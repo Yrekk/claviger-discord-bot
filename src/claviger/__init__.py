@@ -1,0 +1,1 @@
+"""Claviger Discord bot package."""
