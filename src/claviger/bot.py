@@ -2,7 +2,12 @@ import discord
 from discord import app_commands
 
 from claviger.commands.role_test import create_role_test_group
-from claviger.config import get_discord_guild_id, get_test_role_id
+from claviger.commands.say import create_say_command
+from claviger.config import (
+    get_discord_guild_id,
+    get_forum_channel_id,
+    get_test_role_id,
+)
 from claviger.services.role_manager import RoleManager
 
 
@@ -16,6 +21,7 @@ class ClavigerBot(discord.Client):
 
         self.guild_id = get_discord_guild_id()
         self.test_role_id = get_test_role_id()
+        self.forum_channel_id = get_forum_channel_id()
 
         self.role_manager = RoleManager()
 
@@ -27,7 +33,13 @@ class ClavigerBot(discord.Client):
                 self.test_role_id,
          ),
             guild=guild,
-)
+        )
+        self.tree.add_command(
+            create_say_command(
+                self.forum_channel_id,
+        ),
+            guild=guild,
+        )
 
 
     async def setup_hook(self) -> None:

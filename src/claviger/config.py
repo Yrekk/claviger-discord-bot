@@ -45,3 +45,17 @@ def get_test_role_id() -> int:
         )
 
     return int(role_id)
+
+def get_forum_channel_id() -> int:
+    """Load and return the Discord forum text channel ID."""
+    load_dotenv()
+
+    channel_id = os.getenv("FORUM_CHANNEL_ID")
+
+    if not channel_id:
+        raise RuntimeError(
+            "FORUM_CHANNEL_ID is missing. "
+            "Check that your .env file contains FORUM_CHANNEL_ID."
+        )
+
+    return int(channel_id)
