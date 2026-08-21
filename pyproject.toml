@@ -11,9 +11,15 @@ requires-python = ">=3.12"
 dependencies = [ "discord.py>=2.6,<3.0",
     "python-dotenv>=1.0,<2.0",]
 
+[project.scripts]
+claviger = "claviger.main:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+]
+voice = [
+    "discord.py[voice]>=2.6,<3.0",
 ]
 
 [tool.setuptools.packages.find]
