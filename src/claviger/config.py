@@ -16,3 +16,32 @@ def get_discord_token() -> str:
         )
 
     return token
+
+def get_discord_guild_id() -> int:
+    """Load and return the Discord guild ID from the environment."""
+    load_dotenv()
+
+    guild_id = os.getenv("DISCORD_GUILD_ID")
+
+    if not guild_id:
+        raise RuntimeError(
+            "DISCORD_GUILD_ID is missing. "
+            "Check that your .env file contains DISCORD_GUILD_ID."
+        )
+
+    return int(guild_id)
+
+
+def get_test_role_id() -> int:
+    """Load and return the Discord role ID used for integration testing."""
+    load_dotenv()
+
+    role_id = os.getenv("TEST_ROLE_ID")
+
+    if not role_id:
+        raise RuntimeError(
+            "TEST_ROLE_ID is missing. "
+            "Check that your .env file contains TEST_ROLE_ID."
+        )
+
+    return int(role_id)
