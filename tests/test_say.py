@@ -17,6 +17,7 @@ def create_interaction(
     *,
     guild_id: int = 123,
     user_id: int = 42,
+    user_color: int = 0x5865F2,
 ) -> Mock:
     """Create a mocked Discord interaction for say command tests."""
     interaction = Mock(spec=discord.Interaction)
@@ -26,6 +27,7 @@ def create_interaction(
 
     user = Mock(spec=discord.Member)
     user.id = user_id
+    user.color = discord.Color(user_color)
 
     interaction.guild = guild
     interaction.user = user
@@ -154,9 +156,15 @@ async def test_say_sends_message_to_selected_channel(
         Capability.SAY,
     )
 
-    channel.send.assert_awaited_once_with(
-        "Ave Claviger",
-    )
+    channel.send.assert_awaited_once()
+
+    call = channel.send.await_args
+
+    embed = call.kwargs["embed"]
+
+    assert isinstance(embed, discord.Embed)
+    assert embed.description == "Ave Claviger"
+    assert embed.color == interaction.user.color
 
     interaction.response.send_message.assert_awaited_once_with(
         "Message envoyé dans #forum.",

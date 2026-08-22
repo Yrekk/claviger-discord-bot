@@ -45,8 +45,13 @@ def create_say_command(
                 ephemeral=True,
             )
             return
-
-        await salon.send(message)
+        
+        embed = discord.Embed(
+            description=message,
+            color=interaction.user.color,
+        )
+        
+        await salon.send(embed=embed)
 
         await interaction.response.send_message(
             f"Message envoyé dans {salon.mention}.",
