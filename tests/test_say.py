@@ -4,12 +4,18 @@ import discord
 import pytest
 
 from claviger.commands.say import create_say_command
+from claviger.services.authorization import (
+    AuthorizationService,
+    Capability,
+)
+
+
+# Helper functions to create mocked Discord objects for say command tests.
 
 
 def create_interaction(
     *,
     guild_id: int = 123,
-    owner_id: int = 42,
     user_id: int = 42,
 ) -> Mock:
     """Create a mocked Discord interaction for say command tests."""
@@ -17,7 +23,6 @@ def create_interaction(
 
     guild = Mock(spec=discord.Guild)
     guild.id = guild_id
-    guild.owner_id = owner_id
 
     user = Mock(spec=discord.Member)
     user.id = user_id
@@ -45,10 +50,26 @@ def create_text_channel(
     return channel
 
 
+@pytest.fixture
+def authorization_service() -> Mock:
+    """Create a mocked authorization service allowed by default."""
+    service = Mock(spec=AuthorizationService)
+    service.is_allowed = AsyncMock(return_value=True)
+
+    return service
+
+
+# Tests for the say command.
+
+
 @pytest.mark.asyncio
-async def test_say_rejects_interaction_outside_guild() -> None:
+async def test_say_rejects_interaction_outside_guild(
+    authorization_service: Mock,
+) -> None:
     """Reject the say command when it is used outside a Discord server."""
-    command = create_say_command()
+    command = create_say_command(
+        authorization_service,
+    )
 
     interaction = create_interaction()
     interaction.guild = None
@@ -61,6 +82,8 @@ async def test_say_rejects_interaction_outside_guild() -> None:
         "Ave Claviger",
     )
 
+    authorization_service.is_allowed.assert_not_awaited()
+
     interaction.response.send_message.assert_awaited_once_with(
         "Cette commande doit être utilisée sur un serveur.",
         ephemeral=True,
@@ -68,37 +91,15 @@ async def test_say_rejects_interaction_outside_guild() -> None:
 
 
 @pytest.mark.asyncio
-async def test_say_rejects_non_owner() -> None:
-    """Reject the say command when the user is not the server owner."""
-    command = create_say_command()
+async def test_say_rejects_unauthorized_user(
+    authorization_service: Mock,
+) -> None:
+    """Reject the say command when authorization is denied."""
+    authorization_service.is_allowed.return_value = False
 
-    interaction = create_interaction(
-        owner_id=42,
-        user_id=84,
+    command = create_say_command(
+        authorization_service,
     )
-
-    channel = create_text_channel(
-        guild=interaction.guild,
-    )
-
-    await command.callback(
-        interaction,
-        channel,
-        "Ave Claviger",
-    )
-
-    channel.send.assert_not_awaited()
-
-    interaction.response.send_message.assert_awaited_once_with(
-        "Cette commande est réservée au propriétaire du serveur.",
-        ephemeral=True,
-    )
-
-
-@pytest.mark.asyncio
-async def test_say_sends_message_to_selected_channel() -> None:
-    """Send the requested message to the selected text channel."""
-    command = create_say_command()
 
     interaction = create_interaction()
 
@@ -110,6 +111,47 @@ async def test_say_sends_message_to_selected_channel() -> None:
         interaction,
         channel,
         "Ave Claviger",
+    )
+
+    authorization_service.is_allowed.assert_awaited_once_with(
+        interaction.user,
+        interaction.guild,
+        Capability.SAY,
+    )
+
+    channel.send.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Vous n'êtes pas autorisé à utiliser cette commande.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_say_sends_message_to_selected_channel(
+    authorization_service: Mock,
+) -> None:
+    """Send the requested message to the selected text channel."""
+    command = create_say_command(
+        authorization_service,
+    )
+
+    interaction = create_interaction()
+
+    channel = create_text_channel(
+        guild=interaction.guild,
+    )
+
+    await command.callback(
+        interaction,
+        channel,
+        "Ave Claviger",
+    )
+
+    authorization_service.is_allowed.assert_awaited_once_with(
+        interaction.user,
+        interaction.guild,
+        Capability.SAY,
     )
 
     channel.send.assert_awaited_once_with(
@@ -123,9 +165,13 @@ async def test_say_sends_message_to_selected_channel() -> None:
 
 
 @pytest.mark.asyncio
-async def test_say_rejects_channel_from_another_guild() -> None:
+async def test_say_rejects_channel_from_another_guild(
+    authorization_service: Mock,
+) -> None:
     """Reject a text channel that belongs to another Discord server."""
-    command = create_say_command()
+    command = create_say_command(
+        authorization_service,
+    )
 
     interaction = create_interaction(
         guild_id=123,
@@ -142,6 +188,12 @@ async def test_say_rejects_channel_from_another_guild() -> None:
         interaction,
         channel,
         "Ave Claviger",
+    )
+
+    authorization_service.is_allowed.assert_awaited_once_with(
+        interaction.user,
+        interaction.guild,
+        Capability.SAY,
     )
 
     channel.send.assert_not_awaited()

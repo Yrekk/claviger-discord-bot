@@ -1,9 +1,12 @@
 import discord
+from claviger.services.authorization import AuthorizationService, Capability
 from discord import app_commands
 
 
-def create_say_command() -> app_commands.Command:
-    """Create the owner-only say command."""
+def create_say_command(
+    authorization_service: AuthorizationService,
+) -> app_commands.Command:
+    """Create the say command."""
 
     @app_commands.command(
         name="say",
@@ -25,9 +28,13 @@ def create_say_command() -> app_commands.Command:
             )
             return
 
-        if interaction.user.id != interaction.guild.owner_id:
+        if not await authorization_service.is_allowed(
+            interaction.user,
+            interaction.guild,
+            Capability.SAY,
+        ):
             await interaction.response.send_message(
-                "Cette commande est réservée au propriétaire du serveur.",
+                "Vous n'êtes pas autorisé à utiliser cette commande.",
                 ephemeral=True,
             )
             return
