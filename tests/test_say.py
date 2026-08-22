@@ -8,9 +8,10 @@ from claviger.services.authorization import (
     AuthorizationService,
     Capability,
 )
-
-
-# Helper functions to create mocked Discord objects for say command tests.
+from claviger.services.say import (
+    SayService,
+    SayStyle,
+)
 
 
 def create_interaction(
@@ -47,7 +48,6 @@ def create_text_channel(
 
     channel.guild = guild
     channel.mention = "#forum"
-    channel.send = AsyncMock()
 
     return channel
 
@@ -61,16 +61,24 @@ def authorization_service() -> Mock:
     return service
 
 
-# Tests for the say command.
+@pytest.fixture
+def say_service() -> Mock:
+    """Create a mocked say service."""
+    service = Mock(spec=SayService)
+    service.send = AsyncMock()
+
+    return service
 
 
 @pytest.mark.asyncio
 async def test_say_rejects_interaction_outside_guild(
     authorization_service: Mock,
+    say_service: Mock,
 ) -> None:
     """Reject the say command when it is used outside a Discord server."""
     command = create_say_command(
         authorization_service,
+        say_service,
     )
 
     interaction = create_interaction()
@@ -85,6 +93,7 @@ async def test_say_rejects_interaction_outside_guild(
     )
 
     authorization_service.is_allowed.assert_not_awaited()
+    say_service.send.assert_not_awaited()
 
     interaction.response.send_message.assert_awaited_once_with(
         "Cette commande doit être utilisée sur un serveur.",
@@ -95,12 +104,14 @@ async def test_say_rejects_interaction_outside_guild(
 @pytest.mark.asyncio
 async def test_say_rejects_unauthorized_user(
     authorization_service: Mock,
+    say_service: Mock,
 ) -> None:
     """Reject the say command when authorization is denied."""
     authorization_service.is_allowed.return_value = False
 
     command = create_say_command(
         authorization_service,
+        say_service,
     )
 
     interaction = create_interaction()
@@ -121,7 +132,7 @@ async def test_say_rejects_unauthorized_user(
         Capability.SAY,
     )
 
-    channel.send.assert_not_awaited()
+    say_service.send.assert_not_awaited()
 
     interaction.response.send_message.assert_awaited_once_with(
         "Vous n'êtes pas autorisé à utiliser cette commande.",
@@ -130,12 +141,14 @@ async def test_say_rejects_unauthorized_user(
 
 
 @pytest.mark.asyncio
-async def test_say_sends_message_to_selected_channel(
+async def test_say_uses_embed_style_by_default(
     authorization_service: Mock,
+    say_service: Mock,
 ) -> None:
-    """Send the requested message to the selected text channel."""
+    """Use the embed style when no explicit style is requested."""
     command = create_say_command(
         authorization_service,
+        say_service,
     )
 
     interaction = create_interaction()
@@ -156,15 +169,12 @@ async def test_say_sends_message_to_selected_channel(
         Capability.SAY,
     )
 
-    channel.send.assert_awaited_once()
-
-    call = channel.send.await_args
-
-    embed = call.kwargs["embed"]
-
-    assert isinstance(embed, discord.Embed)
-    assert embed.description == "Ave Claviger"
-    assert embed.color == interaction.user.color
+    say_service.send.assert_awaited_once_with(
+        channel,
+        "Ave Claviger",
+        style=SayStyle.EMBED,
+        color=interaction.user.color,
+    )
 
     interaction.response.send_message.assert_awaited_once_with(
         "Message envoyé dans #forum.",
@@ -173,12 +183,97 @@ async def test_say_sends_message_to_selected_channel(
 
 
 @pytest.mark.asyncio
+async def test_say_allows_plain_style_with_permission(
+    authorization_service: Mock,
+    say_service: Mock,
+) -> None:
+    """Allow plain messages when the user has the plain say capability."""
+    command = create_say_command(
+        authorization_service,
+        say_service,
+    )
+
+    interaction = create_interaction()
+
+    channel = create_text_channel(
+        guild=interaction.guild,
+    )
+
+    await command.callback(
+        interaction,
+        channel,
+        "Ave Claviger",
+        SayStyle.PLAIN.value,
+    )
+
+    assert authorization_service.is_allowed.await_count == 2
+
+    authorization_service.is_allowed.assert_any_await(
+        interaction.user,
+        interaction.guild,
+        Capability.SAY,
+    )
+
+    authorization_service.is_allowed.assert_any_await(
+        interaction.user,
+        interaction.guild,
+        Capability.SAY_PLAIN,
+    )
+
+    say_service.send.assert_awaited_once_with(
+        channel,
+        "Ave Claviger",
+        style=SayStyle.PLAIN,
+        color=interaction.user.color,
+    )
+
+
+@pytest.mark.asyncio
+async def test_say_rejects_plain_style_without_permission(
+    authorization_service: Mock,
+    say_service: Mock,
+) -> None:
+    """Reject plain messages when the user lacks the plain say capability."""
+    authorization_service.is_allowed.side_effect = [
+        True,
+        False,
+    ]
+
+    command = create_say_command(
+        authorization_service,
+        say_service,
+    )
+
+    interaction = create_interaction()
+
+    channel = create_text_channel(
+        guild=interaction.guild,
+    )
+
+    await command.callback(
+        interaction,
+        channel,
+        "Ave Claviger",
+        SayStyle.PLAIN.value,
+    )
+
+    say_service.send.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Vous n'êtes pas autorisé à envoyer un message sans signature visuelle.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
 async def test_say_rejects_channel_from_another_guild(
     authorization_service: Mock,
+    say_service: Mock,
 ) -> None:
     """Reject a text channel that belongs to another Discord server."""
     command = create_say_command(
         authorization_service,
+        say_service,
     )
 
     interaction = create_interaction(
@@ -204,7 +299,7 @@ async def test_say_rejects_channel_from_another_guild(
         Capability.SAY,
     )
 
-    channel.send.assert_not_awaited()
+    say_service.send.assert_not_awaited()
 
     interaction.response.send_message.assert_awaited_once_with(
         "Le salon sélectionné n'appartient pas à ce serveur.",

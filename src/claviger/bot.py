@@ -13,6 +13,7 @@ from claviger.commands.claviger import create_claviger_group
 from claviger.services.role_manager import RoleManager
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.authorization import AuthorizationService
+from claviger.services.say import SayService
 
 class ClavigerBot(discord.Client):
     def __init__(self) -> None:
@@ -28,6 +29,7 @@ class ClavigerBot(discord.Client):
         self.role_manager = RoleManager()
         self.role_discovery_service = RoleDiscoveryService()
         self.authorization_service = AuthorizationService()
+        self.say_service = SayService()
 
         guild = discord.Object(id=self.guild_id)
 
@@ -40,7 +42,7 @@ class ClavigerBot(discord.Client):
         )
 
         self.tree.add_command(
-            create_say_command(self.authorization_service),
+            create_say_command(self.authorization_service,self.say_service,),
             guild=guild,
         )
 

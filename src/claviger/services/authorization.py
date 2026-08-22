@@ -9,6 +9,7 @@ class Capability(StrEnum):
     """Capabilities that can be granted by Claviger's authorization system."""
 
     SAY = "say"
+    SAY_PLAIN = "say.plain"
     ROLE_SCAN = "role.scan"
 
 
