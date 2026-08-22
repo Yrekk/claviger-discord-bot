@@ -45,8 +45,6 @@ def get_test_role_id() -> int:
         )
 
     return int(role_id)
-
-def get_forum_channel_id() -> int:
     """Load and return the Discord forum text channel ID."""
     load_dotenv()
 
