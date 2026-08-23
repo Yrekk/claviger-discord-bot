@@ -23,7 +23,7 @@ def test_succumbrae_fallback_uses_expected_role_conventions() -> None:
     assert SUCCUMBRAE_FALLBACK_POLICY.member_role_name == "Membre"
     assert (
         SUCCUMBRAE_FALLBACK_POLICY.adult_role_name
-        == "Civis Noctis · 18+"
+        == "Civis Noctis - 18+"
     )
     assert SUCCUMBRAE_FALLBACK_POLICY.access_role_prefix == "access-"
 

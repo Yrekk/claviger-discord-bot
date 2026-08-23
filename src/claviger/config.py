@@ -52,15 +52,14 @@ def get_database_path() -> str:
         "DATABASE_PATH",
         "data/claviger.db",
     )
-    """Load and return the Discord forum text channel ID."""
-    load_dotenv()
 
-    channel_id = os.getenv("FORUM_CHANNEL_ID")
+def get_admin_report_forum_id() -> int | None:
+    """Return the bootstrap Discord forum used for administrative reports."""
+    value = os.getenv(
+        "ADMIN_REPORT_FORUM_ID",
+    )
 
-    if not channel_id:
-        raise RuntimeError(
-            "FORUM_CHANNEL_ID is missing. "
-            "Check that your .env file contains FORUM_CHANNEL_ID."
-        )
+    if value is None or not value.strip():
+        return None
 
-    return int(channel_id)
+    return int(value)

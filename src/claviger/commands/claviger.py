@@ -5,11 +5,18 @@ from claviger.policies.policy_resolver import PolicyResolver
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 
+from claviger.reporting.event import (
+    ReportEvent,
+    ReportSeverity,
+)
+from claviger.reporting.service import ReportService
+
 
 def create_claviger_group(
     role_discovery_service: RoleDiscoveryService,
     policy_resolver: PolicyResolver,
     role_classifier: RoleClassifier,
+    report_service: ReportService,
 ) -> app_commands.Group:
     """Create Claviger's administrative command group."""
 
@@ -22,6 +29,60 @@ def create_claviger_group(
         name="roles",
         description="Analyse et gestion des rôles Discord.",
     )
+
+    report_group = app_commands.Group(
+        name="report",
+        description="Diagnostic du système de reporting de Claviger.",
+    )
+
+    @report_group.command(
+        name="test",
+        description="Teste le système de reporting administratif.",
+    )
+    async def test_reporting(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        await report_service.emit(
+            ReportEvent(
+                event_type="report.test",
+                severity=ReportSeverity.INFO,
+                title="Test du système de reporting",
+                summary=(
+                    "Le système de reporting de Claviger "
+                    "a reçu un événement de test."
+                ),
+                guild_id=interaction.guild.id,
+                guild_label=interaction.guild.name,
+                actor_id=interaction.user.id,
+                actor_label=interaction.user.display_name,
+            )
+        )
+
+        await interaction.followup.send(
+            (
+                "Rapport de test émis. "
+                "Vérifie le forum administratif."
+            ),
+            ephemeral=True,
+        )
 
     @roles_group.command(
         name="scan",
@@ -63,6 +124,23 @@ def create_claviger_group(
             )
 
         except RuntimeError as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="roles.scan.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec du scan des rôles",
+                    summary=(
+                        "Claviger n'a pas pu analyser "
+                        "la hiérarchie des rôles."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
             await interaction.followup.send(
                 f"Impossible d'analyser les rôles : {error}",
                 ephemeral=True,
@@ -211,5 +289,7 @@ def create_claviger_group(
     claviger_group.add_command(
         roles_group,
     )
-
+    claviger_group.add_command(
+        report_group,
+    )
     return claviger_group
