@@ -192,3 +192,4 @@ data/*.db-wal
 
 # Streamlit
 .streamlit/secrets.toml
+*.db
