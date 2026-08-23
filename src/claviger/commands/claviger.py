@@ -1,21 +1,85 @@
 import discord
 from discord import app_commands
 
+from claviger.database.status import (
+    DatabaseState,
+    DatabaseStatus,
+    DatabaseStatusService,
+)
 from claviger.policies.policy_resolver import PolicyResolver
-from claviger.services.role_classifier import RoleClassifier
-from claviger.services.role_discovery import RoleDiscoveryService
-
 from claviger.reporting.event import (
     ReportEvent,
     ReportSeverity,
 )
 from claviger.reporting.service import ReportService
+from claviger.services.role_classifier import RoleClassifier
+from claviger.services.role_discovery import RoleDiscoveryService
+
+
+def _format_database_status(
+    status: DatabaseStatus,
+) -> str:
+    """Format a database status for an administrative Discord response."""
+
+    state_labels = {
+        DatabaseState.MISSING: "Absente",
+        DatabaseState.UNINITIALIZED: "Non initialisée",
+        DatabaseState.READY: "Prête",
+        DatabaseState.MIGRATION_REQUIRED: "Migration requise",
+        DatabaseState.TOO_NEW: "Version trop récente",
+        DatabaseState.UNAVAILABLE: "Indisponible",
+    }
+
+    recommendations = {
+        DatabaseState.MISSING: (
+            "Initialiser manuellement la base de données."
+        ),
+        DatabaseState.UNINITIALIZED: (
+            "Initialiser le schéma de la base de données."
+        ),
+        DatabaseState.READY: (
+            "Aucune action nécessaire."
+        ),
+        DatabaseState.MIGRATION_REQUIRED: (
+            "Exécuter manuellement les migrations."
+        ),
+        DatabaseState.TOO_NEW: (
+            "Ne pas modifier la base. "
+            "Vérifier la version de Claviger."
+        ),
+        DatabaseState.UNAVAILABLE: (
+            "Vérifier le fichier, les permissions "
+            "et l'environnement d'exécution."
+        ),
+    }
+
+    current_version = (
+        str(status.current_version)
+        if status.current_version is not None
+        else "N/A"
+    )
+
+    return "\n".join(
+        [
+            "**Base de données Claviger**",
+            "",
+            f"- État : **{state_labels[status.state]}**",
+            f"- Version actuelle : `{current_version}`",
+            f"- Version attendue : `{status.target_version}`",
+            "",
+            (
+                "**Action recommandée :** "
+                f"{recommendations[status.state]}"
+            ),
+        ]
+    )
 
 
 def create_claviger_group(
     role_discovery_service: RoleDiscoveryService,
     policy_resolver: PolicyResolver,
     role_classifier: RoleClassifier,
+    database_status_service: DatabaseStatusService,
     report_service: ReportService,
 ) -> app_commands.Group:
     """Create Claviger's administrative command group."""
@@ -33,6 +97,11 @@ def create_claviger_group(
     report_group = app_commands.Group(
         name="report",
         description="Diagnostic du système de reporting de Claviger.",
+    )
+
+    database_group = app_commands.Group(
+        name="database",
+        description="Diagnostic et maintenance de la base de données.",
     )
 
     @report_group.command(
@@ -80,6 +149,65 @@ def create_claviger_group(
             (
                 "Rapport de test émis. "
                 "Vérifie le forum administratif."
+            ),
+            ephemeral=True,
+        )
+
+    @database_group.command(
+        name="status",
+        description="Affiche l'état de la base de données de Claviger.",
+    )
+    async def database_status(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        try:
+            status = await database_status_service.check()
+
+        except Exception as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="database.status.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec du diagnostic de la base de données",
+                    summary=(
+                        "Claviger n'a pas pu déterminer "
+                        "l'état de sa base de données."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await interaction.followup.send(
+                "Impossible de déterminer l'état de la base de données.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.followup.send(
+            _format_database_status(
+                status,
             ),
             ephemeral=True,
         )
@@ -243,6 +371,7 @@ def create_claviger_group(
             anomalies.append(
                 f'Rôle membre "{policy.member_role_name}" introuvable.'
             )
+
         elif len(classification.member_roles) > 1:
             anomalies.append(
                 f'Plusieurs rôles "{policy.member_role_name}" détectés.'
@@ -253,6 +382,7 @@ def create_claviger_group(
                 anomalies.append(
                     f'Rôle adulte "{policy.adult_role_name}" introuvable.'
                 )
+
             elif len(classification.adult_roles) > 1:
                 anomalies.append(
                     f'Plusieurs rôles "{policy.adult_role_name}" détectés.'
@@ -289,7 +419,13 @@ def create_claviger_group(
     claviger_group.add_command(
         roles_group,
     )
+
     claviger_group.add_command(
         report_group,
     )
+
+    claviger_group.add_command(
+        database_group,
+    )
+
     return claviger_group

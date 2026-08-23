@@ -16,6 +16,8 @@ from claviger.config import (
 
 # Database
 from claviger.database.connection import DatabaseConnection
+from claviger.database.schema import DatabaseSchema
+from claviger.database.status import DatabaseStatusService
 
 # Policies
 from claviger.policies.policy_resolver import PolicyResolver
@@ -58,6 +60,15 @@ class ClavigerBot(discord.Client):
 
         self.database = DatabaseConnection(
             get_database_path(),
+        )
+
+        self.database_schema = DatabaseSchema(
+            self.database,
+        )
+
+        self.database_status_service = DatabaseStatusService(
+            self.database,
+            self.database_schema,
         )
 
         self.guild_policy_repository = GuildPolicyRepository(
@@ -112,6 +123,7 @@ class ClavigerBot(discord.Client):
                 self.role_discovery_service,
                 self.policy_resolver,
                 self.role_classifier,
+                self.database_status_service,
                 self.report_service,
             ),
             guild=guild,

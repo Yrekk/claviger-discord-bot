@@ -4,10 +4,16 @@ import discord
 import pytest
 
 from claviger.commands.claviger import create_claviger_group
+from claviger.database.status import (
+    DatabaseState,
+    DatabaseStatus,
+    DatabaseStatusService,
+)
 from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
 from claviger.policies.policy_resolver import PolicyResolver
+from claviger.reporting.event import ReportSeverity
 from claviger.reporting.service import ReportService
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
@@ -82,6 +88,17 @@ def create_test_group(
         return_value=SUCCUMBRAE_FALLBACK_POLICY,
     )
 
+    database_status_service = Mock(
+        spec=DatabaseStatusService,
+    )
+    database_status_service.check = AsyncMock(
+        return_value=DatabaseStatus(
+            state=DatabaseState.READY,
+            current_version=2,
+            target_version=2,
+        )
+    )
+
     report_service = Mock(
         spec=ReportService,
     )
@@ -93,12 +110,14 @@ def create_test_group(
         role_discovery_service,
         policy_resolver,
         role_classifier,
+        database_status_service,
         report_service,
     )
 
     return (
         group,
         policy_resolver,
+        database_status_service,
         report_service,
     )
 
@@ -110,6 +129,7 @@ def get_scan_command(
     (
         group,
         policy_resolver,
+        _,
         report_service,
     ) = create_test_group(
         role_discovery_service,
@@ -121,14 +141,14 @@ def get_scan_command(
 
     assert roles_group is not None
 
-    scan_command = roles_group.get_command(
+    command = roles_group.get_command(
         "scan",
     )
 
-    assert scan_command is not None
+    assert command is not None
 
     return (
-        scan_command,
+        command,
         policy_resolver,
         report_service,
     )
@@ -141,6 +161,7 @@ def get_report_test_command(
     (
         group,
         policy_resolver,
+        _,
         report_service,
     ) = create_test_group(
         role_discovery_service,
@@ -152,15 +173,47 @@ def get_report_test_command(
 
     assert report_group is not None
 
-    report_command = report_group.get_command(
+    command = report_group.get_command(
         "test",
     )
 
-    assert report_command is not None
+    assert command is not None
 
     return (
-        report_command,
+        command,
         policy_resolver,
+        report_service,
+    )
+
+
+def get_database_status_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger database status command."""
+    (
+        group,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+    )
+
+    database_group = group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    command = database_group.get_command(
+        "status",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        database_status_service,
         report_service,
     )
 
@@ -244,22 +297,27 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
         name="Dux Inutilis",
         position=100,
     )
+
     claviger = create_role(
         name="Claviger",
         position=50,
     )
+
     adult = create_role(
         name="Civis Noctis - 18+",
         position=45,
     )
+
     member = create_role(
         name="Membre",
         position=40,
     )
+
     access = create_role(
         name="access-ia-yuri",
         position=30,
     )
+
     unmanaged = create_role(
         name="Archivum",
         position=20,
@@ -378,8 +436,13 @@ async def test_role_scan_reports_discovery_error() -> None:
 
     assert event.event_type == "roles.scan.failed"
     assert event.severity.value == "error"
+
     assert event.guild_id == interaction.guild.id
+    assert event.guild_label == interaction.guild.name
+
     assert event.actor_id == interaction.user.id
+    assert event.actor_label == interaction.user.display_name
+
     assert (
         event.details
         == "Claviger's highest role could not be found."
@@ -433,8 +496,10 @@ async def test_report_test_emits_structured_event() -> None:
 
     assert event.event_type == "report.test"
     assert event.severity.value == "info"
+
     assert event.guild_id == 123
     assert event.guild_label == interaction.guild.name
+
     assert event.actor_id == interaction.user.id
     assert event.actor_label == interaction.user.display_name
 
@@ -479,5 +544,134 @@ async def test_report_test_rejects_non_owner() -> None:
 
     interaction.response.send_message.assert_awaited_once_with(
         "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_status_displays_current_state() -> None:
+    """Display the current database state without modifying it."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_status_service,
+        report_service,
+    ) = get_database_status_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.MISSING,
+        current_version=None,
+        target_version=2,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    interaction.response.defer.assert_awaited_once_with(
+        ephemeral=True,
+    )
+
+    database_status_service.check.assert_awaited_once()
+    report_service.emit.assert_not_awaited()
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "État : **Absente**" in message
+    assert "Version actuelle : `N/A`" in message
+    assert "Version attendue : `2`" in message
+    assert "Initialiser manuellement" in message
+
+
+@pytest.mark.asyncio
+async def test_database_status_rejects_non_owner() -> None:
+    """Prevent non-owners from inspecting database administration."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_status_service,
+        report_service,
+    ) = get_database_status_command(
+        service,
+    )
+
+    interaction = create_interaction(
+        owner_id=42,
+        user_id=84,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    database_status_service.check.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_status_reports_unexpected_failure() -> None:
+    """Report unexpected database diagnostic failures."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_status_service,
+        report_service,
+    ) = get_database_status_command(
+        service,
+    )
+
+    database_status_service.check.side_effect = RuntimeError(
+        "Unexpected diagnostic failure."
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    interaction.response.defer.assert_awaited_once_with(
+        ephemeral=True,
+    )
+
+    database_status_service.check.assert_awaited_once()
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "database.status.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert event.details == "Unexpected diagnostic failure."
+
+    assert event.guild_id == interaction.guild.id
+    assert event.guild_label == interaction.guild.name
+
+    assert event.actor_id == interaction.user.id
+    assert event.actor_label == interaction.user.display_name
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Impossible de déterminer l'état de la base de données.",
         ephemeral=True,
     )
