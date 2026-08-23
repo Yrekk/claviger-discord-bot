@@ -21,6 +21,7 @@ from claviger.database.status import DatabaseStatusService
 
 # Policies
 from claviger.policies.policy_resolver import PolicyResolver
+from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 
 # Reporting
 from claviger.reporting.discord_forum import DiscordForumReporter
@@ -39,6 +40,10 @@ from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.role_manager import RoleManager
 from claviger.services.say import SayService
+from claviger.services.guild_policy_bootstrap import (
+    GuildPolicyBootstrapService,
+)
+
 
 
 class ClavigerBot(discord.Client):
@@ -79,7 +84,11 @@ class ClavigerBot(discord.Client):
             repository=self.guild_policy_repository,
             fallback_guild_id=self.guild_id,
         )
-
+        self.guild_policy_bootstrap_service = GuildPolicyBootstrapService(
+                repository=self.guild_policy_repository,
+                fallback_guild_id=get_discord_guild_id(),
+                bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
+        )
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
         ]
@@ -123,6 +132,7 @@ class ClavigerBot(discord.Client):
                 self.role_discovery_service,
                 self.policy_resolver,
                 self.role_classifier,
+                self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,
                 self.report_service,

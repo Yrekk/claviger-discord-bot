@@ -18,6 +18,11 @@ from claviger.reporting.service import ReportService
 
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.guild_policy_bootstrap import (
+    GuildAlreadyConfiguredError,
+    GuildBootstrapNotAllowedError,
+    GuildPolicyBootstrapService,
+)
 
 
 def _format_database_status(
@@ -83,6 +88,7 @@ def create_claviger_group(
     role_discovery_service: RoleDiscoveryService,
     policy_resolver: PolicyResolver,
     role_classifier: RoleClassifier,
+    guild_policy_bootstrap_service: GuildPolicyBootstrapService,
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
     report_service: ReportService,
@@ -107,6 +113,11 @@ def create_claviger_group(
     database_group = app_commands.Group(
         name="database",
         description="Diagnostic et maintenance de la base de données.",
+    )
+
+    guild_group = app_commands.Group(
+    name="guild",
+    description="Configuration du serveur Discord.",
     )
 
     @report_group.command(
@@ -335,6 +346,248 @@ def create_claviger_group(
             (
                 "Base de données initialisée avec succès. "
                 f"Version du schéma : `{final_status.current_version}`."
+            ),
+            ephemeral=True,
+        )
+
+    @database_group.command(
+        name="migrate",
+        description="Migre explicitement la base de données de Claviger.",
+    )
+    async def database_migrate(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        try:
+            status = await database_status_service.check()
+
+            if status.state == DatabaseState.READY:
+                await interaction.followup.send(
+                    "La base de données est déjà à jour.",
+                    ephemeral=True,
+                )
+                return
+
+            if status.state in (
+                DatabaseState.MISSING,
+                DatabaseState.UNINITIALIZED,
+            ):
+                await interaction.followup.send(
+                    (
+                        "La base de données n'est pas initialisée. "
+                        "Utilise `/claviger database initialize`."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
+            if status.state == DatabaseState.TOO_NEW:
+                raise RuntimeError(
+                    "La base de données utilise une version de schéma "
+                    "plus récente que cette version de Claviger."
+                )
+
+            if status.state == DatabaseState.UNAVAILABLE:
+                raise RuntimeError(
+                    "La base de données est actuellement indisponible."
+                )
+
+            if status.state != DatabaseState.MIGRATION_REQUIRED:
+                raise RuntimeError(
+                    f"Unexpected database state: {status.state.value}."
+                )
+
+            previous_version = status.current_version
+
+            await database_schema.migrate()
+
+            final_status = await database_status_service.check()
+
+            if final_status.state != DatabaseState.READY:
+                raise RuntimeError(
+                    (
+                        "Database migration completed but "
+                        f"final state is {final_status.state.value}."
+                    )
+                )
+
+        except Exception as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="database.migrate.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec de la migration de la base de données",
+                    summary=(
+                        "Claviger n'a pas pu migrer "
+                        "sa base de données."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await interaction.followup.send(
+                "Échec de la migration de la base de données.",
+                ephemeral=True,
+            )
+            return
+
+        await report_service.emit(
+            ReportEvent(
+                event_type="database.migrate.success",
+                severity=ReportSeverity.INFO,
+                title="Base de données migrée",
+                summary=(
+                    "La base de données de Claviger "
+                    "a été migrée avec succès."
+                ),
+                details=(
+                    f"Schema version: {previous_version} "
+                    f"-> {final_status.current_version}"
+                ),
+                guild_id=interaction.guild.id,
+                guild_label=interaction.guild.name,
+                actor_id=interaction.user.id,
+                actor_label=interaction.user.display_name,
+            )
+        )
+
+        await interaction.followup.send(
+            (
+                "Base de données migrée avec succès : "
+                f"`{previous_version}` → `{final_status.current_version}`."
+            ),
+            ephemeral=True,
+        )
+
+    @guild_group.command(
+        name="bootstrap",
+        description="Initialise la configuration persistante du serveur.",
+    )
+    async def guild_bootstrap(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        status = await database_status_service.check()
+
+        if status.state != DatabaseState.READY:
+            await interaction.followup.send(
+                (
+                    "La base de données doit être prête avant "
+                    "d'initialiser la configuration du serveur."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        try:
+            overrides = await guild_policy_bootstrap_service.bootstrap(
+                interaction.guild.id,
+            )
+
+        except GuildAlreadyConfiguredError:
+            await interaction.followup.send(
+                "Ce serveur possède déjà une configuration persistante.",
+                ephemeral=True,
+            )
+            return
+
+        except GuildBootstrapNotAllowedError:
+            await interaction.followup.send(
+                (
+                    "Le bootstrap initial est réservé au serveur "
+                    "de secours configuré pour cette instance."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        except Exception as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="guild.bootstrap.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec du bootstrap du serveur",
+                    summary=(
+                        "Claviger n'a pas pu créer la configuration "
+                        "persistante du serveur."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await interaction.followup.send(
+                "Échec de l'initialisation de la configuration du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await report_service.emit(
+            ReportEvent(
+                event_type="guild.bootstrap.success",
+                severity=ReportSeverity.INFO,
+                title="Configuration du serveur initialisée",
+                summary=(
+                    "La configuration persistante du serveur "
+                    "a été créée avec succès."
+                ),
+                details=(
+                    f"Rôle membre : {overrides.member_role_name}\n"
+                    f"Rôle adulte : {overrides.adult_role_name}\n"
+                    f"Préfixe intérêts : {overrides.member_interest_prefix}\n"
+                    f"Préfixe accès adulte : {overrides.adult_access_prefix}"
+                ),
+                guild_id=interaction.guild.id,
+                guild_label=interaction.guild.name,
+                actor_id=interaction.user.id,
+                actor_label=interaction.user.display_name,
+            )
+        )
+
+        await interaction.followup.send(
+            (
+                "Configuration persistante du serveur initialisée avec succès."
             ),
             ephemeral=True,
         )
@@ -581,6 +834,9 @@ def create_claviger_group(
 
     claviger_group.add_command(
         database_group,
+    )
+    claviger_group.add_command(
+        guild_group,
     )
 
     return claviger_group

@@ -15,6 +15,9 @@ from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
 from claviger.policies.policy_resolver import PolicyResolver
+from claviger.policies.guild_policy import GuildPolicyOverrides
+
+
 
 from claviger.reporting.event import ReportSeverity
 from claviger.reporting.service import ReportService
@@ -23,6 +26,10 @@ from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
+)
+from claviger.services.guild_policy_bootstrap import (
+    GuildAlreadyConfiguredError,
+    GuildPolicyBootstrapService,
 )
 
 
@@ -83,6 +90,7 @@ def create_role(
 
 def create_test_group(
     role_discovery_service: RoleDiscoveryService,
+    guild_policy_bootstrap_service: GuildPolicyBootstrapService | None = None,
 ):
     """Create Claviger's command group with mocked external services."""
     policy_resolver = Mock(
@@ -114,12 +122,19 @@ def create_test_group(
     )
     report_service.emit = AsyncMock()
 
+    if guild_policy_bootstrap_service is None:
+        guild_policy_bootstrap_service = Mock(
+            spec=GuildPolicyBootstrapService,
+        )
+        guild_policy_bootstrap_service.bootstrap = AsyncMock()
+
     role_classifier = RoleClassifier()
 
     group = create_claviger_group(
         role_discovery_service,
         policy_resolver,
         role_classifier,
+        guild_policy_bootstrap_service,
         database_schema,
         database_status_service,
         report_service,
@@ -262,6 +277,79 @@ def get_database_initialize_command(
     return (
         command,
         database_schema,
+        database_status_service,
+        report_service,
+    )
+
+def get_database_migrate_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger database migrate command."""
+    (
+        group,
+        _,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+    )
+
+    database_group = group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    command = database_group.get_command(
+        "migrate",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    )
+
+def get_guild_bootstrap_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger guild bootstrap command."""
+
+    bootstrap_service = Mock(
+        spec=GuildPolicyBootstrapService,
+    )
+    bootstrap_service.bootstrap = AsyncMock()
+
+    (
+        group,
+        _,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        guild_policy_bootstrap_service=bootstrap_service,
+    )
+
+    guild_group = group.get_command(
+        "guild",
+    )
+
+    assert guild_group is not None
+
+    command = guild_group.get_command(
+        "bootstrap",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        bootstrap_service,
         database_status_service,
         report_service,
     )
@@ -906,5 +994,383 @@ async def test_database_initialize_reports_failure() -> None:
 
     interaction.followup.send.assert_awaited_once_with(
         "Échec de l'initialisation de la base de données.",
+        ephemeral=True,
+    )
+
+@pytest.mark.asyncio
+async def test_database_migrate_upgrades_outdated_database() -> None:
+    """Migrate an outdated database and verify its final state."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_migrate_command(
+        service,
+    )
+
+    database_status_service.check.side_effect = [
+        DatabaseStatus(
+            state=DatabaseState.MIGRATION_REQUIRED,
+            current_version=1,
+            target_version=2,
+        ),
+        DatabaseStatus(
+            state=DatabaseState.READY,
+            current_version=2,
+            target_version=2,
+        ),
+    ]
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.migrate.assert_awaited_once()
+
+    assert database_status_service.check.await_count == 2
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "database.migrate.success"
+    assert event.severity == ReportSeverity.INFO
+    assert event.details == "Schema version: 1 -> 2"
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Base de données migrée avec succès : `1` → `2`.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_migrate_rejects_ready_database() -> None:
+    """Do not migrate an already up-to-date database."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_migrate_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.READY,
+        current_version=2,
+        target_version=2,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.migrate.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        "La base de données est déjà à jour.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_migrate_rejects_uninitialized_database() -> None:
+    """Require initialization before migration."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_migrate_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.UNINITIALIZED,
+        current_version=0,
+        target_version=2,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.migrate.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "La base de données n'est pas initialisée. "
+            "Utilise `/claviger database initialize`."
+        ),
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_migrate_rejects_non_owner() -> None:
+    """Prevent non-owners from migrating the database."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_migrate_command(
+        service,
+    )
+
+    interaction = create_interaction(
+        owner_id=42,
+        user_id=84,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.migrate.assert_not_awaited()
+    database_status_service.check.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_persists_initial_configuration() -> None:
+    """Bootstrap the initial persistent guild configuration."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        database_status_service,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    bootstrap_service.bootstrap.return_value = GuildPolicyOverrides(
+        member_role_name="Membre",
+        adult_role_name="Civis Noctis - 18+",
+        member_interest_prefix="interest-",
+        adult_access_prefix="access-",
+        salutations_channel_name="salutations",
+        adult_rules_channel_name="lex-noctis",
+        role_management_enabled=True,
+        adult_access_enabled=True,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_status_service.check.assert_awaited_once()
+
+    bootstrap_service.bootstrap.assert_awaited_once_with(
+        interaction.guild.id,
+    )
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "guild.bootstrap.success"
+    assert event.severity == ReportSeverity.INFO
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Configuration persistante du serveur initialisée avec succès.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_rejects_existing_configuration() -> None:
+    """Never overwrite an existing persistent guild configuration."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        _,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    bootstrap_service.bootstrap.side_effect = GuildAlreadyConfiguredError(
+        "Already configured."
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Ce serveur possède déjà une configuration persistante.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_requires_ready_database() -> None:
+    """Require a ready database before guild bootstrap."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        database_status_service,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.MISSING,
+        current_version=None,
+        target_version=2,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    bootstrap_service.bootstrap.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "La base de données doit être prête avant "
+            "d'initialiser la configuration du serveur."
+        ),
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_rejects_non_owner() -> None:
+    """Prevent non-owners from bootstrapping guild configuration."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        database_status_service,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    interaction = create_interaction(
+        owner_id=42,
+        user_id=84,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    bootstrap_service.bootstrap.assert_not_awaited()
+    database_status_service.check.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_reports_unexpected_failure() -> None:
+    """Report unexpected guild bootstrap failures."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        _,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    bootstrap_service.bootstrap.side_effect = RuntimeError(
+        "Bootstrap exploded."
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "guild.bootstrap.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert event.details == "Bootstrap exploded."
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Échec de l'initialisation de la configuration du serveur.",
         ephemeral=True,
     )
