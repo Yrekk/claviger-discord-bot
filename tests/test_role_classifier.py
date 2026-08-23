@@ -12,7 +12,9 @@ def create_role(
     name: str,
 ) -> Mock:
     """Create a mocked Discord role."""
-    role = Mock(spec=discord.Role)
+    role = Mock(
+        spec=discord.Role,
+    )
     role.name = name
 
     return role
@@ -22,8 +24,9 @@ def create_policy() -> GuildPolicy:
     """Create a guild policy used for role classification tests."""
     return GuildPolicy(
         member_role_name="Membre",
-        adult_role_name="Civis Noctis · 18+",
-        access_role_prefix="access-",
+        adult_role_name="Civis Noctis - 18+",
+        member_interest_prefix="interest-",
+        adult_access_prefix="access-",
         salutations_channel_name="salutations",
         adult_rules_channel_name="lex-noctis",
         role_management_enabled=True,
@@ -48,14 +51,17 @@ def create_hierarchy(
 
 
 def test_classifier_identifies_managed_role_types() -> None:
-    """Classify member, adult and access roles from the guild policy."""
+    """Classify fixed, interest and adult access roles."""
     classifier = RoleClassifier()
 
     member = create_role(
         name="Membre",
     )
     adult = create_role(
-        name="Civis Noctis · 18+",
+        name="Civis Noctis - 18+",
+    )
+    interest = create_role(
+        name="interest-ia",
     )
     access = create_role(
         name="access-ia-yuri",
@@ -68,6 +74,7 @@ def test_classifier_identifies_managed_role_types() -> None:
         manageable_roles=[
             member,
             adult,
+            interest,
             access,
             unmanaged,
         ],
@@ -81,19 +88,26 @@ def test_classifier_identifies_managed_role_types() -> None:
     assert classification.member_roles == [
         member,
     ]
+
     assert classification.adult_roles == [
         adult,
     ]
+
+    assert classification.interest_roles == [
+        interest,
+    ]
+
     assert classification.access_roles == [
         access,
     ]
+
     assert classification.unmanaged_roles == [
         unmanaged,
     ]
 
 
 def test_classifier_keeps_duplicate_fixed_roles_visible() -> None:
-    """Keep duplicate fixed roles visible so they can be reported as anomalies."""
+    """Keep duplicate fixed roles visible for anomaly reporting."""
     classifier = RoleClassifier()
 
     first_member = create_role(
@@ -121,35 +135,32 @@ def test_classifier_keeps_duplicate_fixed_roles_visible() -> None:
     ]
 
 
-def test_classifier_uses_policy_role_names_and_prefix() -> None:
-    """Classify roles using guild-specific policy values."""
+def test_classifier_uses_policy_specific_prefixes() -> None:
+    """Use guild-specific interest and adult access prefixes."""
     classifier = RoleClassifier()
 
-    custom_member = create_role(
-        name="Citoyen",
+    interest = create_role(
+        name="topic-ia",
     )
-    custom_adult = create_role(
-        name="Nocturna",
-    )
-    custom_access = create_role(
-        name="custom-yuri",
+    access = create_role(
+        name="private-yuri",
     )
 
     policy = GuildPolicy(
         member_role_name="Citoyen",
         adult_role_name="Nocturna",
-        access_role_prefix="custom-",
-        salutations_channel_name="salutations",
-        adult_rules_channel_name="adult-rules",
+        member_interest_prefix="topic-",
+        adult_access_prefix="private-",
+        salutations_channel_name="welcome",
+        adult_rules_channel_name="rules",
         role_management_enabled=True,
         adult_access_enabled=True,
     )
 
     hierarchy = create_hierarchy(
         manageable_roles=[
-            custom_member,
-            custom_adult,
-            custom_access,
+            interest,
+            access,
         ],
     )
 
@@ -158,13 +169,49 @@ def test_classifier_uses_policy_role_names_and_prefix() -> None:
         policy,
     )
 
-    assert classification.member_roles == [
-        custom_member,
+    assert classification.interest_roles == [
+        interest,
     ]
-    assert classification.adult_roles == [
-        custom_adult,
-    ]
+
     assert classification.access_roles == [
-        custom_access,
+        access,
     ]
+
     assert classification.unmanaged_roles == []
+
+
+def test_classifier_ignores_empty_prefixes() -> None:
+    """Do not classify every role when a configured prefix is empty."""
+    classifier = RoleClassifier()
+
+    role = create_role(
+        name="Archivum",
+    )
+
+    policy = GuildPolicy(
+        member_role_name="Membre",
+        adult_role_name="Adulte",
+        member_interest_prefix="",
+        adult_access_prefix="",
+        salutations_channel_name="salutations",
+        adult_rules_channel_name="adult-rules",
+        role_management_enabled=True,
+        adult_access_enabled=True,
+    )
+
+    hierarchy = create_hierarchy(
+        manageable_roles=[
+            role,
+        ],
+    )
+
+    classification = classifier.classify(
+        hierarchy,
+        policy,
+    )
+
+    assert classification.interest_roles == []
+    assert classification.access_roles == []
+    assert classification.unmanaged_roles == [
+        role,
+    ]

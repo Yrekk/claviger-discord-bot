@@ -43,10 +43,10 @@ async def test_initialize_sets_current_schema_version(
 
 
 @pytest.mark.asyncio
-async def test_initialize_is_idempotent(
+async def test_initialize_rejects_already_initialized_database(
     tmp_path: Path,
 ) -> None:
-    """Allow schema initialization to run multiple times safely."""
+    """Reject initialization when the database is already initialized."""
     database = DatabaseConnection(
         tmp_path / "claviger.db",
     )
@@ -55,7 +55,12 @@ async def test_initialize_is_idempotent(
     )
 
     await schema.initialize()
-    await schema.initialize()
+
+    with pytest.raises(
+        RuntimeError,
+        match="Database is already initialized",
+    ):
+        await schema.initialize()
 
     assert await schema.get_version() == CURRENT_SCHEMA_VERSION
 
@@ -84,6 +89,7 @@ async def test_initialize_rejects_newer_database_schema(
         match="newer than supported version",
     ):
         await schema.initialize()
+
 
 @pytest.mark.asyncio
 async def test_initialize_creates_guild_settings_table(
@@ -115,7 +121,7 @@ async def test_initialize_creates_guild_settings_table(
 
 
 @pytest.mark.asyncio
-async def test_initialize_migrates_version_one_database(
+async def test_migrate_upgrades_version_one_database(
     tmp_path: Path,
 ) -> None:
     """Migrate an existing version one database to the current schema."""
@@ -133,7 +139,7 @@ async def test_initialize_migrates_version_one_database(
         database,
     )
 
-    await schema.initialize()
+    await schema.migrate()
 
     assert await schema.get_version() == CURRENT_SCHEMA_VERSION
 

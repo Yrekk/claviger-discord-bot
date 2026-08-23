@@ -59,7 +59,8 @@ async def test_save_and_get_guild_policy_overrides(
 
     expected = GuildPolicyOverrides(
         adult_role_name="Accès adulte",
-        access_role_prefix="custom-access-",
+        member_interest_prefix="interest-",
+        adult_access_prefix="access-",
         role_management_enabled=True,
         adult_access_enabled=False,
     )

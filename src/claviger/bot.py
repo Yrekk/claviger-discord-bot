@@ -123,6 +123,7 @@ class ClavigerBot(discord.Client):
                 self.role_discovery_service,
                 self.policy_resolver,
                 self.role_classifier,
+                self.database_schema,
                 self.database_status_service,
                 self.report_service,
             ),

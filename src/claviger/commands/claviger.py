@@ -6,12 +6,16 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.database.schema import DatabaseSchema
+
 from claviger.policies.policy_resolver import PolicyResolver
+
 from claviger.reporting.event import (
     ReportEvent,
     ReportSeverity,
 )
 from claviger.reporting.service import ReportService
+
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 
@@ -79,6 +83,7 @@ def create_claviger_group(
     role_discovery_service: RoleDiscoveryService,
     policy_resolver: PolicyResolver,
     role_classifier: RoleClassifier,
+    database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
     report_service: ReportService,
 ) -> app_commands.Group:
@@ -157,6 +162,7 @@ def create_claviger_group(
         name="status",
         description="Affiche l'état de la base de données de Claviger.",
     )
+
     async def database_status(
         interaction: discord.Interaction,
     ) -> None:
@@ -208,6 +214,127 @@ def create_claviger_group(
         await interaction.followup.send(
             _format_database_status(
                 status,
+            ),
+            ephemeral=True,
+        )
+
+
+    @database_group.command(
+    name="initialize",
+    description="Initialise explicitement la base de données de Claviger.",
+    )
+
+    async def database_initialize(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        try:
+            status = await database_status_service.check()
+
+            if status.state == DatabaseState.READY:
+                await interaction.followup.send(
+                    "La base de données est déjà initialisée et prête.",
+                    ephemeral=True,
+                )
+                return
+
+            if status.state == DatabaseState.MIGRATION_REQUIRED:
+                await interaction.followup.send(
+                    (
+                        "La base de données existe déjà mais nécessite "
+                        "une migration. Utilise `/claviger database migrate`."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
+            if status.state == DatabaseState.TOO_NEW:
+                raise RuntimeError(
+                    "La base de données utilise une version de schéma "
+                    "plus récente que cette version de Claviger."
+                )
+
+            if status.state == DatabaseState.UNAVAILABLE:
+                raise RuntimeError(
+                    "La base de données est actuellement indisponible."
+                )
+
+            await database_schema.initialize()
+
+            final_status = await database_status_service.check()
+
+            if final_status.state != DatabaseState.READY:
+                raise RuntimeError(
+                    (
+                        "Database initialization completed but "
+                        f"final state is {final_status.state.value}."
+                    )
+                )
+
+        except Exception as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="database.initialize.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec de l'initialisation de la base de données",
+                    summary=(
+                        "Claviger n'a pas pu initialiser "
+                        "sa base de données."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await interaction.followup.send(
+                "Échec de l'initialisation de la base de données.",
+                ephemeral=True,
+            )
+            return
+
+        await report_service.emit(
+            ReportEvent(
+                event_type="database.initialize.success",
+                severity=ReportSeverity.INFO,
+                title="Base de données initialisée",
+                summary=(
+                    "La base de données de Claviger "
+                    "a été initialisée avec succès."
+                ),
+                details=(
+                    f"Schema version: {final_status.current_version}"
+                ),
+                guild_id=interaction.guild.id,
+                guild_label=interaction.guild.name,
+                actor_id=interaction.user.id,
+                actor_label=interaction.user.display_name,
+            )
+        )
+
+        await interaction.followup.send(
+            (
+                "Base de données initialisée avec succès. "
+                f"Version du schéma : `{final_status.current_version}`."
             ),
             ephemeral=True,
         )
@@ -289,7 +416,14 @@ def create_claviger_group(
             ),
             f"- Rôle membre attendu : {policy.member_role_name}",
             f"- Rôle adulte attendu : {policy.adult_role_name}",
-            f"- Préfixe d'accès : {policy.access_role_prefix}",
+            (
+                "- Préfixe intérêts membre : "
+                f"{policy.member_interest_prefix}"
+            ),
+            (
+                "- Préfixe accès adulte : "
+                f"{policy.adult_access_prefix}"
+            ),
             "",
             f"**Rôles de confiance ({len(hierarchy.trusted_roles)})**",
         ]
@@ -335,7 +469,28 @@ def create_claviger_group(
         lines.extend(
             [
                 "",
-                f"**Rôles d'accès ({len(classification.access_roles)})**",
+                (
+                    "**Intérêts membre "
+                    f"({len(classification.interest_roles)})**"
+                ),
+            ]
+        )
+
+        if classification.interest_roles:
+            lines.extend(
+                f"- {role.name}"
+                for role in classification.interest_roles
+            )
+        else:
+            lines.append("- Aucun")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Accès adultes "
+                    f"({len(classification.access_roles)})**"
+                ),
             ]
         )
 
@@ -391,8 +546,8 @@ def create_claviger_group(
             if not classification.access_roles:
                 anomalies.append(
                     (
-                        "Aucun rôle d'accès correspondant au préfixe "
-                        f'"{policy.access_role_prefix}" détecté.'
+                        "Aucun rôle d'accès adulte correspondant "
+                        f'au préfixe "{policy.adult_access_prefix}" détecté.'
                     )
                 )
 

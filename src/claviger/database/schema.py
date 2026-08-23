@@ -20,7 +20,8 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             guild_id INTEGER PRIMARY KEY,
             member_role_name TEXT,
             adult_role_name TEXT,
-            access_role_prefix TEXT,
+            member_interest_prefix TEXT,
+            adult_access_prefix TEXT,
             salutations_channel_name TEXT,
             adult_rules_channel_name TEXT,
             role_management_enabled INTEGER
@@ -52,19 +53,17 @@ class DatabaseSchema:
         """Return the current SQLite application schema version."""
 
         async with self.database.connect() as connection:
-            cursor = await connection.execute(
-                "PRAGMA user_version"
+            return await self._get_version(
+                connection,
             )
 
-            row = await cursor.fetchone()
-
-        if row is None:
-            return 0
-
-        return int(row[0])
-
     async def initialize(self) -> None:
-        """Initialize or migrate the database to the current schema version."""
+        """Initialize a new or uninitialized database."""
+
+        self.database.database_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         async with self.database.connect() as connection:
             current_version = await self._get_version(
@@ -78,14 +77,68 @@ class DatabaseSchema:
                     f"{CURRENT_SCHEMA_VERSION}."
                 )
 
-            for version in range(
-                current_version + 1,
-                CURRENT_SCHEMA_VERSION + 1,
-            ):
-                await self._apply_migration(
-                    connection,
-                    version,
+            if current_version != 0:
+                raise RuntimeError(
+                    "Database is already initialized."
                 )
+
+            await self._upgrade(
+                connection,
+                current_version,
+            )
+
+    async def migrate(self) -> None:
+        """Migrate an existing database to the current schema version."""
+
+        async with self.database.connect() as connection:
+            current_version = await self._get_version(
+                connection,
+            )
+
+            if current_version == 0:
+                raise RuntimeError(
+                    "Database is not initialized."
+                )
+
+            if current_version > CURRENT_SCHEMA_VERSION:
+                raise UnsupportedSchemaVersionError(
+                    "Database schema version "
+                    f"{current_version} is newer than supported version "
+                    f"{CURRENT_SCHEMA_VERSION}."
+                )
+
+            if current_version == CURRENT_SCHEMA_VERSION:
+                raise RuntimeError(
+                    "Database is already up to date."
+                )
+
+            await self._upgrade(
+                connection,
+                current_version,
+            )
+
+    async def _upgrade(
+        self,
+        connection: aiosqlite.Connection,
+        current_version: int,
+    ) -> None:
+        """Apply every missing migration up to the current schema version."""
+
+        if current_version > CURRENT_SCHEMA_VERSION:
+            raise UnsupportedSchemaVersionError(
+                "Database schema version "
+                f"{current_version} is newer than supported version "
+                f"{CURRENT_SCHEMA_VERSION}."
+            )
+
+        for version in range(
+            current_version + 1,
+            CURRENT_SCHEMA_VERSION + 1,
+        ):
+            await self._apply_migration(
+                connection,
+                version,
+            )
 
     async def _get_version(
         self,
@@ -111,7 +164,9 @@ class DatabaseSchema:
     ) -> None:
         """Apply one schema migration atomically."""
 
-        statements = MIGRATIONS.get(version)
+        statements = MIGRATIONS.get(
+            version,
+        )
 
         if statements is None:
             raise RuntimeError(

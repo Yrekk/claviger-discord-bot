@@ -9,17 +9,22 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.database.schema import DatabaseSchema
+
 from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
 from claviger.policies.policy_resolver import PolicyResolver
+
 from claviger.reporting.event import ReportSeverity
 from claviger.reporting.service import ReportService
+
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
 )
+
 
 
 def create_interaction(
@@ -76,7 +81,6 @@ def create_role(
 
     return role
 
-
 def create_test_group(
     role_discovery_service: RoleDiscoveryService,
 ):
@@ -87,6 +91,12 @@ def create_test_group(
     policy_resolver.resolve = AsyncMock(
         return_value=SUCCUMBRAE_FALLBACK_POLICY,
     )
+
+    database_schema = Mock(
+        spec=DatabaseSchema,
+    )
+    database_schema.initialize = AsyncMock()
+    database_schema.migrate = AsyncMock()
 
     database_status_service = Mock(
         spec=DatabaseStatusService,
@@ -110,6 +120,7 @@ def create_test_group(
         role_discovery_service,
         policy_resolver,
         role_classifier,
+        database_schema,
         database_status_service,
         report_service,
     )
@@ -117,6 +128,7 @@ def create_test_group(
     return (
         group,
         policy_resolver,
+        database_schema,
         database_status_service,
         report_service,
     )
@@ -129,6 +141,7 @@ def get_scan_command(
     (
         group,
         policy_resolver,
+        _,
         _,
         report_service,
     ) = create_test_group(
@@ -162,6 +175,7 @@ def get_report_test_command(
         group,
         policy_resolver,
         _,
+        _,
         report_service,
     ) = create_test_group(
         role_discovery_service,
@@ -193,6 +207,7 @@ def get_database_status_command(
     (
         group,
         _,
+        _,
         database_status_service,
         report_service,
     ) = create_test_group(
@@ -217,6 +232,39 @@ def get_database_status_command(
         report_service,
     )
 
+
+def get_database_initialize_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger database initialize command."""
+    (
+        group,
+        _,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+    )
+
+    database_group = group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    command = database_group.get_command(
+        "initialize",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    )
 
 @pytest.mark.asyncio
 async def test_role_scan_rejects_interaction_outside_guild() -> None:
@@ -313,6 +361,11 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
         position=40,
     )
 
+    interest = create_role(
+    name="interest-ia",
+    position=35,
+    )
+
     access = create_role(
         name="access-ia-yuri",
         position=30,
@@ -332,6 +385,7 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
             manageable_roles=[
                 adult,
                 member,
+                interest,
                 access,
                 unmanaged,
             ],
@@ -382,10 +436,13 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
     assert "**Rôle membre (1)**" in message
     assert "Membre" in message
 
+    assert "**Intérêts membre (1)**" in message
+    assert "interest-ia" in message
+
     assert "**Rôle adulte (1)**" in message
     assert "Civis Noctis - 18+" in message
 
-    assert "**Rôles d'accès (1)**" in message
+    assert "**Accès adultes (1)**" in message
     assert "access-ia-yuri" in message
 
     assert "**Autres rôles sous Claviger (1)**" in message
@@ -673,5 +730,181 @@ async def test_database_status_reports_unexpected_failure() -> None:
 
     interaction.followup.send.assert_awaited_once_with(
         "Impossible de déterminer l'état de la base de données.",
+        ephemeral=True,
+    )
+
+@pytest.mark.asyncio
+async def test_database_initialize_creates_missing_database() -> None:
+    """Initialize a missing database and verify its final state."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_initialize_command(
+        service,
+    )
+
+    database_status_service.check.side_effect = [
+        DatabaseStatus(
+            state=DatabaseState.MISSING,
+            current_version=None,
+            target_version=2,
+        ),
+        DatabaseStatus(
+            state=DatabaseState.READY,
+            current_version=2,
+            target_version=2,
+        ),
+    ]
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.initialize.assert_awaited_once()
+
+    assert database_status_service.check.await_count == 2
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "database.initialize.success"
+    assert event.severity == ReportSeverity.INFO
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "Base de données initialisée avec succès. "
+            "Version du schéma : `2`."
+        ),
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_initialize_rejects_ready_database() -> None:
+    """Do not initialize an already ready database."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_initialize_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.READY,
+        current_version=2,
+        target_version=2,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.initialize.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        "La base de données est déjà initialisée et prête.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_initialize_rejects_non_owner() -> None:
+    """Prevent non-owners from initializing the database."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_initialize_command(
+        service,
+    )
+
+    interaction = create_interaction(
+        owner_id=42,
+        user_id=84,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.initialize.assert_not_awaited()
+    database_status_service.check.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_initialize_reports_failure() -> None:
+    """Report database initialization failures."""
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = get_database_initialize_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.MISSING,
+        current_version=None,
+        target_version=2,
+    )
+
+    database_schema.initialize.side_effect = RuntimeError(
+        "Initialization exploded."
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "database.initialize.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert event.details == "Initialization exploded."
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Échec de l'initialisation de la base de données.",
         ephemeral=True,
     )

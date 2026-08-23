@@ -22,13 +22,14 @@ class GuildPolicyRepository:
         guild_id: int,
     ) -> GuildPolicyOverrides | None:
         """Return policy overrides for a guild, or None when none exist."""
+
         if not self.database.exists():
             raise DatabaseMissingError(
-                f"SQLite database does not exist: {self.database.database_path}"
+                f"SQLite database does not exist: "
+                f"{self.database.database_path}"
             )
 
         try:
-            
             async with self.database.connect() as connection:
                 connection.row_factory = aiosqlite.Row
 
@@ -37,7 +38,8 @@ class GuildPolicyRepository:
                     SELECT
                         member_role_name,
                         adult_role_name,
-                        access_role_prefix,
+                        member_interest_prefix,
+                        adult_access_prefix,
                         salutations_channel_name,
                         adult_rules_channel_name,
                         role_management_enabled,
@@ -61,7 +63,8 @@ class GuildPolicyRepository:
         return GuildPolicyOverrides(
             member_role_name=row["member_role_name"],
             adult_role_name=row["adult_role_name"],
-            access_role_prefix=row["access_role_prefix"],
+            member_interest_prefix=row["member_interest_prefix"],
+            adult_access_prefix=row["adult_access_prefix"],
             salutations_channel_name=row["salutations_channel_name"],
             adult_rules_channel_name=row["adult_rules_channel_name"],
             role_management_enabled=self._to_optional_bool(
@@ -79,6 +82,12 @@ class GuildPolicyRepository:
     ) -> None:
         """Create or replace all policy overrides for a guild."""
 
+        if not self.database.exists():
+            raise DatabaseMissingError(
+                f"SQLite database does not exist: "
+                f"{self.database.database_path}"
+            )
+
         try:
             async with self.database.connect() as connection:
                 await connection.execute(
@@ -87,17 +96,21 @@ class GuildPolicyRepository:
                         guild_id,
                         member_role_name,
                         adult_role_name,
-                        access_role_prefix,
+                        member_interest_prefix,
+                        adult_access_prefix,
                         salutations_channel_name,
                         adult_rules_channel_name,
                         role_management_enabled,
                         adult_access_enabled
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(guild_id) DO UPDATE SET
                         member_role_name = excluded.member_role_name,
                         adult_role_name = excluded.adult_role_name,
-                        access_role_prefix = excluded.access_role_prefix,
+                        member_interest_prefix =
+                            excluded.member_interest_prefix,
+                        adult_access_prefix =
+                            excluded.adult_access_prefix,
                         salutations_channel_name =
                             excluded.salutations_channel_name,
                         adult_rules_channel_name =
@@ -111,7 +124,8 @@ class GuildPolicyRepository:
                         guild_id,
                         overrides.member_role_name,
                         overrides.adult_role_name,
-                        overrides.access_role_prefix,
+                        overrides.member_interest_prefix,
+                        overrides.adult_access_prefix,
                         overrides.salutations_channel_name,
                         overrides.adult_rules_channel_name,
                         overrides.role_management_enabled,

@@ -33,6 +33,7 @@ class PolicyResolver:
             overrides = await self.repository.get(
                 guild_id,
             )
+
         except DatabaseUnavailableError:
             return self._resolve_database_fallback(
                 guild_id,
@@ -75,10 +76,15 @@ class PolicyResolver:
                 if overrides.adult_role_name is not None
                 else base_policy.adult_role_name
             ),
-            access_role_prefix=(
-                overrides.access_role_prefix
-                if overrides.access_role_prefix is not None
-                else base_policy.access_role_prefix
+            member_interest_prefix=(
+                overrides.member_interest_prefix
+                if overrides.member_interest_prefix is not None
+                else base_policy.member_interest_prefix
+            ),
+            adult_access_prefix=(
+                overrides.adult_access_prefix
+                if overrides.adult_access_prefix is not None
+                else base_policy.adult_access_prefix
             ),
             salutations_channel_name=(
                 overrides.salutations_channel_name

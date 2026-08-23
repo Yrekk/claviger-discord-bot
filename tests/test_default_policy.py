@@ -25,7 +25,7 @@ def test_succumbrae_fallback_uses_expected_role_conventions() -> None:
         SUCCUMBRAE_FALLBACK_POLICY.adult_role_name
         == "Civis Noctis - 18+"
     )
-    assert SUCCUMBRAE_FALLBACK_POLICY.access_role_prefix == "access-"
+    assert SUCCUMBRAE_FALLBACK_POLICY.adult_access_prefix == "access-"
 
 
 def test_succumbrae_fallback_uses_expected_flow_channels() -> None:

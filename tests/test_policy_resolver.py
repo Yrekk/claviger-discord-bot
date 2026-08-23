@@ -56,7 +56,8 @@ async def test_resolver_applies_partial_database_overrides(
     """Merge configured guild overrides with the safe default policy."""
     repository.get.return_value = GuildPolicyOverrides(
         member_role_name="Citoyen",
-        access_role_prefix="role-access-",
+        member_interest_prefix="interest-",
+        adult_access_prefix="access-",
         role_management_enabled=True,
     )
 
@@ -70,7 +71,8 @@ async def test_resolver_applies_partial_database_overrides(
     )
 
     assert policy.member_role_name == "Citoyen"
-    assert policy.access_role_prefix == "role-access-"
+    assert policy.member_interest_prefix == "interest-"
+    assert policy.adult_access_prefix == "access-"
     assert policy.role_management_enabled is True
 
     assert (

@@ -7,7 +7,9 @@ class GuildPolicy:
 
     member_role_name: str
     adult_role_name: str
-    access_role_prefix: str
+
+    member_interest_prefix: str
+    adult_access_prefix: str
 
     salutations_channel_name: str
     adult_rules_channel_name: str
@@ -22,7 +24,9 @@ class GuildPolicyOverrides:
 
     member_role_name: str | None = None
     adult_role_name: str | None = None
-    access_role_prefix: str | None = None
+
+    member_interest_prefix: str | None = None
+    adult_access_prefix: str | None = None
 
     salutations_channel_name: str | None = None
     adult_rules_channel_name: str | None = None
