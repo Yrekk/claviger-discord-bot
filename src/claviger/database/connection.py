@@ -61,3 +61,6 @@ class DatabaseConnection:
     def exists(self) -> bool:
         """Return whether the configured SQLite database file exists."""
         return self.database_path.is_file()
+
+class DatabaseMissingError(DatabaseUnavailableError):
+    """Raised when Claviger's SQLite database does not exist."""

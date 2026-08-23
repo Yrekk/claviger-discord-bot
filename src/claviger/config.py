@@ -45,6 +45,13 @@ def get_test_role_id() -> int:
         )
 
     return int(role_id)
+
+def get_database_path() -> str:
+    """Return Claviger's SQLite database path."""
+    return os.getenv(
+        "DATABASE_PATH",
+        "data/claviger.db",
+    )
     """Load and return the Discord forum text channel ID."""
     load_dotenv()
 

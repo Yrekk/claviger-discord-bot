@@ -14,7 +14,7 @@ SAFE_DEFAULT_POLICY = GuildPolicy(
 
 SUCCUMBRAE_FALLBACK_POLICY = GuildPolicy(
     member_role_name="Membre",
-    adult_role_name="Civis Noctis · 18+",
+    adult_role_name="Civis Noctis - 18+",
     access_role_prefix="access-",
     salutations_channel_name="salutations",
     adult_rules_channel_name="lex-noctis",

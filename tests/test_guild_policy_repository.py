@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from claviger.database.connection import DatabaseConnection
+from claviger.database.connection import DatabaseConnection, DatabaseMissingError
 from claviger.database.schema import DatabaseSchema
 from claviger.policies.guild_policy import GuildPolicyOverrides
 from claviger.repositories.guild_policy_repository import (
@@ -161,3 +161,25 @@ async def test_guild_configurations_are_isolated(
 
     assert await repository.get(123) == first
     assert await repository.get(456) == second
+
+@pytest.mark.asyncio
+async def test_get_does_not_create_missing_database(
+    tmp_path: Path,
+) -> None:
+    """Do not create SQLite while trying to read missing configuration."""
+    database_path = tmp_path / "claviger.db"
+
+    database = DatabaseConnection(
+        database_path,
+    )
+
+    repository = GuildPolicyRepository(
+        database,
+    )
+
+    with pytest.raises(DatabaseMissingError):
+        await repository.get(
+            123,
+        )
+
+    assert database_path.exists() is False

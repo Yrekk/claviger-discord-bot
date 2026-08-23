@@ -2,6 +2,7 @@ import aiosqlite
 
 from claviger.database.connection import (
     DatabaseConnection,
+    DatabaseMissingError,
     DatabaseUnavailableError,
 )
 from claviger.policies.guild_policy import GuildPolicyOverrides
@@ -21,8 +22,13 @@ class GuildPolicyRepository:
         guild_id: int,
     ) -> GuildPolicyOverrides | None:
         """Return policy overrides for a guild, or None when none exist."""
+        if not self.database.exists():
+            raise DatabaseMissingError(
+                f"SQLite database does not exist: {self.database.database_path}"
+            )
 
         try:
+            
             async with self.database.connect() as connection:
                 connection.row_factory = aiosqlite.Row
 
