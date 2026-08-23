@@ -9,7 +9,8 @@ description = "Discord bot for consent-based and preference-driven access manage
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [ "discord.py>=2.6,<3.0",
-    "python-dotenv>=1.0,<2.0",]
+    "python-dotenv>=1.0,<2.0",
+    "aiosqlite>=0.20,<1.0",]
 
 [project.scripts]
 claviger = "claviger.main:main"
