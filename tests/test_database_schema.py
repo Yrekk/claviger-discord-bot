@@ -84,3 +84,69 @@ async def test_initialize_rejects_newer_database_schema(
         match="newer than supported version",
     ):
         await schema.initialize()
+
+@pytest.mark.asyncio
+async def test_initialize_creates_guild_settings_table(
+    tmp_path: Path,
+) -> None:
+    """Create the guild settings table during schema initialization."""
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_settings'
+            """
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == ("guild_settings",)
+
+
+@pytest.mark.asyncio
+async def test_initialize_migrates_version_one_database(
+    tmp_path: Path,
+) -> None:
+    """Migrate an existing version one database to the current schema."""
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+
+    async with database.connect() as connection:
+        await connection.execute(
+            "PRAGMA user_version = 1"
+        )
+        await connection.commit()
+
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    assert await schema.get_version() == CURRENT_SCHEMA_VERSION
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_settings'
+            """
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == ("guild_settings",)

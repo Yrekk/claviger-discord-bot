@@ -131,3 +131,31 @@ async def test_database_status_reports_unavailable_database() -> None:
     assert status.current_version is None
 
     schema.get_version.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_database_status_reports_required_migration(
+    tmp_path: Path,
+) -> None:
+    """Report an existing schema older than the current version."""
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+
+    async with database.connect() as connection:
+        await connection.execute(
+            "PRAGMA user_version = 1"
+        )
+        await connection.commit()
+
+    schema = DatabaseSchema(database)
+
+    service = DatabaseStatusService(
+        database,
+        schema,
+    )
+
+    status = await service.check()
+
+    assert status.state is DatabaseState.MIGRATION_REQUIRED
+    assert status.current_version == 1
+    assert status.target_version == CURRENT_SCHEMA_VERSION
