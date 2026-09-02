@@ -5,7 +5,6 @@ from claviger.reporting.event import (
     ReportSeverity,
 )
 
-
 SEVERITY_COLORS = {
     ReportSeverity.INFO: discord.Color.blue(),
     ReportSeverity.WARNING: discord.Color.orange(),
@@ -36,10 +35,7 @@ class DiscordForumReporter:
             event,
         )
 
-        thread_name = (
-            f"[{event.severity.value.upper()}] "
-            f"{event.title}"
-        )[:100]
+        thread_name = (f"[{event.severity.value.upper()}] {event.title}")[:100]
 
         await forum.create_thread(
             name=thread_name,
@@ -114,8 +110,8 @@ class DiscordForumReporter:
             embed.add_field(
                 name="Cible",
                 value=event.target_label,
-        inline=True,
-    )
+                inline=True,
+            )
 
         if event.details is not None:
             embed.add_field(

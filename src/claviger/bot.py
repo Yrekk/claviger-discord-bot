@@ -3,7 +3,6 @@ from discord import app_commands
 
 # Commands
 from claviger.commands.claviger import create_claviger_group
-from claviger.commands.role_test import create_role_test_group
 from claviger.commands.say import create_say_command
 
 # Config
@@ -11,17 +10,16 @@ from claviger.config import (
     get_admin_report_forum_id,
     get_database_path,
     get_discord_guild_id,
-    get_test_role_id,
 )
 
 # Database
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import DatabaseStatusService
+from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 
 # Policies
 from claviger.policies.policy_resolver import PolicyResolver
-from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 
 # Reporting
 from claviger.reporting.discord_forum import DiscordForumReporter
@@ -36,14 +34,13 @@ from claviger.repositories.guild_policy_repository import (
 
 # Services
 from claviger.services.authorization import AuthorizationService
+from claviger.services.guild_policy_bootstrap import (
+    GuildPolicyBootstrapService,
+)
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.role_manager import RoleManager
 from claviger.services.say import SayService
-from claviger.services.guild_policy_bootstrap import (
-    GuildPolicyBootstrapService,
-)
-
 
 
 class ClavigerBot(discord.Client):
@@ -55,7 +52,6 @@ class ClavigerBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
         self.guild_id = get_discord_guild_id()
-        self.test_role_id = get_test_role_id()
 
         self.role_manager = RoleManager()
         self.role_discovery_service = RoleDiscoveryService()
@@ -85,9 +81,9 @@ class ClavigerBot(discord.Client):
             fallback_guild_id=self.guild_id,
         )
         self.guild_policy_bootstrap_service = GuildPolicyBootstrapService(
-                repository=self.guild_policy_repository,
-                fallback_guild_id=get_discord_guild_id(),
-                bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
+            repository=self.guild_policy_repository,
+            fallback_guild_id=self.guild_id,
+            bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
         )
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
@@ -109,14 +105,6 @@ class ClavigerBot(discord.Client):
 
         guild = discord.Object(
             id=self.guild_id,
-        )
-
-        self.tree.add_command(
-            create_role_test_group(
-                self.role_manager,
-                self.test_role_id,
-            ),
-            guild=guild,
         )
 
         self.tree.add_command(
@@ -149,18 +137,11 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        print(
-            f"Commandes synchronisées : {len(synced)}"
-        )
+        print(f"Commandes synchronisées : {len(synced)}")
 
     async def on_ready(self) -> None:
         if self.user is None:
             return
 
-        print(
-            f"Claviger connecté en tant que "
-            f"{self.user} ({self.user.id})"
-        )
-        print(
-            f"Serveurs accessibles : {len(self.guilds)}"
-        )
+        print(f"Claviger connecté en tant que {self.user} ({self.user.id})")
+        print(f"Serveurs accessibles : {len(self.guilds)}")

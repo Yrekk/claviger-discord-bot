@@ -25,8 +25,7 @@ class GuildPolicyRepository:
 
         if not self.database.exists():
             raise DatabaseMissingError(
-                f"SQLite database does not exist: "
-                f"{self.database.database_path}"
+                f"SQLite database does not exist: {self.database.database_path}"
             )
 
         try:
@@ -70,9 +69,7 @@ class GuildPolicyRepository:
             role_management_enabled=self._to_optional_bool(
                 row["role_management_enabled"]
             ),
-            adult_access_enabled=self._to_optional_bool(
-                row["adult_access_enabled"]
-            ),
+            adult_access_enabled=self._to_optional_bool(row["adult_access_enabled"]),
         )
 
     async def save(
@@ -84,8 +81,7 @@ class GuildPolicyRepository:
 
         if not self.database.exists():
             raise DatabaseMissingError(
-                f"SQLite database does not exist: "
-                f"{self.database.database_path}"
+                f"SQLite database does not exist: {self.database.database_path}"
             )
 
         try:

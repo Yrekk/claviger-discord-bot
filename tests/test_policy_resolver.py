@@ -13,7 +13,6 @@ from claviger.repositories.guild_policy_repository import (
     GuildPolicyRepository,
 )
 
-
 FALLBACK_GUILD_ID = 123
 
 
@@ -75,13 +74,9 @@ async def test_resolver_applies_partial_database_overrides(
     assert policy.adult_access_prefix == "access-"
     assert policy.role_management_enabled is True
 
+    assert policy.adult_role_name == SAFE_DEFAULT_POLICY.adult_role_name
     assert (
-        policy.adult_role_name
-        == SAFE_DEFAULT_POLICY.adult_role_name
-    )
-    assert (
-        policy.salutations_channel_name
-        == SAFE_DEFAULT_POLICY.salutations_channel_name
+        policy.salutations_channel_name == SAFE_DEFAULT_POLICY.salutations_channel_name
     )
     assert policy.adult_access_enabled is False
 
@@ -112,9 +107,7 @@ async def test_resolver_uses_succumbrae_fallback_when_database_is_unavailable(
     repository: Mock,
 ) -> None:
     """Keep Succumbrae functional when the database is unavailable."""
-    repository.get.side_effect = DatabaseUnavailableError(
-        "Database unavailable."
-    )
+    repository.get.side_effect = DatabaseUnavailableError("Database unavailable.")
 
     resolver = PolicyResolver(
         repository,
@@ -133,9 +126,7 @@ async def test_resolver_uses_safe_default_for_other_guild_when_database_is_unava
     repository: Mock,
 ) -> None:
     """Fail safely on other guilds when the database is unavailable."""
-    repository.get.side_effect = DatabaseUnavailableError(
-        "Database unavailable."
-    )
+    repository.get.side_effect = DatabaseUnavailableError("Database unavailable.")
 
     resolver = PolicyResolver(
         repository,

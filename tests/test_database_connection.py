@@ -20,9 +20,7 @@ async def test_database_connection_opens_sqlite_database(
     )
 
     async with database.connect() as connection:
-        cursor = await connection.execute(
-            "SELECT 1"
-        )
+        cursor = await connection.execute("SELECT 1")
 
         result = await cursor.fetchone()
 
@@ -40,9 +38,7 @@ async def test_database_connection_enables_foreign_keys(
     )
 
     async with database.connect() as connection:
-        cursor = await connection.execute(
-            "PRAGMA foreign_keys"
-        )
+        cursor = await connection.execute("PRAGMA foreign_keys")
 
         result = await cursor.fetchone()
 
@@ -92,6 +88,7 @@ async def test_database_reports_unavailable_database(
 
     assert await database.is_available() is False
 
+
 def test_database_reports_missing_database(
     tmp_path: Path,
 ) -> None:
@@ -104,6 +101,7 @@ def test_database_reports_missing_database(
 
     assert database.exists() is False
     assert database_path.exists() is False
+
 
 @pytest.mark.asyncio
 async def test_availability_check_does_not_create_missing_database(

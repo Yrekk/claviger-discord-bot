@@ -1,6 +1,5 @@
 from claviger.policies.guild_policy import GuildPolicy
 
-
 SAFE_DEFAULT_POLICY = GuildPolicy(
     member_role_name="Membre",
     adult_role_name="Adulte (18+)",

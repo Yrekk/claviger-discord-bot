@@ -4,34 +4,28 @@ import discord
 import pytest
 
 from claviger.commands.claviger import create_claviger_group
+from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
     DatabaseStatus,
     DatabaseStatusService,
 )
-from claviger.database.schema import DatabaseSchema
-
 from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
-from claviger.policies.policy_resolver import PolicyResolver
 from claviger.policies.guild_policy import GuildPolicyOverrides
-
-
-
+from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.event import ReportSeverity
 from claviger.reporting.service import ReportService
-
+from claviger.services.guild_policy_bootstrap import (
+    GuildAlreadyConfiguredError,
+    GuildPolicyBootstrapService,
+)
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
 )
-from claviger.services.guild_policy_bootstrap import (
-    GuildAlreadyConfiguredError,
-    GuildPolicyBootstrapService,
-)
-
 
 
 def create_interaction(
@@ -87,6 +81,7 @@ def create_role(
     role.position = position
 
     return role
+
 
 def create_test_group(
     role_discovery_service: RoleDiscoveryService,
@@ -281,6 +276,7 @@ def get_database_initialize_command(
         report_service,
     )
 
+
 def get_database_migrate_command(
     role_discovery_service: RoleDiscoveryService,
 ):
@@ -313,6 +309,7 @@ def get_database_migrate_command(
         database_status_service,
         report_service,
     )
+
 
 def get_guild_bootstrap_command(
     role_discovery_service: RoleDiscoveryService,
@@ -353,6 +350,7 @@ def get_guild_bootstrap_command(
         database_status_service,
         report_service,
     )
+
 
 @pytest.mark.asyncio
 async def test_role_scan_rejects_interaction_outside_guild() -> None:
@@ -450,8 +448,8 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
     )
 
     interest = create_role(
-    name="interest-ia",
-    position=35,
+        name="interest-ia",
+        position=35,
     )
 
     access = create_role(
@@ -547,9 +545,7 @@ async def test_role_scan_reports_discovery_error() -> None:
         spec=RoleDiscoveryService,
     )
     service.get_hierarchy = AsyncMock(
-        side_effect=RuntimeError(
-            "Claviger's highest role could not be found."
-        )
+        side_effect=RuntimeError("Claviger's highest role could not be found.")
     )
 
     interaction = create_interaction(
@@ -588,10 +584,7 @@ async def test_role_scan_reports_discovery_error() -> None:
     assert event.actor_id == interaction.user.id
     assert event.actor_label == interaction.user.display_name
 
-    assert (
-        event.details
-        == "Claviger's highest role could not be found."
-    )
+    assert event.details == "Claviger's highest role could not be found."
 
     interaction.followup.send.assert_awaited_once_with(
         (
@@ -649,10 +642,7 @@ async def test_report_test_emits_structured_event() -> None:
     assert event.actor_label == interaction.user.display_name
 
     interaction.followup.send.assert_awaited_once_with(
-        (
-            "Rapport de test émis. "
-            "Vérifie le forum administratif."
-        ),
+        ("Rapport de test émis. Vérifie le forum administratif."),
         ephemeral=True,
     )
 
@@ -821,6 +811,7 @@ async def test_database_status_reports_unexpected_failure() -> None:
         ephemeral=True,
     )
 
+
 @pytest.mark.asyncio
 async def test_database_initialize_creates_missing_database() -> None:
     """Initialize a missing database and verify its final state."""
@@ -869,10 +860,7 @@ async def test_database_initialize_creates_missing_database() -> None:
     assert event.severity == ReportSeverity.INFO
 
     interaction.followup.send.assert_awaited_once_with(
-        (
-            "Base de données initialisée avec succès. "
-            "Version du schéma : `2`."
-        ),
+        ("Base de données initialisée avec succès. Version du schéma : `2`."),
         ephemeral=True,
     )
 
@@ -974,9 +962,7 @@ async def test_database_initialize_reports_failure() -> None:
         target_version=2,
     )
 
-    database_schema.initialize.side_effect = RuntimeError(
-        "Initialization exploded."
-    )
+    database_schema.initialize.side_effect = RuntimeError("Initialization exploded.")
 
     interaction = create_interaction()
 
@@ -996,6 +982,7 @@ async def test_database_initialize_reports_failure() -> None:
         "Échec de l'initialisation de la base de données.",
         ephemeral=True,
     )
+
 
 @pytest.mark.asyncio
 async def test_database_migrate_upgrades_outdated_database() -> None:
@@ -1164,6 +1151,7 @@ async def test_database_migrate_rejects_non_owner() -> None:
         "Cette commande est réservée au propriétaire du serveur.",
         ephemeral=True,
     )
+
 
 @pytest.mark.asyncio
 async def test_guild_bootstrap_persists_initial_configuration() -> None:
@@ -1352,9 +1340,7 @@ async def test_guild_bootstrap_reports_unexpected_failure() -> None:
         service,
     )
 
-    bootstrap_service.bootstrap.side_effect = RuntimeError(
-        "Bootstrap exploded."
-    )
+    bootstrap_service.bootstrap.side_effect = RuntimeError("Bootstrap exploded.")
 
     interaction = create_interaction()
 

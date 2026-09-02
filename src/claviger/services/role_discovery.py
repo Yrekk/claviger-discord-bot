@@ -11,16 +11,13 @@ class RoleHierarchy:
     trusted_roles: list[discord.Role]
     manageable_roles: list[discord.Role]
 
+
 def is_trusted_role(
     role: discord.Role,
     bot_role: discord.Role,
 ) -> bool:
     """Return whether a role grants trusted status over Claviger."""
-    return (
-        role > bot_role
-        and not role.managed
-        and not role.is_default()
-    )
+    return role > bot_role and not role.managed and not role.is_default()
 
 
 def is_manageable_role(
@@ -28,11 +25,8 @@ def is_manageable_role(
     bot_role: discord.Role,
 ) -> bool:
     """Return whether a role is technically manageable by Claviger."""
-    return (
-        role < bot_role
-        and not role.managed
-        and not role.is_default()
-    )
+    return role < bot_role and not role.managed and not role.is_default()
+
 
 class RoleDiscoveryService:
     """Discover the role hierarchy of a Discord guild."""
@@ -46,20 +40,14 @@ class RoleDiscoveryService:
         bot_member = guild.me
 
         if bot_member is None:
-            raise RuntimeError(
-                "Claviger could not find its own member in this guild."
-            )
+            raise RuntimeError("Claviger could not find its own member in this guild.")
 
         roles = await guild.fetch_roles()
 
         bot_role_id = bot_member.top_role.id
 
         bot_role = next(
-            (
-                role
-                for role in roles
-                if role.id == bot_role_id
-            ),
+            (role for role in roles if role.id == bot_role_id),
             None,
         )
 
@@ -68,16 +56,10 @@ class RoleDiscoveryService:
                 "Claviger's highest role could not be found in the guild roles."
             )
 
-        trusted_roles = [
-            role
-            for role in roles
-            if is_trusted_role(role, bot_role)
-        ]
+        trusted_roles = [role for role in roles if is_trusted_role(role, bot_role)]
 
         manageable_roles = [
-            role
-            for role in roles
-            if is_manageable_role(role, bot_role)
+            role for role in roles if is_manageable_role(role, bot_role)
         ]
 
         trusted_roles.sort(reverse=True)

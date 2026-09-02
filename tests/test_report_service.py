@@ -59,9 +59,7 @@ async def test_report_service_dispatches_event_to_all_reporters() -> None:
 async def test_report_service_continues_when_reporter_fails() -> None:
     """Continue dispatching when one reporter raises an exception."""
     failing = create_reporter()
-    failing.report.side_effect = RuntimeError(
-        "Discord unavailable."
-    )
+    failing.report.side_effect = RuntimeError("Discord unavailable.")
 
     working = create_reporter()
 
@@ -90,9 +88,7 @@ async def test_report_service_continues_when_reporter_fails() -> None:
 async def test_report_service_logs_reporter_failure() -> None:
     """Log reporter failures without propagating them."""
     reporter = create_reporter()
-    reporter.report.side_effect = RuntimeError(
-        "Reporter exploded."
-    )
+    reporter.report.side_effect = RuntimeError("Reporter exploded.")
 
     logger = Mock(
         spec=logging.Logger,

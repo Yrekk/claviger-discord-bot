@@ -21,23 +21,14 @@ def test_succumbrae_fallback_keeps_role_features_enabled() -> None:
 def test_succumbrae_fallback_uses_expected_role_conventions() -> None:
     """Use Succumbrae's known role naming conventions."""
     assert SUCCUMBRAE_FALLBACK_POLICY.member_role_name == "Membre"
-    assert (
-        SUCCUMBRAE_FALLBACK_POLICY.adult_role_name
-        == "Civis Noctis - 18+"
-    )
+    assert SUCCUMBRAE_FALLBACK_POLICY.adult_role_name == "Civis Noctis - 18+"
     assert SUCCUMBRAE_FALLBACK_POLICY.adult_access_prefix == "access-"
 
 
 def test_succumbrae_fallback_uses_expected_flow_channels() -> None:
     """Use the known channels required by Succumbrae's membership flows."""
-    assert (
-        SUCCUMBRAE_FALLBACK_POLICY.salutations_channel_name
-        == "salutations"
-    )
-    assert (
-        SUCCUMBRAE_FALLBACK_POLICY.adult_rules_channel_name
-        == "lex-noctis"
-    )
+    assert SUCCUMBRAE_FALLBACK_POLICY.salutations_channel_name == "salutations"
+    assert SUCCUMBRAE_FALLBACK_POLICY.adult_rules_channel_name == "lex-noctis"
 
 
 def test_policy_is_immutable() -> None:

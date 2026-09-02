@@ -19,4 +19,4 @@ def test_get_discord_token_raises_when_missing(monkeypatch) -> None:
     monkeypatch.delenv("DISCORD_TOKEN", raising=False)
 
     with pytest.raises(RuntimeError, match="DISCORD_TOKEN is missing"):
-        config.get_discord_token()   
+        config.get_discord_token()

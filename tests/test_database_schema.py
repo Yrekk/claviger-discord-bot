@@ -75,9 +75,7 @@ async def test_initialize_rejects_newer_database_schema(
     )
 
     async with database.connect() as connection:
-        await connection.execute(
-            f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION + 1}"
-        )
+        await connection.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION + 1}")
         await connection.commit()
 
     schema = DatabaseSchema(
@@ -130,9 +128,7 @@ async def test_migrate_upgrades_version_one_database(
     )
 
     async with database.connect() as connection:
-        await connection.execute(
-            "PRAGMA user_version = 1"
-        )
+        await connection.execute("PRAGMA user_version = 1")
         await connection.commit()
 
     schema = DatabaseSchema(

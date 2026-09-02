@@ -34,9 +34,7 @@ class DatabaseConnection:
             ) from error
 
         try:
-            await connection.execute(
-                "PRAGMA foreign_keys = ON"
-            )
+            await connection.execute("PRAGMA foreign_keys = ON")
 
             yield connection
         finally:
@@ -50,9 +48,7 @@ class DatabaseConnection:
 
         try:
             async with self.connect() as connection:
-                await connection.execute(
-                    "SELECT 1"
-                )
+                await connection.execute("SELECT 1")
         except (DatabaseUnavailableError, aiosqlite.Error):
             return False
 
@@ -61,6 +57,7 @@ class DatabaseConnection:
     def exists(self) -> bool:
         """Return whether the configured SQLite database file exists."""
         return self.database_path.is_file()
+
 
 class DatabaseMissingError(DatabaseUnavailableError):
     """Raised when Claviger's SQLite database does not exist."""

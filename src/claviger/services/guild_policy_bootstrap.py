@@ -36,8 +36,7 @@ class GuildPolicyBootstrapService:
 
         if guild_id != self.fallback_guild_id:
             raise GuildBootstrapNotAllowedError(
-                "Guild bootstrap is only allowed for the configured "
-                "fallback guild."
+                "Guild bootstrap is only allowed for the configured fallback guild."
             )
 
         existing = await self.repository.get(

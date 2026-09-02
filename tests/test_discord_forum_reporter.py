@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock, Mock
 
-from attrs import fields
 import discord
 import pytest
 
@@ -11,7 +10,6 @@ from claviger.reporting.event import (
     ReportEvent,
     ReportSeverity,
 )
-
 
 FORUM_ID = 123
 
@@ -150,9 +148,7 @@ async def test_discord_reporter_builds_structured_embed() -> None:
 
     call = forum.create_thread.await_args
 
-    assert call.kwargs["name"] == (
-        "[ERROR] Database initialization failed"
-    )
+    assert call.kwargs["name"] == ("[ERROR] Database initialization failed")
 
     embed = call.kwargs["embed"]
 
@@ -160,14 +156,9 @@ async def test_discord_reporter_builds_structured_embed() -> None:
     assert embed.description == event.summary
     assert embed.timestamp == event.occurred_at
 
-    fields = {
-        field.name: field.value
-        for field in embed.fields
-    }
+    fields = {field.name: field.value for field in embed.fields}
 
-    assert fields["Événement"] == (
-        "`database.initialize.failed`"
-    )
+    assert fields["Événement"] == ("`database.initialize.failed`")
     assert fields["Sévérité"] == "ERROR"
     assert fields["Serveur"] == event.guild_label
     assert fields["Acteur"] == event.actor_label

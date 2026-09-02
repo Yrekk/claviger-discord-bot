@@ -163,6 +163,7 @@ async def test_guild_configurations_are_isolated(
     assert await repository.get(123) == first
     assert await repository.get(456) == second
 
+
 @pytest.mark.asyncio
 async def test_get_does_not_create_missing_database(
     tmp_path: Path,

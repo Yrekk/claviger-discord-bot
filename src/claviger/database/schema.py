@@ -4,7 +4,6 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-
 CURRENT_SCHEMA_VERSION = 2
 
 
@@ -78,9 +77,7 @@ class DatabaseSchema:
                 )
 
             if current_version != 0:
-                raise RuntimeError(
-                    "Database is already initialized."
-                )
+                raise RuntimeError("Database is already initialized.")
 
             await self._upgrade(
                 connection,
@@ -96,9 +93,7 @@ class DatabaseSchema:
             )
 
             if current_version == 0:
-                raise RuntimeError(
-                    "Database is not initialized."
-                )
+                raise RuntimeError("Database is not initialized.")
 
             if current_version > CURRENT_SCHEMA_VERSION:
                 raise UnsupportedSchemaVersionError(
@@ -108,9 +103,7 @@ class DatabaseSchema:
                 )
 
             if current_version == CURRENT_SCHEMA_VERSION:
-                raise RuntimeError(
-                    "Database is already up to date."
-                )
+                raise RuntimeError("Database is already up to date.")
 
             await self._upgrade(
                 connection,
@@ -146,9 +139,7 @@ class DatabaseSchema:
     ) -> int:
         """Return the schema version using an existing connection."""
 
-        cursor = await connection.execute(
-            "PRAGMA user_version"
-        )
+        cursor = await connection.execute("PRAGMA user_version")
 
         row = await cursor.fetchone()
 
@@ -174,18 +165,12 @@ class DatabaseSchema:
             )
 
         try:
-            await connection.execute(
-                "BEGIN IMMEDIATE"
-            )
+            await connection.execute("BEGIN IMMEDIATE")
 
             for statement in statements:
-                await connection.execute(
-                    statement
-                )
+                await connection.execute(statement)
 
-            await connection.execute(
-                f"PRAGMA user_version = {version}"
-            )
+            await connection.execute(f"PRAGMA user_version = {version}")
 
             await connection.commit()
 

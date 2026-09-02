@@ -26,12 +26,8 @@ def create_role(
     def hierarchy_key(other: discord.Role) -> tuple[int, int]:
         return other.position, -other.id
 
-    role.__lt__.side_effect = (
-        lambda other: hierarchy_key(role) < hierarchy_key(other)
-    )
-    role.__gt__.side_effect = (
-        lambda other: hierarchy_key(role) > hierarchy_key(other)
-    )
+    role.__lt__.side_effect = lambda other: hierarchy_key(role) < hierarchy_key(other)
+    role.__gt__.side_effect = lambda other: hierarchy_key(role) > hierarchy_key(other)
 
     return role
 

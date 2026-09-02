@@ -10,7 +10,6 @@ class Capability(StrEnum):
 
     SAY = "say"
     SAY_PLAIN = "say.plain"
-    ROLE_SCAN = "role.scan"
 
 
 DEFAULT_TRUSTED_CAPABILITIES = frozenset(

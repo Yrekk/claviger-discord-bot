@@ -27,12 +27,8 @@ def create_role(
     def hierarchy_key(other: discord.Role) -> tuple[int, int]:
         return other.position, -other.id
 
-    role.__lt__.side_effect = (
-        lambda other: hierarchy_key(role) < hierarchy_key(other)
-    )
-    role.__gt__.side_effect = (
-        lambda other: hierarchy_key(role) > hierarchy_key(other)
-    )
+    role.__lt__.side_effect = lambda other: hierarchy_key(role) < hierarchy_key(other)
+    role.__gt__.side_effect = lambda other: hierarchy_key(role) > hierarchy_key(other)
 
     return role
 
@@ -79,7 +75,7 @@ async def test_owner_is_always_allowed() -> None:
     assert await service.is_allowed(
         member,
         guild,
-        Capability.ROLE_SCAN,
+        Capability.SAY_PLAIN,
     )
 
 
@@ -112,7 +108,7 @@ async def test_trusted_member_can_use_say() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trusted_member_cannot_use_role_scan() -> None:
+async def test_trusted_member_cannot_use_sensitive_capability() -> None:
     """Do not grant sensitive capabilities to trusted roles by default."""
     service = AuthorizationService()
 
@@ -135,7 +131,7 @@ async def test_trusted_member_cannot_use_role_scan() -> None:
     assert not await service.is_allowed(
         member,
         guild,
-        Capability.ROLE_SCAN,
+        Capability.SAY_PLAIN,
     )
 
 

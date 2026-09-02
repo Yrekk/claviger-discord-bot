@@ -1,28 +1,25 @@
 import discord
 from discord import app_commands
 
+from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
     DatabaseStatus,
     DatabaseStatusService,
 )
-from claviger.database.schema import DatabaseSchema
-
 from claviger.policies.policy_resolver import PolicyResolver
-
 from claviger.reporting.event import (
     ReportEvent,
     ReportSeverity,
 )
 from claviger.reporting.service import ReportService
-
-from claviger.services.role_classifier import RoleClassifier
-from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.guild_policy_bootstrap import (
     GuildAlreadyConfiguredError,
     GuildBootstrapNotAllowedError,
     GuildPolicyBootstrapService,
 )
+from claviger.services.role_classifier import RoleClassifier
+from claviger.services.role_discovery import RoleDiscoveryService
 
 
 def _format_database_status(
@@ -40,32 +37,20 @@ def _format_database_status(
     }
 
     recommendations = {
-        DatabaseState.MISSING: (
-            "Initialiser manuellement la base de données."
-        ),
-        DatabaseState.UNINITIALIZED: (
-            "Initialiser le schéma de la base de données."
-        ),
-        DatabaseState.READY: (
-            "Aucune action nécessaire."
-        ),
-        DatabaseState.MIGRATION_REQUIRED: (
-            "Exécuter manuellement les migrations."
-        ),
+        DatabaseState.MISSING: ("Initialiser manuellement la base de données."),
+        DatabaseState.UNINITIALIZED: ("Initialiser le schéma de la base de données."),
+        DatabaseState.READY: ("Aucune action nécessaire."),
+        DatabaseState.MIGRATION_REQUIRED: ("Exécuter manuellement les migrations."),
         DatabaseState.TOO_NEW: (
-            "Ne pas modifier la base. "
-            "Vérifier la version de Claviger."
+            "Ne pas modifier la base. Vérifier la version de Claviger."
         ),
         DatabaseState.UNAVAILABLE: (
-            "Vérifier le fichier, les permissions "
-            "et l'environnement d'exécution."
+            "Vérifier le fichier, les permissions et l'environnement d'exécution."
         ),
     }
 
     current_version = (
-        str(status.current_version)
-        if status.current_version is not None
-        else "N/A"
+        str(status.current_version) if status.current_version is not None else "N/A"
     )
 
     return "\n".join(
@@ -76,10 +61,7 @@ def _format_database_status(
             f"- Version actuelle : `{current_version}`",
             f"- Version attendue : `{status.target_version}`",
             "",
-            (
-                "**Action recommandée :** "
-                f"{recommendations[status.state]}"
-            ),
+            (f"**Action recommandée :** {recommendations[status.state]}"),
         ]
     )
 
@@ -116,8 +98,8 @@ def create_claviger_group(
     )
 
     guild_group = app_commands.Group(
-    name="guild",
-    description="Configuration du serveur Discord.",
+        name="guild",
+        description="Configuration du serveur Discord.",
     )
 
     @report_group.command(
@@ -151,8 +133,7 @@ def create_claviger_group(
                 severity=ReportSeverity.INFO,
                 title="Test du système de reporting",
                 summary=(
-                    "Le système de reporting de Claviger "
-                    "a reçu un événement de test."
+                    "Le système de reporting de Claviger a reçu un événement de test."
                 ),
                 guild_id=interaction.guild.id,
                 guild_label=interaction.guild.name,
@@ -162,10 +143,7 @@ def create_claviger_group(
         )
 
         await interaction.followup.send(
-            (
-                "Rapport de test émis. "
-                "Vérifie le forum administratif."
-            ),
+            ("Rapport de test émis. Vérifie le forum administratif."),
             ephemeral=True,
         )
 
@@ -173,7 +151,6 @@ def create_claviger_group(
         name="status",
         description="Affiche l'état de la base de données de Claviger.",
     )
-
     async def database_status(
         interaction: discord.Interaction,
     ) -> None:
@@ -205,8 +182,7 @@ def create_claviger_group(
                     severity=ReportSeverity.ERROR,
                     title="Échec du diagnostic de la base de données",
                     summary=(
-                        "Claviger n'a pas pu déterminer "
-                        "l'état de sa base de données."
+                        "Claviger n'a pas pu déterminer l'état de sa base de données."
                     ),
                     details=str(error),
                     guild_id=interaction.guild.id,
@@ -229,12 +205,10 @@ def create_claviger_group(
             ephemeral=True,
         )
 
-
     @database_group.command(
-    name="initialize",
-    description="Initialise explicitement la base de données de Claviger.",
+        name="initialize",
+        description="Initialise explicitement la base de données de Claviger.",
     )
-
     async def database_initialize(
         interaction: discord.Interaction,
     ) -> None:
@@ -283,9 +257,7 @@ def create_claviger_group(
                 )
 
             if status.state == DatabaseState.UNAVAILABLE:
-                raise RuntimeError(
-                    "La base de données est actuellement indisponible."
-                )
+                raise RuntimeError("La base de données est actuellement indisponible.")
 
             await database_schema.initialize()
 
@@ -305,10 +277,7 @@ def create_claviger_group(
                     event_type="database.initialize.failed",
                     severity=ReportSeverity.ERROR,
                     title="Échec de l'initialisation de la base de données",
-                    summary=(
-                        "Claviger n'a pas pu initialiser "
-                        "sa base de données."
-                    ),
+                    summary=("Claviger n'a pas pu initialiser sa base de données."),
                     details=str(error),
                     guild_id=interaction.guild.id,
                     guild_label=interaction.guild.name,
@@ -329,12 +298,9 @@ def create_claviger_group(
                 severity=ReportSeverity.INFO,
                 title="Base de données initialisée",
                 summary=(
-                    "La base de données de Claviger "
-                    "a été initialisée avec succès."
+                    "La base de données de Claviger a été initialisée avec succès."
                 ),
-                details=(
-                    f"Schema version: {final_status.current_version}"
-                ),
+                details=(f"Schema version: {final_status.current_version}"),
                 guild_id=interaction.guild.id,
                 guild_label=interaction.guild.name,
                 actor_id=interaction.user.id,
@@ -405,14 +371,10 @@ def create_claviger_group(
                 )
 
             if status.state == DatabaseState.UNAVAILABLE:
-                raise RuntimeError(
-                    "La base de données est actuellement indisponible."
-                )
+                raise RuntimeError("La base de données est actuellement indisponible.")
 
             if status.state != DatabaseState.MIGRATION_REQUIRED:
-                raise RuntimeError(
-                    f"Unexpected database state: {status.state.value}."
-                )
+                raise RuntimeError(f"Unexpected database state: {status.state.value}.")
 
             previous_version = status.current_version
 
@@ -434,10 +396,7 @@ def create_claviger_group(
                     event_type="database.migrate.failed",
                     severity=ReportSeverity.ERROR,
                     title="Échec de la migration de la base de données",
-                    summary=(
-                        "Claviger n'a pas pu migrer "
-                        "sa base de données."
-                    ),
+                    summary=("Claviger n'a pas pu migrer sa base de données."),
                     details=str(error),
                     guild_id=interaction.guild.id,
                     guild_label=interaction.guild.name,
@@ -457,10 +416,7 @@ def create_claviger_group(
                 event_type="database.migrate.success",
                 severity=ReportSeverity.INFO,
                 title="Base de données migrée",
-                summary=(
-                    "La base de données de Claviger "
-                    "a été migrée avec succès."
-                ),
+                summary=("La base de données de Claviger a été migrée avec succès."),
                 details=(
                     f"Schema version: {previous_version} "
                     f"-> {final_status.current_version}"
@@ -569,8 +525,7 @@ def create_claviger_group(
                 severity=ReportSeverity.INFO,
                 title="Configuration du serveur initialisée",
                 summary=(
-                    "La configuration persistante du serveur "
-                    "a été créée avec succès."
+                    "La configuration persistante du serveur a été créée avec succès."
                 ),
                 details=(
                     f"Rôle membre : {overrides.member_role_name}\n"
@@ -586,9 +541,7 @@ def create_claviger_group(
         )
 
         await interaction.followup.send(
-            (
-                "Configuration persistante du serveur initialisée avec succès."
-            ),
+            ("Configuration persistante du serveur initialisée avec succès."),
             ephemeral=True,
         )
 
@@ -637,10 +590,7 @@ def create_claviger_group(
                     event_type="roles.scan.failed",
                     severity=ReportSeverity.ERROR,
                     title="Échec du scan des rôles",
-                    summary=(
-                        "Claviger n'a pas pu analyser "
-                        "la hiérarchie des rôles."
-                    ),
+                    summary=("Claviger n'a pas pu analyser la hiérarchie des rôles."),
                     details=str(error),
                     guild_id=interaction.guild.id,
                     guild_label=interaction.guild.name,
@@ -669,23 +619,14 @@ def create_claviger_group(
             ),
             f"- Rôle membre attendu : {policy.member_role_name}",
             f"- Rôle adulte attendu : {policy.adult_role_name}",
-            (
-                "- Préfixe intérêts membre : "
-                f"{policy.member_interest_prefix}"
-            ),
-            (
-                "- Préfixe accès adulte : "
-                f"{policy.adult_access_prefix}"
-            ),
+            (f"- Préfixe intérêts membre : {policy.member_interest_prefix}"),
+            (f"- Préfixe accès adulte : {policy.adult_access_prefix}"),
             "",
             f"**Rôles de confiance ({len(hierarchy.trusted_roles)})**",
         ]
 
         if hierarchy.trusted_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in hierarchy.trusted_roles
-            )
+            lines.extend(f"- {role.name}" for role in hierarchy.trusted_roles)
         else:
             lines.append("- Aucun")
 
@@ -697,10 +638,7 @@ def create_claviger_group(
         )
 
         if classification.member_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in classification.member_roles
-            )
+            lines.extend(f"- {role.name}" for role in classification.member_roles)
         else:
             lines.append("- Introuvable")
 
@@ -712,46 +650,31 @@ def create_claviger_group(
         )
 
         if classification.adult_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in classification.adult_roles
-            )
+            lines.extend(f"- {role.name}" for role in classification.adult_roles)
         else:
             lines.append("- Introuvable")
 
         lines.extend(
             [
                 "",
-                (
-                    "**Intérêts membre "
-                    f"({len(classification.interest_roles)})**"
-                ),
+                (f"**Intérêts membre ({len(classification.interest_roles)})**"),
             ]
         )
 
         if classification.interest_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in classification.interest_roles
-            )
+            lines.extend(f"- {role.name}" for role in classification.interest_roles)
         else:
             lines.append("- Aucun")
 
         lines.extend(
             [
                 "",
-                (
-                    "**Accès adultes "
-                    f"({len(classification.access_roles)})**"
-                ),
+                (f"**Accès adultes ({len(classification.access_roles)})**"),
             ]
         )
 
         if classification.access_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in classification.access_roles
-            )
+            lines.extend(f"- {role.name}" for role in classification.access_roles)
         else:
             lines.append("- Aucun")
 
@@ -766,30 +689,21 @@ def create_claviger_group(
         )
 
         if classification.unmanaged_roles:
-            lines.extend(
-                f"- {role.name}"
-                for role in classification.unmanaged_roles
-            )
+            lines.extend(f"- {role.name}" for role in classification.unmanaged_roles)
         else:
             lines.append("- Aucun")
 
         anomalies: list[str] = []
 
         if len(classification.member_roles) == 0:
-            anomalies.append(
-                f'Rôle membre "{policy.member_role_name}" introuvable.'
-            )
+            anomalies.append(f'Rôle membre "{policy.member_role_name}" introuvable.')
 
         elif len(classification.member_roles) > 1:
-            anomalies.append(
-                f'Plusieurs rôles "{policy.member_role_name}" détectés.'
-            )
+            anomalies.append(f'Plusieurs rôles "{policy.member_role_name}" détectés.')
 
         if policy.adult_access_enabled:
             if len(classification.adult_roles) == 0:
-                anomalies.append(
-                    f'Rôle adulte "{policy.adult_role_name}" introuvable.'
-                )
+                anomalies.append(f'Rôle adulte "{policy.adult_role_name}" introuvable.')
 
             elif len(classification.adult_roles) > 1:
                 anomalies.append(
@@ -812,10 +726,7 @@ def create_claviger_group(
         )
 
         if anomalies:
-            lines.extend(
-                f"- {anomaly}"
-                for anomaly in anomalies
-            )
+            lines.extend(f"- {anomaly}" for anomaly in anomalies)
         else:
             lines.append("- Aucune")
 

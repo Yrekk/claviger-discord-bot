@@ -5,7 +5,6 @@ from claviger.reporting.event import (
     ReportSeverity,
 )
 
-
 SEVERITY_LEVELS = {
     ReportSeverity.INFO: logging.INFO,
     ReportSeverity.WARNING: logging.WARNING,
@@ -30,10 +29,7 @@ class PythonLoggingReporter:
         """Write a structured report event to the configured logger."""
         level = SEVERITY_LEVELS[event.severity]
 
-        message = (
-            f"[{event.event_type}] "
-            f"{event.title} — {event.summary}"
-        )
+        message = f"[{event.event_type}] {event.title} — {event.summary}"
 
         if event.details is not None:
             message += f"\nDetails: {event.details}"
@@ -41,25 +37,16 @@ class PythonLoggingReporter:
         context: list[str] = []
 
         if event.guild_id is not None:
-            context.append(
-                f"guild_id={event.guild_id}"
-            )
+            context.append(f"guild_id={event.guild_id}")
 
         if event.actor_id is not None:
-            context.append(
-                f"actor_id={event.actor_id}"
-            )
+            context.append(f"actor_id={event.actor_id}")
 
         if event.target_id is not None:
-            context.append(
-                f"target_id={event.target_id}"
-            )
+            context.append(f"target_id={event.target_id}")
 
         if context:
-            message += (
-                "\nContext: "
-                + ", ".join(context)
-            )
+            message += "\nContext: " + ", ".join(context)
 
         self.logger.log(
             level,

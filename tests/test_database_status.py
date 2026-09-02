@@ -94,9 +94,7 @@ async def test_database_status_reports_newer_schema(
     )
 
     async with database.connect() as connection:
-        await connection.execute(
-            f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION + 1}"
-        )
+        await connection.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION + 1}")
         await connection.commit()
 
     schema = DatabaseSchema(database)
@@ -110,6 +108,7 @@ async def test_database_status_reports_newer_schema(
 
     assert status.state is DatabaseState.TOO_NEW
     assert status.current_version == CURRENT_SCHEMA_VERSION + 1
+
 
 @pytest.mark.asyncio
 async def test_database_status_reports_unavailable_database() -> None:
@@ -132,6 +131,7 @@ async def test_database_status_reports_unavailable_database() -> None:
 
     schema.get_version.assert_not_called()
 
+
 @pytest.mark.asyncio
 async def test_database_status_reports_required_migration(
     tmp_path: Path,
@@ -142,9 +142,7 @@ async def test_database_status_reports_required_migration(
     )
 
     async with database.connect() as connection:
-        await connection.execute(
-            "PRAGMA user_version = 1"
-        )
+        await connection.execute("PRAGMA user_version = 1")
         await connection.commit()
 
     schema = DatabaseSchema(database)

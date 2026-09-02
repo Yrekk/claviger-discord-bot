@@ -71,13 +71,10 @@ def create_say_command(
 
         say_style = SayStyle(style)
 
-        if (
-            say_style is SayStyle.PLAIN
-            and not await authorization_service.is_allowed(
-                interaction.user,
-                interaction.guild,
-                Capability.SAY_PLAIN,
-            )
+        if say_style is SayStyle.PLAIN and not await authorization_service.is_allowed(
+            interaction.user,
+            interaction.guild,
+            Capability.SAY_PLAIN,
         ):
             await interaction.response.send_message(
                 "Vous n'êtes pas autorisé à envoyer un message sans signature visuelle.",
