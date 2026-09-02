@@ -596,6 +596,50 @@ async def test_role_scan_reports_discovery_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_role_scan_reports_unexpected_error() -> None:
+    """Report unexpected role discovery failures."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock(
+        side_effect=ValueError("Unexpected Discord failure.")
+    )
+
+    interaction = create_interaction(
+        guild_id=123,
+        user_id=42,
+    )
+
+    (
+        command,
+        policy_resolver,
+        report_service,
+    ) = get_scan_command(
+        service,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    policy_resolver.resolve.assert_not_awaited()
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "roles.scan.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert event.details == "Unexpected Discord failure."
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Impossible d'analyser les rôles : Unexpected Discord failure.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
 async def test_report_test_emits_structured_event() -> None:
     """Allow the guild owner to emit a reporting diagnostic event."""
     service = Mock(
@@ -1355,6 +1399,50 @@ async def test_guild_bootstrap_reports_unexpected_failure() -> None:
     assert event.event_type == "guild.bootstrap.failed"
     assert event.severity == ReportSeverity.ERROR
     assert event.details == "Bootstrap exploded."
+
+    interaction.followup.send.assert_awaited_once_with(
+        "Échec de l'initialisation de la configuration du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_guild_bootstrap_reports_database_status_failure() -> None:
+    """Report unexpected database status failures during guild bootstrap."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        bootstrap_service,
+        database_status_service,
+        report_service,
+    ) = get_guild_bootstrap_command(
+        service,
+    )
+
+    database_status_service.check.side_effect = RuntimeError(
+        "Database status exploded."
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    bootstrap_service.bootstrap.assert_not_awaited()
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "guild.bootstrap.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert event.details == "Database status exploded."
 
     interaction.followup.send.assert_awaited_once_with(
         "Échec de l'initialisation de la configuration du serveur.",
