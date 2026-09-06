@@ -35,6 +35,8 @@ class AccessCatalogRepository(
         access_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> AdultAccess:
         """Create a newly discovered Discord adult access."""
 
@@ -45,6 +47,7 @@ class AccessCatalogRepository(
             catalog_key=access_key,
             channel_id=channel_id,
             channel_name=channel_name,
+            role_manageable=role_manageable,
         )
 
     async def refresh_discovered(
@@ -55,6 +58,8 @@ class AccessCatalogRepository(
         access_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> None:
         """Refresh Discord-owned adult access data."""
 
@@ -65,4 +70,5 @@ class AccessCatalogRepository(
             catalog_key=access_key,
             channel_id=channel_id,
             channel_name=channel_name,
+            role_manageable=role_manageable,
         )

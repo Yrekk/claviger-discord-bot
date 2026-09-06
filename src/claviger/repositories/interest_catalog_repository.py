@@ -35,6 +35,8 @@ class InterestCatalogRepository(
         interest_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> MemberInterest:
         """Create a newly discovered Discord member interest."""
 
@@ -45,6 +47,7 @@ class InterestCatalogRepository(
             catalog_key=interest_key,
             channel_id=channel_id,
             channel_name=channel_name,
+            role_manageable=role_manageable,
         )
 
     async def refresh_discovered(
@@ -55,6 +58,8 @@ class InterestCatalogRepository(
         interest_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> None:
         """Refresh Discord-owned member interest data."""
 
@@ -65,4 +70,5 @@ class InterestCatalogRepository(
             catalog_key=interest_key,
             channel_id=channel_id,
             channel_name=channel_name,
+            role_manageable=role_manageable,
         )

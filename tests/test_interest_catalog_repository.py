@@ -536,3 +536,59 @@ async def test_get_next_incomplete_ignores_invalid_mapping(
         )
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_create_discovered_preserves_unmanageable_role_state(
+    tmp_path: Path,
+) -> None:
+    """Persist Discord manageability when first cataloguing a role."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    interest = await repository.create_discovered(
+        guild_id=123,
+        role_id=456,
+        role_name="interest-ludus",
+        interest_key="ludus",
+        channel_id=789,
+        channel_name="ludus",
+        role_manageable=False,
+    )
+
+    assert interest.role_manageable is False
+
+
+@pytest.mark.asyncio
+async def test_refresh_discovered_preserves_unmanageable_role_state(
+    tmp_path: Path,
+) -> None:
+    """Keep Discord manageability state during technical refresh."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    await create_interest(
+        repository,
+    )
+
+    await repository.refresh_discovered(
+        guild_id=123,
+        role_id=456,
+        role_name="interest-ludus",
+        interest_key="ludus",
+        channel_id=789,
+        channel_name="ludus",
+        role_manageable=False,
+    )
+
+    interest = await repository.get(
+        123,
+        456,
+    )
+
+    assert interest is not None
+    assert interest.role_manageable is False

@@ -156,6 +156,8 @@ class RoleChannelCatalogRepository(
         catalog_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> CatalogEntryT:
         """Create a newly discovered Discord catalog entry."""
 
@@ -171,9 +173,10 @@ class RoleChannelCatalogRepository(
                         role_name,
                         {self.key_column},
                         channel_id,
-                        channel_name
+                        channel_name,
+                        role_manageable
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         guild_id,
@@ -182,6 +185,7 @@ class RoleChannelCatalogRepository(
                         catalog_key,
                         channel_id,
                         channel_name,
+                        role_manageable,
                     ),
                 )
 
@@ -216,6 +220,8 @@ class RoleChannelCatalogRepository(
         catalog_key: str,
         channel_id: int,
         channel_name: str,
+        *,
+        role_manageable: bool = True,
     ) -> None:
         """Refresh Discord-owned data without changing human metadata."""
 
@@ -232,7 +238,7 @@ class RoleChannelCatalogRepository(
                         channel_id = ?,
                         channel_name = ?,
                         discord_present = 1,
-                        role_manageable = 1,
+                        role_manageable = ?,
                         channel_present = 1,
                         mapping_valid = 1,
                         matches_policy = 1
@@ -244,6 +250,7 @@ class RoleChannelCatalogRepository(
                         catalog_key,
                         channel_id,
                         channel_name,
+                        role_manageable,
                         guild_id,
                         role_id,
                     ),
