@@ -9,61 +9,75 @@ from claviger.services.noctis_workflow_coordinator_service import (
     NoctisWorkflowCoordinatorService,
 )
 
+MAX_THEME_BUTTONS = 20
+THEME_BUTTONS_PER_ROW = 5
 
-def _truncate_description(
-    description: str,
+
+def _build_theme_button_label(
+    theme: AdultAccessTheme,
+    *,
+    selected: bool,
 ) -> str:
-    """Fit a catalog description inside a Discord select option."""
+    """Build a checkbox-like Discord button label."""
 
-    if len(description) <= 100:
-        return description
+    checkbox = "☑" if selected else "☐"
 
-    return f"{description[:97]}..."
+    emoji = f"{theme.emoji} " if theme.emoji else ""
+
+    label = f"{checkbox} {emoji}{theme.label}"
+
+    # Discord button labels are limited to 80 characters.
+    return label[:80]
 
 
-class NoctisThemeSelect(discord.ui.Select):
-    """Select the logical adult-access themes."""
+class NoctisThemeButton(discord.ui.Button):
+    """Toggle one logical Noctis access theme."""
 
     def __init__(
         self,
         *,
         owner_view: "NoctisQuestionnaireView",
-        themes: tuple[AdultAccessTheme, ...],
+        theme: AdultAccessTheme,
+        row: int,
     ) -> None:
-        if len(themes) > 25:
-            raise ValueError("Discord supports at most 25 themes in one select menu.")
+        self.owner_view = owner_view
+        self.theme = theme
 
-        selected_keys = set(
-            owner_view.selected_theme_keys,
-        )
-
-        options = [
-            discord.SelectOption(
-                label=theme.label,
-                value=theme.theme_key,
-                description=_truncate_description(
-                    theme.description,
-                ),
-                emoji=theme.emoji,
-                default=theme.theme_key in selected_keys,
-            )
-            for theme in themes
-        ]
+        selected = theme.theme_key in owner_view.selected_theme_keys
 
         super().__init__(
-            placeholder="Choisissez vos accès Noctis",
-            min_values=0,
-            max_values=len(options),
-            options=options,
+            label=_build_theme_button_label(
+                theme,
+                selected=selected,
+            ),
+            style=(
+                discord.ButtonStyle.success
+                if selected
+                else discord.ButtonStyle.secondary
+            ),
+            custom_id=f"noctis-theme:{theme.theme_key}",
+            row=row,
         )
 
-        self.owner_view = owner_view
+    def refresh_from_view(self) -> None:
+        """Refresh visual state from the questionnaire."""
+
+        selected = self.theme.theme_key in self.owner_view.selected_theme_keys
+
+        self.label = _build_theme_button_label(
+            self.theme,
+            selected=selected,
+        )
+
+        self.style = (
+            discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
+        )
 
     async def callback(
         self,
         interaction: discord.Interaction,
     ) -> None:
-        """Update the pending theme selection."""
+        """Toggle this theme in the pending selection."""
 
         if interaction.user.id != self.owner_view.actor_id:
             await interaction.response.send_message(
@@ -72,11 +86,30 @@ class NoctisThemeSelect(discord.ui.Select):
             )
             return
 
-        self.owner_view.selected_theme_keys = tuple(
-            self.values,
+        selected_keys = set(
+            self.owner_view.selected_theme_keys,
         )
 
+        if self.theme.theme_key in selected_keys:
+            selected_keys.remove(
+                self.theme.theme_key,
+            )
+        else:
+            selected_keys.add(
+                self.theme.theme_key,
+            )
+
+        # Restore canonical catalog order instead of click order.
+        self.owner_view.selected_theme_keys = tuple(
+            theme.theme_key
+            for theme in self.owner_view.questionnaire.themes
+            if theme.theme_key in selected_keys
+        )
+
+        self.owner_view.refresh_theme_buttons()
+
         await interaction.response.edit_message(
+            content=self.owner_view.format_content(),
             view=self.owner_view,
         )
 
@@ -97,6 +130,14 @@ class NoctisQuestionnaireView(discord.ui.View):
             timeout=600,
         )
 
+        if len(questionnaire.themes) > MAX_THEME_BUTTONS:
+            raise ValueError(
+                (
+                    "The Noctis button questionnaire supports "
+                    f"at most {MAX_THEME_BUTTONS} themes."
+                )
+            )
+
         self.coordinator = coordinator
         self.policy = policy
         self.questionnaire = questionnaire
@@ -106,17 +147,71 @@ class NoctisQuestionnaireView(discord.ui.View):
         self.selected_theme_keys = tuple(
             questionnaire.selected_theme_keys,
         )
+
         self.include_ai = questionnaire.include_ai
 
-        if questionnaire.themes:
+        for index, theme in enumerate(questionnaire.themes):
+            row = index // THEME_BUTTONS_PER_ROW
+
             self.add_item(
-                NoctisThemeSelect(
+                NoctisThemeButton(
                     owner_view=self,
-                    themes=questionnaire.themes,
+                    theme=theme,
+                    row=row,
                 )
             )
 
         self._refresh_ai_button()
+
+    def refresh_theme_buttons(self) -> None:
+        """Refresh every theme button from current selection."""
+
+        for child in self.children:
+            if isinstance(
+                child,
+                NoctisThemeButton,
+            ):
+                child.refresh_from_view()
+
+    def format_content(self) -> str:
+        """Format the current questionnaire state."""
+
+        themes_by_key = {theme.theme_key: theme for theme in self.questionnaire.themes}
+
+        selected_labels = [
+            themes_by_key[theme_key].label
+            for theme_key in self.selected_theme_keys
+            if theme_key in themes_by_key
+        ]
+
+        if selected_labels:
+            selection_text = " • ".join(
+                selected_labels,
+            )
+        else:
+            selection_text = "Aucun"
+
+        ai_text = "activés" if self.include_ai else "désactivés"
+
+        if self.preview:
+            header = (
+                "**Aperçu du questionnaire Noctis**\n"
+                "Mode test : aucune modification de rôle "
+                "ne sera appliquée."
+            )
+        else:
+            header = (
+                "**Configuration de vos accès Noctis**\n"
+                "Activez ou désactivez les catégories "
+                "auxquelles vous souhaitez accéder."
+            )
+
+        return (
+            f"{header}\n\n"
+            f"**Accès sélectionnés ({len(selected_labels)}) :** "
+            f"{selection_text}\n\n"
+            f"**Contenus IA : {ai_text}**"
+        )
 
     def _refresh_ai_button(self) -> None:
         """Refresh the IA toggle label and style."""
@@ -131,6 +226,7 @@ class NoctisQuestionnaireView(discord.ui.View):
     @discord.ui.button(
         label="Contenus IA : désactivés",
         style=discord.ButtonStyle.secondary,
+        row=4,
     )
     async def toggle_ai(
         self,
@@ -150,12 +246,14 @@ class NoctisQuestionnaireView(discord.ui.View):
         self._refresh_ai_button()
 
         await interaction.response.edit_message(
+            content=self.format_content(),
             view=self,
         )
 
     @discord.ui.button(
         label="Valider mes accès",
         style=discord.ButtonStyle.primary,
+        row=4,
     )
     async def validate(
         self,
@@ -172,10 +270,12 @@ class NoctisQuestionnaireView(discord.ui.View):
             return
 
         if self.preview:
-            await interaction.response.send_message(
-                self._format_preview(),
-                ephemeral=True,
+            await interaction.response.edit_message(
+                content=self._format_preview(),
+                view=None,
             )
+
+            self.stop()
             return
 
         if interaction.guild is None:
@@ -185,6 +285,21 @@ class NoctisQuestionnaireView(discord.ui.View):
             )
             return
 
+        # Discord requires a quick acknowledgement.
+        await interaction.response.defer()
+
+        # Prevent duplicate submissions while role changes are running.
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.edit_original_response(
+            content=(
+                "⏳ **Mise à jour de vos accès Noctis...**\n\n"
+                "Claviger applique votre sélection."
+            ),
+            view=self,
+        )
+
         try:
             result = await self.coordinator.apply_selection(
                 interaction.guild,
@@ -193,23 +308,32 @@ class NoctisQuestionnaireView(discord.ui.View):
                 self.selected_theme_keys,
                 include_ai=self.include_ai,
             )
+
         except Exception:
-            await interaction.response.send_message(
-                (
-                    "Impossible de mettre à jour vos accès Noctis. "
-                    "Aucun nouveau questionnaire n'a été ouvert."
+            for child in self.children:
+                child.disabled = False
+
+            await interaction.edit_original_response(
+                content=(
+                    "❌ **Impossible de mettre à jour vos accès "
+                    "Noctis.**\n\n"
+                    "Vous pouvez réessayer. Claviger recalculera "
+                    "les modifications nécessaires depuis votre "
+                    "état actuel."
                 ),
-                ephemeral=True,
+                view=self,
             )
             return
 
-        await interaction.response.send_message(
-            (
-                "✅ Vos accès Noctis ont été mis à jour.\n"
+        await interaction.edit_original_response(
+            content=(
+                "✅ **Vos accès Noctis ont été mis à jour.**\n\n"
                 f"Modifications appliquées : {result.change_count}."
             ),
-            ephemeral=True,
+            view=None,
         )
+
+        self.stop()
 
     def _format_preview(self) -> str:
         """Format the questionnaire state without changing Discord."""

@@ -3,6 +3,7 @@ from discord import app_commands
 
 # Commands
 from claviger.commands.claviger_command import create_claviger_group
+from claviger.commands.noctis_command import create_noctis_command
 from claviger.commands.say import create_say_command
 
 # Config
@@ -197,6 +198,15 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
+        self.tree.add_command(
+            create_noctis_command(
+                self.noctis_workflow_coordinator_service,
+                self.policy_resolver,
+                self.database_status_service,
+                self.report_service,
+            ),
+            guild=guild,
+        )
         self.tree.add_command(
             create_claviger_group(
                 self.role_discovery_service,

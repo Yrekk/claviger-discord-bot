@@ -19,24 +19,19 @@ from claviger.ui.noctis_questionnaire_view import (
 )
 
 
-def create_noctis_admin_group(
+def create_noctis_command(
     noctis_workflow_coordinator_service: NoctisWorkflowCoordinatorService,
     policy_resolver: PolicyResolver,
     database_status_service: DatabaseStatusService,
     report_service: ReportService,
-) -> app_commands.Group:
-    """Create Claviger's Noctis administration command group."""
+) -> app_commands.Command:
+    """Create the public /noctis command."""
 
-    noctis_group = app_commands.Group(
+    @app_commands.command(
         name="noctis",
-        description="Administration et prévisualisation du workflow Noctis.",
+        description="Configure vos accès aux espaces réservés aux adultes.",
     )
-
-    @noctis_group.command(
-        name="preview",
-        description="Teste le questionnaire Noctis sans modifier les rôles.",
-    )
-    async def noctis_preview(
+    async def noctis(
         interaction: discord.Interaction,
     ) -> None:
         if interaction.guild is None:
@@ -46,23 +41,12 @@ def create_noctis_admin_group(
             )
             return
 
-        if interaction.user.id != interaction.guild.owner_id:
-            await interaction.response.send_message(
-                "Cette commande est réservée au propriétaire du serveur.",
-                ephemeral=True,
-            )
-            return
-
         try:
             status = await database_status_service.check()
 
             if status.state != DatabaseState.READY:
                 await interaction.response.send_message(
-                    (
-                        "La base de données doit être prête avant "
-                        "de tester le questionnaire Noctis. "
-                        "Vérifie `/claviger database status`."
-                    ),
+                    "La configuration des accès est temporairement indisponible.",
                     ephemeral=True,
                 )
                 return
@@ -70,6 +54,30 @@ def create_noctis_admin_group(
             policy = await policy_resolver.resolve(
                 interaction.guild.id,
             )
+
+            if not policy.role_management_enabled or not policy.adult_access_enabled:
+                await interaction.response.send_message(
+                    ("La gestion des accès adultes est désactivée sur ce serveur."),
+                    ephemeral=True,
+                )
+                return
+
+            channel_name = getattr(
+                interaction.channel,
+                "name",
+                None,
+            )
+
+            if channel_name != policy.adult_rules_channel_name:
+                await interaction.response.send_message(
+                    (
+                        "Cette commande doit être utilisée dans "
+                        f"`#{policy.adult_rules_channel_name}` après "
+                        "avoir pris connaissance des règles."
+                    ),
+                    ephemeral=True,
+                )
+                return
 
             questionnaire = (
                 await noctis_workflow_coordinator_service.build_questionnaire(
@@ -81,10 +89,7 @@ def create_noctis_admin_group(
 
             if not questionnaire.themes:
                 await interaction.response.send_message(
-                    (
-                        "Aucun thème Noctis disponible. "
-                        "Vérifie le catalogue des accès adultes."
-                    ),
+                    "Aucun accès adulte n'est actuellement disponible.",
                     ephemeral=True,
                 )
                 return
@@ -94,7 +99,7 @@ def create_noctis_admin_group(
                 policy=policy,
                 questionnaire=questionnaire,
                 actor_id=interaction.user.id,
-                preview=True,
+                preview=False,
             )
 
             await interaction.response.send_message(
@@ -106,10 +111,12 @@ def create_noctis_admin_group(
         except Exception as error:
             await report_service.emit(
                 ReportEvent(
-                    event_type="noctis.preview.failed",
+                    event_type="noctis.open.failed",
                     severity=ReportSeverity.ERROR,
-                    title="Échec de la prévisualisation Noctis",
-                    summary=("Claviger n'a pas pu construire le questionnaire Noctis."),
+                    title="Échec de l'ouverture du questionnaire Noctis",
+                    summary=(
+                        "Claviger n'a pas pu ouvrir le questionnaire d'accès adulte."
+                    ),
                     details=str(error),
                     guild_id=interaction.guild.id,
                     guild_label=interaction.guild.name,
@@ -119,8 +126,11 @@ def create_noctis_admin_group(
             )
 
             await interaction.response.send_message(
-                "Impossible de construire le questionnaire Noctis.",
+                (
+                    "Impossible d'ouvrir le questionnaire Noctis. "
+                    "L'incident a été signalé."
+                ),
                 ephemeral=True,
             )
 
-    return noctis_group
+    return noctis

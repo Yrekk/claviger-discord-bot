@@ -19,7 +19,7 @@ from claviger.services.noctis_workflow_coordinator_service import (
 )
 from claviger.ui.noctis_questionnaire_view import (
     NoctisQuestionnaireView,
-    NoctisThemeSelect,
+    NoctisThemeButton,
 )
 
 
@@ -130,23 +130,33 @@ def create_interaction(
     interaction.response = Mock()
     interaction.response.send_message = AsyncMock()
     interaction.response.edit_message = AsyncMock()
+    interaction.response.defer = AsyncMock()
+
+    interaction.followup = Mock()
+    interaction.followup.send = AsyncMock()
+
+    interaction.edit_original_response = AsyncMock()
 
     return interaction
 
 
-def get_theme_select(
+def get_theme_button(
     view: NoctisQuestionnaireView,
-) -> NoctisThemeSelect:
-    """Retrieve the questionnaire theme select."""
+    theme_key: str,
+) -> NoctisThemeButton:
+    """Retrieve one questionnaire theme button."""
 
     for child in view.children:
-        if isinstance(
-            child,
-            NoctisThemeSelect,
+        if (
+            isinstance(
+                child,
+                NoctisThemeButton,
+            )
+            and child.theme.theme_key == theme_key
         ):
             return child
 
-    raise AssertionError("No Noctis theme select found.")
+    raise AssertionError(f"No Noctis theme button found for {theme_key!r}.")
 
 
 @pytest.mark.asyncio
@@ -165,25 +175,33 @@ async def test_questionnaire_restores_existing_state() -> None:
         preview=True,
     )
 
-    select = get_theme_select(
+    yuri_button = get_theme_button(
         view,
+        "yuri",
     )
 
-    defaults = {option.value for option in select.options if option.default}
-
-    assert defaults == {
-        "yuri",
-    }
+    bdsm_button = get_theme_button(
+        view,
+        "bdsm",
+    )
 
     assert view.selected_theme_keys == ("yuri",)
+
+    assert yuri_button.style == discord.ButtonStyle.success
+    assert yuri_button.label is not None
+    assert yuri_button.label.startswith("☑")
+
+    assert bdsm_button.style == discord.ButtonStyle.secondary
+    assert bdsm_button.label is not None
+    assert bdsm_button.label.startswith("☐")
 
     assert view.include_ai is False
     assert view.toggle_ai.label == "Contenus IA : désactivés"
 
 
 @pytest.mark.asyncio
-async def test_theme_select_updates_pending_selection() -> None:
-    """Update the pending logical themes without modifying Discord roles."""
+async def test_theme_button_toggles_pending_selection() -> None:
+    """Toggle themes without using a dropdown menu."""
 
     coordinator = Mock(
         spec=NoctisWorkflowCoordinatorService,
@@ -197,25 +215,31 @@ async def test_theme_select_updates_pending_selection() -> None:
         preview=True,
     )
 
-    select = get_theme_select(
+    bdsm_button = get_theme_button(
         view,
-    )
-
-    select._values = [
         "bdsm",
-    ]
+    )
 
     interaction = create_interaction()
 
-    await select.callback(
+    await bdsm_button.callback(
         interaction,
     )
 
-    assert view.selected_theme_keys == ("bdsm",)
-
-    interaction.response.edit_message.assert_awaited_once_with(
-        view=view,
+    assert view.selected_theme_keys == (
+        "yuri",
+        "bdsm",
     )
+
+    assert bdsm_button.style == discord.ButtonStyle.success
+    assert bdsm_button.label is not None
+    assert bdsm_button.label.startswith("☑")
+
+    kwargs = interaction.response.edit_message.await_args.kwargs
+
+    assert kwargs["view"] is view
+    assert "Yuri" in kwargs["content"]
+    assert "Shibari - BDSM" in kwargs["content"]
 
 
 @pytest.mark.asyncio
@@ -244,9 +268,10 @@ async def test_ai_button_toggles_pending_preference() -> None:
     assert view.toggle_ai.label == "Contenus IA : activés"
     assert view.toggle_ai.style == discord.ButtonStyle.success
 
-    interaction.response.edit_message.assert_awaited_once_with(
-        view=view,
-    )
+    kwargs = interaction.response.edit_message.await_args.kwargs
+
+    assert kwargs["view"] is view
+    assert "Contenus IA : activés" in kwargs["content"]
 
 
 @pytest.mark.asyncio
@@ -280,12 +305,13 @@ async def test_preview_validation_never_applies_roles() -> None:
 
     coordinator.apply_selection.assert_not_awaited()
 
-    message = interaction.response.send_message.await_args.args[0]
+    kwargs = interaction.response.edit_message.await_args.kwargs
 
-    assert "aucune modification appliquée" in message
-    assert "Yuri" in message
-    assert "Shibari - BDSM" in message
-    assert "Contenus IA : activés" in message
+    assert "aucune modification appliquée" in kwargs["content"]
+    assert "Yuri" in kwargs["content"]
+    assert "Shibari - BDSM" in kwargs["content"]
+    assert "Contenus IA : activés" in kwargs["content"]
+    assert kwargs["view"] is None
 
 
 @pytest.mark.asyncio
@@ -320,6 +346,8 @@ async def test_live_validation_applies_selection_through_coordinator() -> None:
         interaction,
     )
 
+    interaction.response.defer.assert_awaited_once()
+
     coordinator.apply_selection.assert_awaited_once_with(
         interaction.guild,
         interaction.user,
@@ -328,6 +356,89 @@ async def test_live_validation_applies_selection_through_coordinator() -> None:
         include_ai=True,
     )
 
-    message = interaction.response.send_message.await_args.args[0]
+    assert interaction.edit_original_response.await_count == 2
 
-    assert "4" in message
+    progress_kwargs = interaction.edit_original_response.await_args_list[0].kwargs
+
+    assert "Mise à jour de vos accès Noctis" in progress_kwargs["content"]
+    assert progress_kwargs["view"] is view
+
+    final_kwargs = interaction.edit_original_response.await_args_list[-1].kwargs
+
+    assert "Vos accès Noctis ont été mis à jour" in final_kwargs["content"]
+    assert "4" in final_kwargs["content"]
+    assert final_kwargs["view"] is None
+
+
+@pytest.mark.asyncio
+async def test_live_validation_defers_before_applying_roles() -> None:
+    """Acknowledge the interaction before role changes complete."""
+
+    coordinator = Mock(
+        spec=NoctisWorkflowCoordinatorService,
+    )
+
+    coordinator.apply_selection = AsyncMock(
+        return_value=NoctisRoleExecutionResult(
+            added_role_ids=(1,),
+            removed_role_ids=(),
+        )
+    )
+
+    view = NoctisQuestionnaireView(
+        coordinator=coordinator,
+        policy=SUCCUMBRAE_FALLBACK_POLICY,
+        questionnaire=create_questionnaire(),
+        actor_id=42,
+        preview=False,
+    )
+
+    interaction = create_interaction()
+
+    await view.validate.callback(
+        interaction,
+    )
+
+    interaction.response.defer.assert_awaited_once()
+    coordinator.apply_selection.assert_awaited_once()
+
+    assert interaction.edit_original_response.await_count == 2
+
+    assert (
+        "Mise à jour de vos accès Noctis"
+        in interaction.edit_original_response.await_args_list[0].kwargs["content"]
+    )
+
+    assert (
+        "Vos accès Noctis ont été mis à jour"
+        in interaction.edit_original_response.await_args_list[1].kwargs["content"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_questionnaire_rejects_other_user() -> None:
+    """Prevent another member from interacting with the questionnaire."""
+
+    coordinator = Mock(
+        spec=NoctisWorkflowCoordinatorService,
+    )
+    coordinator.apply_selection = AsyncMock()
+
+    view = NoctisQuestionnaireView(
+        coordinator=coordinator,
+        policy=SUCCUMBRAE_FALLBACK_POLICY,
+        questionnaire=create_questionnaire(),
+        actor_id=42,
+        preview=False,
+    )
+
+    interaction = create_interaction(
+        user_id=99,
+    )
+
+    await view.validate.callback(
+        interaction,
+    )
+
+    coordinator.apply_selection.assert_not_awaited()
+    interaction.response.send_message.assert_awaited_once()
