@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 
 # Commands
-from claviger.commands.claviger import create_claviger_group
+from claviger.commands.claviger_command import create_claviger_group
 from claviger.commands.say import create_say_command
 
 # Config
@@ -16,9 +16,9 @@ from claviger.config import (
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import DatabaseStatusService
-from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 
 # Policies
+from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 from claviger.policies.policy_resolver import PolicyResolver
 
 # Reporting
@@ -28,14 +28,28 @@ from claviger.reporting.reporter import Reporter
 from claviger.reporting.service import ReportService
 
 # Repositories
+from claviger.repositories.access_catalog_repository import (
+    AccessCatalogRepository,
+)
 from claviger.repositories.guild_policy_repository import (
     GuildPolicyRepository,
+)
+from claviger.repositories.interest_catalog_repository import (
+    InterestCatalogRepository,
 )
 
 # Services
 from claviger.services.authorization import AuthorizationService
+from claviger.services.catalog_registry_service import CatalogRegistry
+from claviger.services.catalog_sync_coordinator_service import (
+    CatalogSyncCoordinatorService,
+)
+from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
+)
+from claviger.services.role_channel_discovery_service import (
+    RoleChannelDiscoveryService,
 )
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
@@ -76,15 +90,41 @@ class ClavigerBot(discord.Client):
             self.database,
         )
 
+        self.interest_catalog_repository = InterestCatalogRepository(
+            self.database,
+        )
+
+        self.access_catalog_repository = AccessCatalogRepository(
+            self.database,
+        )
+
         self.policy_resolver = PolicyResolver(
             repository=self.guild_policy_repository,
             fallback_guild_id=self.guild_id,
         )
+
         self.guild_policy_bootstrap_service = GuildPolicyBootstrapService(
             repository=self.guild_policy_repository,
             fallback_guild_id=self.guild_id,
             bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
         )
+
+        self.catalog_registry = CatalogRegistry(
+            interest_repository=self.interest_catalog_repository,
+            access_repository=self.access_catalog_repository,
+        )
+
+        self.role_channel_discovery_service = RoleChannelDiscoveryService()
+
+        self.catalog_sync_planner = CatalogSyncPlanner()
+
+        self.catalog_sync_coordinator_service = CatalogSyncCoordinatorService(
+            database=self.database,
+            registry=self.catalog_registry,
+            discovery_service=self.role_channel_discovery_service,
+            planner=self.catalog_sync_planner,
+        )
+
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
         ]
@@ -120,6 +160,7 @@ class ClavigerBot(discord.Client):
                 self.role_discovery_service,
                 self.policy_resolver,
                 self.role_classifier,
+                self.catalog_sync_coordinator_service,
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,
