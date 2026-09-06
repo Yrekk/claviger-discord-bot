@@ -282,7 +282,9 @@ async def test_member_interests_table_has_expected_columns(
         "sort_order",
         "enabled",
         "discord_present",
+        "role_manageable",
         "channel_present",
+        "mapping_valid",
         "matches_policy",
     }
 

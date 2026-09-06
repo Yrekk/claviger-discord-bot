@@ -60,8 +60,14 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             discord_present INTEGER NOT NULL DEFAULT 1
                 CHECK (discord_present IN (0, 1)),
 
+            role_manageable INTEGER NOT NULL DEFAULT 1
+                CHECK (role_manageable IN (0, 1)),
+
             channel_present INTEGER NOT NULL DEFAULT 1
                 CHECK (channel_present IN (0, 1)),
+
+            mapping_valid INTEGER NOT NULL DEFAULT 1
+                CHECK (mapping_valid IN (0, 1)),
 
             matches_policy INTEGER NOT NULL DEFAULT 1
                 CHECK (matches_policy IN (0, 1)),
