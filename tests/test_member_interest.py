@@ -18,7 +18,7 @@ def create_interest(
         guild_id=123,
         role_id=456,
         role_name="interest-ludus",
-        interest_key="ludus",
+        catalog_key="ludus",
         channel_id=789,
         channel_name="ludus",
         label=label,
@@ -101,3 +101,12 @@ def test_member_interest_requires_manageable_role() -> None:
 
     assert interest.is_available is False
     assert interest.is_publicly_ready is False
+
+
+def test_member_interest_exposes_interest_key_alias() -> None:
+    """Keep interest terminology while sharing the generic catalog model."""
+
+    interest = create_interest()
+
+    assert interest.catalog_key == "ludus"
+    assert interest.interest_key == "ludus"

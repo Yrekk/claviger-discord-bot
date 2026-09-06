@@ -472,3 +472,67 @@ async def test_repository_does_not_create_missing_database(
         )
 
     assert database_path.exists() is False
+
+
+@pytest.mark.asyncio
+async def test_get_next_incomplete_ignores_unmanageable_role(
+    tmp_path: Path,
+) -> None:
+    """Do not configure interests whose Discord role cannot be managed."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    await create_interest(
+        repository,
+    )
+
+    await repository.update_sync_state(
+        123,
+        456,
+        discord_present=True,
+        role_manageable=False,
+        channel_present=True,
+        mapping_valid=True,
+        matches_policy=True,
+    )
+
+    assert (
+        await repository.get_next_incomplete(
+            123,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_next_incomplete_ignores_invalid_mapping(
+    tmp_path: Path,
+) -> None:
+    """Do not configure interests whose role-to-channel mapping is invalid."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    await create_interest(
+        repository,
+    )
+
+    await repository.update_sync_state(
+        123,
+        456,
+        discord_present=True,
+        role_manageable=True,
+        channel_present=True,
+        mapping_valid=False,
+        matches_policy=True,
+    )
+
+    assert (
+        await repository.get_next_incomplete(
+            123,
+        )
+        is None
+    )
