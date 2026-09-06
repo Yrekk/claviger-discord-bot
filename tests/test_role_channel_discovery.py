@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import discord
 import pytest
 
-from claviger.services.role_channel_discovery import (
+from claviger.services.role_channel_discovery_service import (
     RoleChannelDiscoveryService,
 )
 
@@ -22,22 +22,51 @@ def create_role(
 
     role.id = role_id
     role.name = name
-
     role.__lt__.return_value = below_bot
 
     return role
 
 
-def create_channel(
+def create_text_channel(
     *,
     channel_id: int,
     name: str,
     visible_roles: set[int],
 ) -> MagicMock:
-    """Create a text channel exposing explicit role visibility."""
+    """Create a text channel with explicit role visibility."""
 
     channel = MagicMock(
         spec=discord.TextChannel,
+    )
+
+    channel.id = channel_id
+    channel.name = name
+
+    def overwrites_for(
+        role: discord.Role,
+    ) -> discord.PermissionOverwrite:
+        overwrite = discord.PermissionOverwrite()
+
+        if role.id in visible_roles:
+            overwrite.view_channel = True
+
+        return overwrite
+
+    channel.overwrites_for.side_effect = overwrites_for
+
+    return channel
+
+
+def create_forum_channel(
+    *,
+    channel_id: int,
+    name: str,
+    visible_roles: set[int],
+) -> MagicMock:
+    """Create a forum channel with explicit role visibility."""
+
+    channel = MagicMock(
+        spec=discord.ForumChannel,
     )
 
     channel.id = channel_id
@@ -72,6 +101,7 @@ def create_guild(
     bot_member = MagicMock(
         spec=discord.Member,
     )
+
     bot_member.top_role = MagicMock(
         spec=discord.Role,
     )
@@ -83,105 +113,73 @@ def create_guild(
     return guild
 
 
-def test_discover_returns_matching_role_with_unique_channel() -> None:
-    """Discover one valid role-to-channel catalog mapping."""
+def test_build_snapshot_contains_all_roles_and_content_channels() -> None:
+    """Capture catalog and non-catalog Discord roles in one snapshot."""
 
-    role = create_role(
+    interest_role = create_role(
         role_id=100,
         name="interest-ia",
     )
 
-    channel = create_channel(
-        channel_id=200,
-        name="ia",
-        visible_roles={100},
-    )
-
-    guild = create_guild(
-        roles=[role],
-        channels=[channel],
-    )
-
-    service = RoleChannelDiscoveryService()
-
-    discoveries = service.discover(
-        guild,
-        prefix="interest-",
-    )
-
-    assert len(discoveries) == 1
-
-    discovery = discoveries[0]
-
-    assert discovery.role_id == 100
-    assert discovery.role_name == "interest-ia"
-    assert discovery.catalog_key == "ia"
-
-    assert discovery.role_manageable is True
-
-    assert discovery.channel_id == 200
-    assert discovery.channel_name == "ia"
-
-    assert discovery.channel_present is True
-    assert discovery.mapping_valid is True
-
-
-def test_discover_ignores_roles_outside_prefix() -> None:
-    """Ignore Discord roles unrelated to the requested catalog."""
-
-    role = create_role(
-        role_id=100,
+    access_role = create_role(
+        role_id=101,
         name="access-ia-futa",
     )
 
-    guild = create_guild(
-        roles=[role],
-        channels=[],
+    ordinary_role = create_role(
+        role_id=102,
+        name="Membre",
     )
 
-    service = RoleChannelDiscoveryService()
-
-    discoveries = service.discover(
-        guild,
-        prefix="interest-",
+    text_channel = create_text_channel(
+        channel_id=200,
+        name="ia",
+        visible_roles={100},
     )
 
-    assert discoveries == []
-
-
-def test_discover_ignores_empty_catalog_key() -> None:
-    """Reject a role containing only the configured prefix."""
-
-    role = create_role(
-        role_id=100,
-        name="interest-",
+    forum_channel = create_forum_channel(
+        channel_id=201,
+        name="ia-futa",
+        visible_roles={101},
     )
 
     guild = create_guild(
-        roles=[role],
-        channels=[],
+        roles=[
+            interest_role,
+            access_role,
+            ordinary_role,
+        ],
+        channels=[
+            text_channel,
+            forum_channel,
+        ],
     )
 
-    service = RoleChannelDiscoveryService()
-
-    discoveries = service.discover(
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
         guild,
-        prefix="interest-",
     )
 
-    assert discoveries == []
+    assert {role.role_id for role in snapshot.roles} == {
+        100,
+        101,
+        102,
+    }
+
+    assert {channel.channel_id for channel in snapshot.channels} == {
+        200,
+        201,
+    }
 
 
-def test_discover_marks_role_above_claviger_unmanageable() -> None:
-    """Detect matching roles that Claviger cannot manage."""
+def test_build_snapshot_records_explicit_channel_mapping() -> None:
+    """Record channels explicitly visible to each Discord role."""
 
     role = create_role(
         role_id=100,
         name="interest-ia",
-        below_bot=False,
     )
 
-    channel = create_channel(
+    channel = create_text_channel(
         channel_id=200,
         name="ia",
         visible_roles={100},
@@ -192,58 +190,28 @@ def test_discover_marks_role_above_claviger_unmanageable() -> None:
         channels=[channel],
     )
 
-    service = RoleChannelDiscoveryService()
-
-    discovery = service.discover(
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
         guild,
-        prefix="interest-",
-    )[0]
+    )
 
-    assert discovery.role_manageable is False
-    assert discovery.mapping_valid is True
+    assert snapshot.roles[0].explicit_channel_ids == (200,)
 
 
-def test_discover_marks_missing_channel_mapping_invalid() -> None:
-    """Detect a matching role without an explicit content channel."""
+def test_build_snapshot_records_multiple_explicit_channels() -> None:
+    """Preserve ambiguous role mappings for later planner validation."""
 
     role = create_role(
         role_id=100,
         name="interest-ia",
     )
 
-    guild = create_guild(
-        roles=[role],
-        channels=[],
-    )
-
-    service = RoleChannelDiscoveryService()
-
-    discovery = service.discover(
-        guild,
-        prefix="interest-",
-    )[0]
-
-    assert discovery.channel_id is None
-    assert discovery.channel_name is None
-    assert discovery.channel_present is False
-    assert discovery.mapping_valid is False
-
-
-def test_discover_marks_multiple_channels_mapping_invalid() -> None:
-    """Reject ambiguous mappings when a role exposes several channels."""
-
-    role = create_role(
-        role_id=100,
-        name="interest-ia",
-    )
-
-    first_channel = create_channel(
+    first_channel = create_text_channel(
         channel_id=200,
         name="ia-one",
         visible_roles={100},
     )
 
-    second_channel = create_channel(
+    second_channel = create_forum_channel(
         channel_id=201,
         name="ia-two",
         visible_roles={100},
@@ -257,83 +225,88 @@ def test_discover_marks_multiple_channels_mapping_invalid() -> None:
         ],
     )
 
-    service = RoleChannelDiscoveryService()
-
-    discovery = service.discover(
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
         guild,
-        prefix="interest-",
-    )[0]
+    )
 
-    assert discovery.channel_id is None
-    assert discovery.channel_name is None
-    assert discovery.channel_present is False
-    assert discovery.mapping_valid is False
+    assert snapshot.roles[0].explicit_channel_ids == (
+        200,
+        201,
+    )
 
 
-def test_discover_supports_access_prefix_without_special_logic() -> None:
-    """Use the same discovery engine for adult access roles."""
+def test_build_snapshot_ignores_unsupported_channel_types() -> None:
+    """Ignore voice channels when building role catalog mappings."""
 
     role = create_role(
         role_id=100,
-        name="access-ia-futa",
+        name="interest-ia",
     )
 
-    channel = create_channel(
-        channel_id=200,
-        name="ia-futa",
-        visible_roles={100},
+    voice_channel = MagicMock(
+        spec=discord.VoiceChannel,
     )
+
+    voice_channel.id = 300
+    voice_channel.name = "voice"
 
     guild = create_guild(
         roles=[role],
-        channels=[channel],
+        channels=[voice_channel],
     )
 
-    service = RoleChannelDiscoveryService()
-
-    discovery = service.discover(
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
         guild,
-        prefix="access-",
-    )[0]
+    )
 
-    assert discovery.catalog_key == "ia-futa"
-    assert discovery.mapping_valid is True
+    assert snapshot.channels == ()
+    assert snapshot.roles[0].explicit_channel_ids == ()
 
 
-def test_discover_rejects_empty_prefix() -> None:
-    """Prevent accidental discovery of every Discord role."""
+def test_build_snapshot_records_role_manageability() -> None:
+    """Capture whether Claviger can manage each Discord role."""
+
+    manageable_role = create_role(
+        role_id=100,
+        name="interest-ia",
+        below_bot=True,
+    )
+
+    unmanageable_role = create_role(
+        role_id=101,
+        name="access-ia-futa",
+        below_bot=False,
+    )
+
+    guild = create_guild(
+        roles=[
+            manageable_role,
+            unmanageable_role,
+        ],
+        channels=[],
+    )
+
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
+        guild,
+    )
+
+    assert snapshot.roles[0].role_manageable is True
+    assert snapshot.roles[1].role_manageable is False
+
+
+def test_build_snapshot_requires_claviger_guild_member() -> None:
+    """Fail safely when Discord cannot resolve Claviger in the guild."""
 
     guild = create_guild(
         roles=[],
         channels=[],
     )
 
-    service = RoleChannelDiscoveryService()
-
-    with pytest.raises(
-        ValueError,
-    ):
-        service.discover(
-            guild,
-            prefix="",
-        )
-
-
-def test_discover_requires_claviger_guild_member() -> None:
-    """Fail safely when Discord cannot resolve the bot member."""
-
-    guild = create_guild(
-        roles=[],
-        channels=[],
-    )
     guild.me = None
-
-    service = RoleChannelDiscoveryService()
 
     with pytest.raises(
         RuntimeError,
     ):
-        service.discover(
+        RoleChannelDiscoveryService().build_snapshot(
             guild,
-            prefix="interest-",
         )

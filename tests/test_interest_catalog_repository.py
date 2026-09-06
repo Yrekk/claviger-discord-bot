@@ -7,6 +7,11 @@ from claviger.database.connection import (
     DatabaseMissingError,
 )
 from claviger.database.schema import DatabaseSchema
+from claviger.models.catalog_sync_model import (
+    CatalogStateUpdate,
+    CatalogSyncEntry,
+    CatalogSyncPlan,
+)
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
     MemberInterestNotFoundError,
@@ -592,3 +597,127 @@ async def test_refresh_discovered_preserves_unmanageable_role_state(
 
     assert interest is not None
     assert interest.role_manageable is False
+
+
+@pytest.mark.asyncio
+async def test_apply_sync_plan_does_not_commit_transaction(
+    tmp_path: Path,
+) -> None:
+    """Leave transaction ownership to the catalog coordinator."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    plan = CatalogSyncPlan(
+        creates=(
+            CatalogSyncEntry(
+                role_id=999,
+                role_name="interest-machinae",
+                catalog_key="machinae",
+                channel_id=888,
+                channel_name="machinae",
+                role_manageable=True,
+            ),
+        ),
+        refreshes=(),
+        state_updates=(),
+        warnings=(),
+    )
+
+    async with repository.database.connect() as connection:
+        await connection.execute("BEGIN IMMEDIATE")
+
+        await repository.apply_sync_plan(
+            connection,
+            123,
+            plan,
+        )
+
+        await connection.rollback()
+
+    assert (
+        await repository.get(
+            123,
+            999,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_apply_sync_plan_preserves_historical_identity(
+    tmp_path: Path,
+) -> None:
+    """Update sync state without losing stable historical catalog data."""
+
+    repository = await create_repository(
+        tmp_path,
+    )
+
+    await create_interest(
+        repository,
+    )
+
+    await repository.update_metadata(
+        123,
+        456,
+        label="Jeux vidéo",
+        description="Discussions autour des jeux vidéo.",
+        emoji="🎮",
+    )
+
+    plan = CatalogSyncPlan(
+        creates=(),
+        refreshes=(),
+        state_updates=(
+            CatalogStateUpdate(
+                role_id=456,
+                role_name="legacy-ludus",
+                catalog_key=None,
+                channel_name="ludus-renamed",
+                discord_present=True,
+                role_manageable=True,
+                channel_present=True,
+                mapping_valid=False,
+                matches_policy=False,
+            ),
+        ),
+        warnings=(),
+    )
+
+    async with repository.database.connect() as connection:
+        await connection.execute("BEGIN IMMEDIATE")
+
+        await repository.apply_sync_plan(
+            connection,
+            123,
+            plan,
+        )
+
+        await connection.commit()
+
+    interest = await repository.get(
+        123,
+        456,
+    )
+
+    assert interest is not None
+
+    assert interest.role_id == 456
+    assert interest.role_name == "legacy-ludus"
+
+    assert interest.interest_key == "ludus"
+
+    assert interest.channel_id == 789
+    assert interest.channel_name == "ludus-renamed"
+
+    assert interest.label == "Jeux vidéo"
+    assert interest.description == "Discussions autour des jeux vidéo."
+    assert interest.emoji == "🎮"
+
+    assert interest.discord_present is True
+    assert interest.role_manageable is True
+    assert interest.channel_present is True
+    assert interest.mapping_valid is False
+    assert interest.matches_policy is False

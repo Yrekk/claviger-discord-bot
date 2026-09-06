@@ -7,7 +7,7 @@ from claviger.repositories.access_catalog_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
-from claviger.services.catalog_registry import CatalogRegistry
+from claviger.services.catalog_registry_service import CatalogRegistry
 
 
 def create_policy(

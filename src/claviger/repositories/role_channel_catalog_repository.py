@@ -8,7 +8,8 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.role_channel_catalog import RoleChannelCatalogEntry
+from claviger.models.catalog_sync_model import CatalogSyncPlan
+from claviger.models.role_channel_catalog_model import RoleChannelCatalogEntry
 
 CatalogEntryT = TypeVar(
     "CatalogEntryT",
@@ -165,28 +166,15 @@ class RoleChannelCatalogRepository(
 
         try:
             async with self.database.connect() as connection:
-                await connection.execute(
-                    f"""
-                    INSERT INTO {self.table_name} (
-                        guild_id,
-                        role_id,
-                        role_name,
-                        {self.key_column},
-                        channel_id,
-                        channel_name,
-                        role_manageable
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        guild_id,
-                        role_id,
-                        role_name,
-                        catalog_key,
-                        channel_id,
-                        channel_name,
-                        role_manageable,
-                    ),
+                await self._create_discovered_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=role_id,
+                    role_name=role_name,
+                    catalog_key=catalog_key,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    role_manageable=role_manageable,
                 )
 
                 await connection.commit()
@@ -229,41 +217,16 @@ class RoleChannelCatalogRepository(
 
         try:
             async with self.database.connect() as connection:
-                cursor = await connection.execute(
-                    f"""
-                    UPDATE {self.table_name}
-                    SET
-                        role_name = ?,
-                        {self.key_column} = ?,
-                        channel_id = ?,
-                        channel_name = ?,
-                        discord_present = 1,
-                        role_manageable = ?,
-                        channel_present = 1,
-                        mapping_valid = 1,
-                        matches_policy = 1
-                    WHERE guild_id = ?
-                      AND role_id = ?
-                    """,
-                    (
-                        role_name,
-                        catalog_key,
-                        channel_id,
-                        channel_name,
-                        role_manageable,
-                        guild_id,
-                        role_id,
-                    ),
+                await self._refresh_discovered_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=role_id,
+                    role_name=role_name,
+                    catalog_key=catalog_key,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    role_manageable=role_manageable,
                 )
-
-                if cursor.rowcount == 0:
-                    raise self.not_found_error(
-                        (
-                            f"{self.entry_label.capitalize()} "
-                            "does not exist: "
-                            f"guild={guild_id}, role={role_id}."
-                        )
-                    )
 
                 await connection.commit()
 
@@ -295,37 +258,19 @@ class RoleChannelCatalogRepository(
 
         try:
             async with self.database.connect() as connection:
-                cursor = await connection.execute(
-                    f"""
-                    UPDATE {self.table_name}
-                    SET
-                        discord_present = ?,
-                        role_manageable = ?,
-                        channel_present = ?,
-                        mapping_valid = ?,
-                        matches_policy = ?
-                    WHERE guild_id = ?
-                      AND role_id = ?
-                    """,
-                    (
-                        discord_present,
-                        role_manageable,
-                        channel_present,
-                        mapping_valid,
-                        matches_policy,
-                        guild_id,
-                        role_id,
-                    ),
+                await self._update_sync_state_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=role_id,
+                    role_name=None,
+                    catalog_key=None,
+                    channel_name=None,
+                    discord_present=discord_present,
+                    role_manageable=role_manageable,
+                    channel_present=channel_present,
+                    mapping_valid=mapping_valid,
+                    matches_policy=matches_policy,
                 )
-
-                if cursor.rowcount == 0:
-                    raise self.not_found_error(
-                        (
-                            f"{self.entry_label.capitalize()} "
-                            "does not exist: "
-                            f"guild={guild_id}, role={role_id}."
-                        )
-                    )
 
                 await connection.commit()
 
@@ -339,6 +284,64 @@ class RoleChannelCatalogRepository(
                     f"{self.entry_label} {role_id} "
                     f"in guild {guild_id}."
                 )
+            ) from error
+
+    async def apply_sync_plan(
+        self,
+        connection: aiosqlite.Connection,
+        guild_id: int,
+        plan: CatalogSyncPlan,
+    ) -> None:
+        """Apply one catalog sync plan without committing the transaction."""
+
+        self._ensure_database_exists()
+
+        try:
+            for entry in plan.creates:
+                await self._create_discovered_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=entry.role_id,
+                    role_name=entry.role_name,
+                    catalog_key=entry.catalog_key,
+                    channel_id=entry.channel_id,
+                    channel_name=entry.channel_name,
+                    role_manageable=entry.role_manageable,
+                )
+
+            for entry in plan.refreshes:
+                await self._refresh_discovered_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=entry.role_id,
+                    role_name=entry.role_name,
+                    catalog_key=entry.catalog_key,
+                    channel_id=entry.channel_id,
+                    channel_name=entry.channel_name,
+                    role_manageable=entry.role_manageable,
+                )
+
+            for state in plan.state_updates:
+                await self._update_sync_state_with_connection(
+                    connection,
+                    guild_id=guild_id,
+                    role_id=state.role_id,
+                    role_name=state.role_name,
+                    catalog_key=state.catalog_key,
+                    channel_name=state.channel_name,
+                    discord_present=state.discord_present,
+                    role_manageable=state.role_manageable,
+                    channel_present=state.channel_present,
+                    mapping_valid=state.mapping_valid,
+                    matches_policy=state.matches_policy,
+                )
+
+        except self.not_found_error:
+            raise
+
+        except aiosqlite.Error as error:
+            raise DatabaseUnavailableError(
+                (f"Unable to apply {self.entry_label} sync plan for guild {guild_id}.")
             ) from error
 
     async def get_next_incomplete(
@@ -465,6 +468,159 @@ class RoleChannelCatalogRepository(
                     f"in guild {guild_id}."
                 )
             ) from error
+
+    async def _create_discovered_with_connection(
+        self,
+        connection: aiosqlite.Connection,
+        *,
+        guild_id: int,
+        role_id: int,
+        role_name: str,
+        catalog_key: str,
+        channel_id: int,
+        channel_name: str,
+        role_manageable: bool,
+    ) -> None:
+        """Insert one discovered entry using an existing transaction."""
+
+        await connection.execute(
+            f"""
+            INSERT INTO {self.table_name} (
+                guild_id,
+                role_id,
+                role_name,
+                {self.key_column},
+                channel_id,
+                channel_name,
+                role_manageable,
+                discord_present,
+                channel_present,
+                mapping_valid,
+                matches_policy
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+            """,
+            (
+                guild_id,
+                role_id,
+                role_name,
+                catalog_key,
+                channel_id,
+                channel_name,
+                role_manageable,
+            ),
+        )
+
+    async def _refresh_discovered_with_connection(
+        self,
+        connection: aiosqlite.Connection,
+        *,
+        guild_id: int,
+        role_id: int,
+        role_name: str,
+        catalog_key: str,
+        channel_id: int,
+        channel_name: str,
+        role_manageable: bool,
+    ) -> None:
+        """Refresh one entry using an existing transaction."""
+
+        cursor = await connection.execute(
+            f"""
+            UPDATE {self.table_name}
+            SET
+                role_name = ?,
+                {self.key_column} = ?,
+                channel_id = ?,
+                channel_name = ?,
+                discord_present = 1,
+                role_manageable = ?,
+                channel_present = 1,
+                mapping_valid = 1,
+                matches_policy = 1
+            WHERE guild_id = ?
+            AND role_id = ?
+            """,
+            (
+                role_name,
+                catalog_key,
+                channel_id,
+                channel_name,
+                role_manageable,
+                guild_id,
+                role_id,
+            ),
+        )
+
+        if cursor.rowcount == 0:
+            raise self.not_found_error(
+                (
+                    f"{self.entry_label.capitalize()} "
+                    "does not exist: "
+                    f"guild={guild_id}, role={role_id}."
+                )
+            )
+
+    async def _update_sync_state_with_connection(
+        self,
+        connection: aiosqlite.Connection,
+        *,
+        guild_id: int,
+        role_id: int,
+        role_name: str | None,
+        catalog_key: str | None,
+        channel_name: str | None,
+        discord_present: bool,
+        role_manageable: bool,
+        channel_present: bool,
+        mapping_valid: bool,
+        matches_policy: bool,
+    ) -> None:
+        """Update observed state using an existing transaction."""
+
+        cursor = await connection.execute(
+            f"""
+            UPDATE {self.table_name}
+            SET
+                role_name = COALESCE(?, role_name),
+                {self.key_column} = COALESCE(
+                    ?,
+                    {self.key_column}
+                ),
+                channel_name = COALESCE(
+                    ?,
+                    channel_name
+                ),
+                discord_present = ?,
+                role_manageable = ?,
+                channel_present = ?,
+                mapping_valid = ?,
+                matches_policy = ?
+            WHERE guild_id = ?
+            AND role_id = ?
+            """,
+            (
+                role_name,
+                catalog_key,
+                channel_name,
+                discord_present,
+                role_manageable,
+                channel_present,
+                mapping_valid,
+                matches_policy,
+                guild_id,
+                role_id,
+            ),
+        )
+
+        if cursor.rowcount == 0:
+            raise self.not_found_error(
+                (
+                    f"{self.entry_label.capitalize()} "
+                    "does not exist: "
+                    f"guild={guild_id}, role={role_id}."
+                )
+            )
 
     def _ensure_database_exists(self) -> None:
         """Reject access without implicitly creating SQLite."""

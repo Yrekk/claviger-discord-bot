@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from claviger.models.role_channel_catalog import RoleChannelCatalogEntry
+from claviger.models.role_channel_catalog_model import RoleChannelCatalogEntry
 
 
 @dataclass(frozen=True)
