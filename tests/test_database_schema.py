@@ -119,6 +119,36 @@ async def test_initialize_creates_guild_settings_table(
 
 
 @pytest.mark.asyncio
+async def test_initialize_creates_guild_member_interests_table(
+    tmp_path: Path,
+) -> None:
+    """Create the member interests catalog during schema initialization."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_member_interests'
+            """
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == ("guild_member_interests",)
+
+
+@pytest.mark.asyncio
 async def test_migrate_upgrades_version_one_database(
     tmp_path: Path,
 ) -> None:
@@ -152,3 +182,104 @@ async def test_migrate_upgrades_version_one_database(
         row = await cursor.fetchone()
 
     assert row == ("guild_settings",)
+
+
+@pytest.mark.asyncio
+async def test_migrate_upgrades_version_two_database_to_member_interests_catalog(
+    tmp_path: Path,
+) -> None:
+    """Migrate an existing version two database to schema version three."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            CREATE TABLE guild_settings (
+                guild_id INTEGER PRIMARY KEY,
+                member_role_name TEXT,
+                adult_role_name TEXT,
+                member_interest_prefix TEXT,
+                adult_access_prefix TEXT,
+                salutations_channel_name TEXT,
+                adult_rules_channel_name TEXT,
+                role_management_enabled INTEGER
+                    CHECK (
+                        role_management_enabled IS NULL
+                        OR role_management_enabled IN (0, 1)
+                    ),
+                adult_access_enabled INTEGER
+                    CHECK (
+                        adult_access_enabled IS NULL
+                        OR adult_access_enabled IN (0, 1)
+                    )
+            )
+            """
+        )
+
+        await connection.execute("PRAGMA user_version = 2")
+
+        await connection.commit()
+
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.migrate()
+
+    assert await schema.get_version() == 3
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_member_interests'
+            """
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == ("guild_member_interests",)
+
+
+@pytest.mark.asyncio
+async def test_member_interests_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the complete member interests catalog schema."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_member_interests)")
+
+        rows = await cursor.fetchall()
+
+    column_names = {row[1] for row in rows}
+
+    assert column_names == {
+        "guild_id",
+        "role_id",
+        "role_name",
+        "interest_key",
+        "channel_id",
+        "channel_name",
+        "label",
+        "description",
+        "emoji",
+        "sort_order",
+        "enabled",
+        "discord_present",
+        "matches_policy",
+    }

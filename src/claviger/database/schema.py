@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -33,6 +33,37 @@ MIGRATIONS: dict[int, Sequence[str]] = {
                     adult_access_enabled IS NULL
                     OR adult_access_enabled IN (0, 1)
                 )
+        )
+        """,
+    ),
+    3: (
+        """
+        CREATE TABLE guild_member_interests (
+            guild_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+
+            role_name TEXT NOT NULL,
+            interest_key TEXT NOT NULL,
+
+            channel_id INTEGER,
+            channel_name TEXT,
+
+            label TEXT,
+            description TEXT,
+            emoji TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            discord_present INTEGER NOT NULL DEFAULT 1
+                CHECK (discord_present IN (0, 1)),
+
+            matches_policy INTEGER NOT NULL DEFAULT 1
+                CHECK (matches_policy IN (0, 1)),
+
+            PRIMARY KEY (guild_id, role_id)
         )
         """,
     ),
