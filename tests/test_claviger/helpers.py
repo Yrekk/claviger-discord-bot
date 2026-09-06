@@ -14,6 +14,9 @@ from claviger.policies.default_policy import (
 )
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
+from claviger.services.catalog_next_coordinator_service import (
+    CatalogNextCoordinatorService,
+)
 from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
@@ -59,6 +62,7 @@ def create_interaction(
     interaction.response = Mock()
     interaction.response.send_message = AsyncMock()
     interaction.response.defer = AsyncMock()
+    interaction.response.send_modal = AsyncMock()
 
     interaction.followup = Mock()
     interaction.followup.send = AsyncMock()
@@ -87,6 +91,7 @@ def create_test_group(
     role_discovery_service: RoleDiscoveryService,
     guild_policy_bootstrap_service: GuildPolicyBootstrapService | None = None,
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService | None = None,
+    catalog_next_coordinator_service: CatalogNextCoordinatorService | None = None,
 ):
     """Create Claviger's command group with mocked external services."""
 
@@ -131,6 +136,13 @@ def create_test_group(
         )
         catalog_sync_coordinator_service.sync = AsyncMock()
 
+    if catalog_next_coordinator_service is None:
+        catalog_next_coordinator_service = Mock(
+            spec=CatalogNextCoordinatorService,
+        )
+        catalog_next_coordinator_service.get_next = AsyncMock()
+        catalog_next_coordinator_service.update_metadata = AsyncMock()
+
     role_classifier = RoleClassifier()
 
     group = create_claviger_group(
@@ -138,6 +150,7 @@ def create_test_group(
         policy_resolver=policy_resolver,
         role_classifier=role_classifier,
         catalog_sync_coordinator_service=catalog_sync_coordinator_service,
+        catalog_next_coordinator_service=catalog_next_coordinator_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
@@ -402,6 +415,49 @@ def get_catalog_sync_command(
     return (
         command,
         catalog_sync_coordinator_service,
+        policy_resolver,
+        database_status_service,
+        report_service,
+    )
+
+
+def get_catalog_next_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger catalog next command."""
+
+    catalog_next_coordinator_service = Mock(
+        spec=CatalogNextCoordinatorService,
+    )
+    catalog_next_coordinator_service.get_next = AsyncMock()
+    catalog_next_coordinator_service.update_metadata = AsyncMock()
+
+    (
+        group,
+        policy_resolver,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        catalog_next_coordinator_service=catalog_next_coordinator_service,
+    )
+
+    catalog_group = group.get_command(
+        "catalog",
+    )
+
+    assert catalog_group is not None
+
+    command = catalog_group.get_command(
+        "next",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        catalog_next_coordinator_service,
         policy_resolver,
         database_status_service,
         report_service,

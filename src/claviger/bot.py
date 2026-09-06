@@ -40,6 +40,9 @@ from claviger.repositories.interest_catalog_repository import (
 
 # Services
 from claviger.services.authorization import AuthorizationService
+from claviger.services.catalog_next_coordinator_service import (
+    CatalogNextCoordinatorService,
+)
 from claviger.services.catalog_registry_service import CatalogRegistry
 from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
@@ -114,6 +117,10 @@ class ClavigerBot(discord.Client):
             access_repository=self.access_catalog_repository,
         )
 
+        self.catalog_next_coordinator_service = CatalogNextCoordinatorService(
+            registry=self.catalog_registry,
+        )
+
         self.role_channel_discovery_service = RoleChannelDiscoveryService()
 
         self.catalog_sync_planner = CatalogSyncPlanner()
@@ -161,6 +168,7 @@ class ClavigerBot(discord.Client):
                 self.policy_resolver,
                 self.role_classifier,
                 self.catalog_sync_coordinator_service,
+                self.catalog_next_coordinator_service,
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,

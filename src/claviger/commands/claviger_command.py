@@ -9,6 +9,9 @@ from claviger.database.schema import DatabaseSchema
 from claviger.database.status import DatabaseStatusService
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
+from claviger.services.catalog_next_coordinator_service import (
+    CatalogNextCoordinatorService,
+)
 from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
@@ -22,6 +25,7 @@ def create_claviger_group(
     policy_resolver: PolicyResolver,
     role_classifier: RoleClassifier,
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService,
+    catalog_next_coordinator_service: CatalogNextCoordinatorService,
     guild_policy_bootstrap_service: GuildPolicyBootstrapService,
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
@@ -59,6 +63,7 @@ def create_claviger_group(
 
     catalog_group = create_catalog_group(
         catalog_sync_coordinator_service,
+        catalog_next_coordinator_service,
         policy_resolver,
         database_status_service,
         report_service,
