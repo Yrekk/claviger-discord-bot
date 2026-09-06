@@ -150,6 +150,36 @@ async def test_initialize_creates_guild_member_interests_table(
 
 
 @pytest.mark.asyncio
+async def test_initialize_creates_guild_adult_accesses_table(
+    tmp_path: Path,
+) -> None:
+    """Create the adult access catalog during schema initialization."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_adult_accesses'
+            """
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == ("guild_adult_accesses",)
+
+
+@pytest.mark.asyncio
 async def test_migrate_upgrades_version_one_database(
     tmp_path: Path,
 ) -> None:
@@ -186,10 +216,10 @@ async def test_migrate_upgrades_version_one_database(
 
 
 @pytest.mark.asyncio
-async def test_migrate_upgrades_version_two_database_to_member_interests_catalog(
+async def test_migrate_upgrades_version_two_database_to_current_catalogs(
     tmp_path: Path,
 ) -> None:
-    """Migrate an existing version two database to schema version three."""
+    """Apply member interest and adult access migrations to version two."""
 
     database = DatabaseConnection(
         tmp_path / "claviger.db",
@@ -230,7 +260,7 @@ async def test_migrate_upgrades_version_two_database_to_member_interests_catalog
 
     await schema.migrate()
 
-    assert await schema.get_version() == 3
+    assert await schema.get_version() == CURRENT_SCHEMA_VERSION
 
     async with database.connect() as connection:
         cursor = await connection.execute(
@@ -238,13 +268,99 @@ async def test_migrate_upgrades_version_two_database_to_member_interests_catalog
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
-              AND name = 'guild_member_interests'
+              AND name IN (
+                  'guild_member_interests',
+                  'guild_adult_accesses'
+              )
+            ORDER BY name
+            """
+        )
+
+        rows = await cursor.fetchall()
+
+    assert rows == [
+        ("guild_adult_accesses",),
+        ("guild_member_interests",),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_migrate_upgrades_version_three_database_to_adult_access_catalog(
+    tmp_path: Path,
+) -> None:
+    """Migrate an existing version three database to adult access support."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            CREATE TABLE guild_member_interests (
+                guild_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+
+                role_name TEXT NOT NULL,
+                interest_key TEXT NOT NULL,
+
+                channel_id INTEGER NOT NULL,
+                channel_name TEXT NOT NULL,
+
+                label TEXT,
+                description TEXT,
+                emoji TEXT,
+
+                sort_order INTEGER NOT NULL DEFAULT 0,
+
+                enabled INTEGER NOT NULL DEFAULT 1
+                    CHECK (enabled IN (0, 1)),
+
+                discord_present INTEGER NOT NULL DEFAULT 1
+                    CHECK (discord_present IN (0, 1)),
+
+                role_manageable INTEGER NOT NULL DEFAULT 1
+                    CHECK (role_manageable IN (0, 1)),
+
+                channel_present INTEGER NOT NULL DEFAULT 1
+                    CHECK (channel_present IN (0, 1)),
+
+                mapping_valid INTEGER NOT NULL DEFAULT 1
+                    CHECK (mapping_valid IN (0, 1)),
+
+                matches_policy INTEGER NOT NULL DEFAULT 1
+                    CHECK (matches_policy IN (0, 1)),
+
+                PRIMARY KEY (guild_id, role_id)
+            )
+            """
+        )
+
+        await connection.execute("PRAGMA user_version = 3")
+
+        await connection.commit()
+
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.migrate()
+
+    assert await schema.get_version() == 4
+
+    async with database.connect() as connection:
+        cursor = await connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'guild_adult_accesses'
             """
         )
 
         row = await cursor.fetchone()
 
-    assert row == ("guild_member_interests",)
+    assert row == ("guild_adult_accesses",)
 
 
 @pytest.mark.asyncio
@@ -274,6 +390,48 @@ async def test_member_interests_table_has_expected_columns(
         "role_id",
         "role_name",
         "interest_key",
+        "channel_id",
+        "channel_name",
+        "label",
+        "description",
+        "emoji",
+        "sort_order",
+        "enabled",
+        "discord_present",
+        "role_manageable",
+        "channel_present",
+        "mapping_valid",
+        "matches_policy",
+    }
+
+
+@pytest.mark.asyncio
+async def test_adult_accesses_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the complete adult access catalog schema."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_adult_accesses)")
+
+        rows = await cursor.fetchall()
+
+    column_names = {row[1] for row in rows}
+
+    assert column_names == {
+        "guild_id",
+        "role_id",
+        "role_name",
+        "access_key",
         "channel_id",
         "channel_name",
         "label",
@@ -321,6 +479,46 @@ async def test_member_interest_requires_channel_mapping(
                     456,
                     "interest-ludus",
                     "ludus",
+                ),
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_adult_access_requires_channel_mapping(
+    tmp_path: Path,
+) -> None:
+    """Reject adult accesses without a Discord channel mapping."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await connection.execute(
+                """
+                INSERT INTO guild_adult_accesses (
+                    guild_id,
+                    role_id,
+                    role_name,
+                    access_key
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    123,
+                    456,
+                    "access-ia-futa",
+                    "ia-futa",
                 ),
             )
 

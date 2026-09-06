@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -44,6 +44,46 @@ MIGRATIONS: dict[int, Sequence[str]] = {
 
             role_name TEXT NOT NULL,
             interest_key TEXT NOT NULL,
+
+            channel_id INTEGER NOT NULL,
+            channel_name TEXT NOT NULL,
+
+            label TEXT,
+            description TEXT,
+            emoji TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            discord_present INTEGER NOT NULL DEFAULT 1
+                CHECK (discord_present IN (0, 1)),
+
+            role_manageable INTEGER NOT NULL DEFAULT 1
+                CHECK (role_manageable IN (0, 1)),
+
+            channel_present INTEGER NOT NULL DEFAULT 1
+                CHECK (channel_present IN (0, 1)),
+
+            mapping_valid INTEGER NOT NULL DEFAULT 1
+                CHECK (mapping_valid IN (0, 1)),
+
+            matches_policy INTEGER NOT NULL DEFAULT 1
+                CHECK (matches_policy IN (0, 1)),
+
+            PRIMARY KEY (guild_id, role_id)
+        )
+        """,
+    ),
+    4: (
+        """
+        CREATE TABLE guild_adult_accesses (
+            guild_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+
+            role_name TEXT NOT NULL,
+            access_key TEXT NOT NULL,
 
             channel_id INTEGER NOT NULL,
             channel_name TEXT NOT NULL,
