@@ -86,6 +86,7 @@ def create_role(
 def create_test_group(
     role_discovery_service: RoleDiscoveryService,
     guild_policy_bootstrap_service: GuildPolicyBootstrapService | None = None,
+    catalog_sync_coordinator_service: CatalogSyncCoordinatorService | None = None,
 ):
     """Create Claviger's command group with mocked external services."""
 
@@ -124,10 +125,11 @@ def create_test_group(
         )
         guild_policy_bootstrap_service.bootstrap = AsyncMock()
 
-    catalog_sync_coordinator = Mock(
-        spec=CatalogSyncCoordinatorService,
-    )
-    catalog_sync_coordinator.sync = AsyncMock()
+    if catalog_sync_coordinator_service is None:
+        catalog_sync_coordinator_service = Mock(
+            spec=CatalogSyncCoordinatorService,
+        )
+        catalog_sync_coordinator_service.sync = AsyncMock()
 
     role_classifier = RoleClassifier()
 
@@ -135,7 +137,7 @@ def create_test_group(
         role_discovery_service=role_discovery_service,
         policy_resolver=policy_resolver,
         role_classifier=role_classifier,
-        catalog_sync_coordinator_service=catalog_sync_coordinator,
+        catalog_sync_coordinator_service=catalog_sync_coordinator_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
@@ -359,6 +361,48 @@ def get_guild_bootstrap_command(
     return (
         command,
         bootstrap_service,
+        database_status_service,
+        report_service,
+    )
+
+
+def get_catalog_sync_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger catalog sync command."""
+
+    catalog_sync_coordinator_service = Mock(
+        spec=CatalogSyncCoordinatorService,
+    )
+    catalog_sync_coordinator_service.sync = AsyncMock()
+
+    (
+        group,
+        policy_resolver,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        catalog_sync_coordinator_service=catalog_sync_coordinator_service,
+    )
+
+    catalog_group = group.get_command(
+        "catalog",
+    )
+
+    assert catalog_group is not None
+
+    command = catalog_group.get_command(
+        "sync",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        catalog_sync_coordinator_service,
+        policy_resolver,
         database_status_service,
         report_service,
     )

@@ -43,6 +43,14 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
 
     assert bot.report_service is not None
 
+    assert bot.interest_catalog_repository is not None
+    assert bot.access_catalog_repository is not None
+
+    assert bot.catalog_registry is not None
+    assert bot.role_channel_discovery_service is not None
+    assert bot.catalog_sync_planner is not None
+    assert bot.catalog_sync_coordinator_service is not None
+
     commands = {
         command.name
         for command in bot.tree.get_commands(
