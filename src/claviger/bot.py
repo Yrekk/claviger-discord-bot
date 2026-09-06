@@ -56,7 +56,7 @@ from claviger.services.role_channel_discovery_service import (
 )
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
-from claviger.services.role_manager import RoleManager
+from claviger.services.role_manager_service import RoleManager
 from claviger.services.say import SayService
 
 

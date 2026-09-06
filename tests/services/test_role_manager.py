@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.services.role_manager import RoleManager
+from claviger.services.role_manager_service import RoleManager
 
 
 @pytest.mark.asyncio
