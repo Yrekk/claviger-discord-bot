@@ -37,6 +37,12 @@ from claviger.repositories.guild_policy_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
+from claviger.services.adult_access_questionnaire_service import (
+    AdultAccessQuestionnaireService,
+)
+from claviger.services.adult_access_workflow_service import (
+    AdultAccessWorkflowService,
+)
 
 # Services
 from claviger.services.authorization import AuthorizationService
@@ -50,6 +56,15 @@ from claviger.services.catalog_sync_coordinator_service import (
 from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
+)
+from claviger.services.noctis_role_executor_service import (
+    NoctisRoleExecutorService,
+)
+from claviger.services.noctis_role_planner_service import (
+    NoctisRolePlannerService,
+)
+from claviger.services.noctis_workflow_coordinator_service import (
+    NoctisWorkflowCoordinatorService,
 )
 from claviger.services.role_channel_discovery_service import (
     RoleChannelDiscoveryService,
@@ -99,6 +114,26 @@ class ClavigerBot(discord.Client):
 
         self.access_catalog_repository = AccessCatalogRepository(
             self.database,
+        )
+        self.adult_access_workflow_service = AdultAccessWorkflowService()
+
+        self.adult_access_questionnaire_service = AdultAccessQuestionnaireService(
+            repository=self.access_catalog_repository,
+            workflow_service=self.adult_access_workflow_service,
+        )
+
+        self.noctis_role_planner_service = NoctisRolePlannerService(
+            workflow_service=self.adult_access_workflow_service,
+        )
+
+        self.noctis_role_executor_service = NoctisRoleExecutorService(
+            role_manager=self.role_manager,
+        )
+
+        self.noctis_workflow_coordinator_service = NoctisWorkflowCoordinatorService(
+            questionnaire_service=self.adult_access_questionnaire_service,
+            planner_service=self.noctis_role_planner_service,
+            executor_service=self.noctis_role_executor_service,
         )
 
         self.policy_resolver = PolicyResolver(
@@ -169,6 +204,7 @@ class ClavigerBot(discord.Client):
                 self.role_classifier,
                 self.catalog_sync_coordinator_service,
                 self.catalog_next_coordinator_service,
+                self.noctis_workflow_coordinator_service,
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,

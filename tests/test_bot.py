@@ -52,6 +52,12 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.catalog_sync_coordinator_service is not None
     assert bot.catalog_next_coordinator_service is not None
 
+    assert bot.adult_access_workflow_service is not None
+    assert bot.adult_access_questionnaire_service is not None
+    assert bot.noctis_role_planner_service is not None
+    assert bot.noctis_role_executor_service is not None
+    assert bot.noctis_workflow_coordinator_service is not None
+
     commands = {
         command.name
         for command in bot.tree.get_commands(

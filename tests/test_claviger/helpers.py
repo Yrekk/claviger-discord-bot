@@ -23,6 +23,9 @@ from claviger.services.catalog_sync_coordinator_service import (
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
 )
+from claviger.services.noctis_workflow_coordinator_service import (
+    NoctisWorkflowCoordinatorService,
+)
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
@@ -92,6 +95,7 @@ def create_test_group(
     guild_policy_bootstrap_service: GuildPolicyBootstrapService | None = None,
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService | None = None,
     catalog_next_coordinator_service: CatalogNextCoordinatorService | None = None,
+    noctis_workflow_coordinator_service: NoctisWorkflowCoordinatorService | None = None,
 ):
     """Create Claviger's command group with mocked external services."""
 
@@ -143,6 +147,13 @@ def create_test_group(
         catalog_next_coordinator_service.get_next = AsyncMock()
         catalog_next_coordinator_service.update_metadata = AsyncMock()
 
+    if noctis_workflow_coordinator_service is None:
+        noctis_workflow_coordinator_service = Mock(
+            spec=NoctisWorkflowCoordinatorService,
+        )
+        noctis_workflow_coordinator_service.build_questionnaire = AsyncMock()
+        noctis_workflow_coordinator_service.apply_selection = AsyncMock()
+
     role_classifier = RoleClassifier()
 
     group = create_claviger_group(
@@ -151,6 +162,7 @@ def create_test_group(
         role_classifier=role_classifier,
         catalog_sync_coordinator_service=catalog_sync_coordinator_service,
         catalog_next_coordinator_service=catalog_next_coordinator_service,
+        noctis_workflow_coordinator_service=noctis_workflow_coordinator_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
@@ -458,6 +470,49 @@ def get_catalog_next_command(
     return (
         command,
         catalog_next_coordinator_service,
+        policy_resolver,
+        database_status_service,
+        report_service,
+    )
+
+
+def get_noctis_preview_command(
+    role_discovery_service: RoleDiscoveryService,
+):
+    """Create and retrieve the /claviger noctis preview command."""
+
+    noctis_workflow_coordinator_service = Mock(
+        spec=NoctisWorkflowCoordinatorService,
+    )
+    noctis_workflow_coordinator_service.build_questionnaire = AsyncMock()
+    noctis_workflow_coordinator_service.apply_selection = AsyncMock()
+
+    (
+        group,
+        policy_resolver,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        noctis_workflow_coordinator_service=(noctis_workflow_coordinator_service),
+    )
+
+    noctis_group = group.get_command(
+        "noctis",
+    )
+
+    assert noctis_group is not None
+
+    command = noctis_group.get_command(
+        "preview",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        noctis_workflow_coordinator_service,
         policy_resolver,
         database_status_service,
         report_service,
