@@ -45,8 +45,8 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             role_name TEXT NOT NULL,
             interest_key TEXT NOT NULL,
 
-            channel_id INTEGER,
-            channel_name TEXT,
+            channel_id INTEGER NOT NULL,
+            channel_name TEXT NOT NULL,
 
             label TEXT,
             description TEXT,
@@ -59,6 +59,9 @@ MIGRATIONS: dict[int, Sequence[str]] = {
 
             discord_present INTEGER NOT NULL DEFAULT 1
                 CHECK (discord_present IN (0, 1)),
+
+            channel_present INTEGER NOT NULL DEFAULT 1
+                CHECK (channel_present IN (0, 1)),
 
             matches_policy INTEGER NOT NULL DEFAULT 1
                 CHECK (matches_policy IN (0, 1)),

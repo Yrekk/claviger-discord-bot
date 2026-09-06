@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import aiosqlite
 import pytest
 
 from claviger.database.connection import DatabaseConnection
@@ -281,5 +282,44 @@ async def test_member_interests_table_has_expected_columns(
         "sort_order",
         "enabled",
         "discord_present",
+        "channel_present",
         "matches_policy",
     }
+
+
+@pytest.mark.asyncio
+async def test_member_interest_requires_channel_mapping(
+    tmp_path: Path,
+) -> None:
+    """Reject member interests without a Discord channel mapping."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.initialize()
+
+    async with database.connect() as connection:
+        with pytest.raises(aiosqlite.IntegrityError):
+            await connection.execute(
+                """
+                INSERT INTO guild_member_interests (
+                    guild_id,
+                    role_id,
+                    role_name,
+                    interest_key
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    123,
+                    456,
+                    "interest-ludus",
+                    "ludus",
+                ),
+            )
+
+        await connection.rollback()
