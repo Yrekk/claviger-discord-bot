@@ -70,7 +70,7 @@ async def test_bootstrap_persists_complete_fallback_policy() -> None:
         adult_role_name="Civis Noctis - 18+",
         member_interest_prefix="interest-",
         adult_access_prefix="access-",
-        salutations_channel_name="salutations",
+        salutations_channel_name="salutationes",
         adult_rules_channel_name="lex-noctis",
         role_management_enabled=True,
         adult_access_enabled=True,

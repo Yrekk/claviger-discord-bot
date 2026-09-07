@@ -27,7 +27,7 @@ def test_succumbrae_fallback_uses_expected_role_conventions() -> None:
 
 def test_succumbrae_fallback_uses_expected_flow_channels() -> None:
     """Use the known channels required by Succumbrae's membership flows."""
-    assert SUCCUMBRAE_FALLBACK_POLICY.salutations_channel_name == "salutations"
+    assert SUCCUMBRAE_FALLBACK_POLICY.salutations_channel_name == "salutationes"
     assert SUCCUMBRAE_FALLBACK_POLICY.adult_rules_channel_name == "lex-noctis"
 
 

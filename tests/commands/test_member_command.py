@@ -27,7 +27,7 @@ from claviger.services.member_workflow_coordinator_service import (
 def create_interaction(
     *,
     guild_id: int = 123,
-    channel_name: str = "salutations",
+    channel_name: str = "salutationes",
     user_id: int = 42,
 ) -> Mock:
     """Create a mocked Discord interaction for /membre tests."""
