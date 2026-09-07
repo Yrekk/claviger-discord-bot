@@ -235,7 +235,7 @@ async def test_member_command_requires_salutations_channel() -> None:
     coordinator.build_questionnaire.assert_not_awaited()
 
     interaction.response.send_message.assert_awaited_once_with(
-        "Cette commande doit être utilisée dans `#salutations`.",
+        "Cette commande doit être utilisée dans `#salutationes`.",
         ephemeral=True,
     )
 

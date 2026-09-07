@@ -52,6 +52,11 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.catalog_sync_coordinator_service is not None
     assert bot.catalog_next_coordinator_service is not None
 
+    assert bot.member_interest_questionnaire_service is not None
+    assert bot.member_role_planner_service is not None
+    assert bot.member_role_executor_service is not None
+    assert bot.member_workflow_coordinator_service is not None
+
     assert bot.adult_access_workflow_service is not None
     assert bot.adult_access_questionnaire_service is not None
     assert bot.noctis_role_planner_service is not None
@@ -66,4 +71,6 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     }
 
     assert "say" in commands
+    assert "membre" in commands
+    assert "noctis" in commands
     assert "claviger" in commands

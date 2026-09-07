@@ -3,6 +3,7 @@ from discord import app_commands
 
 # Commands
 from claviger.commands.claviger_command import create_claviger_group
+from claviger.commands.member_command import create_member_command
 from claviger.commands.noctis_command import create_noctis_command
 from claviger.commands.say import create_say_command
 
@@ -38,14 +39,14 @@ from claviger.repositories.guild_policy_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
+
+# Services
 from claviger.services.adult_access_questionnaire_service import (
     AdultAccessQuestionnaireService,
 )
 from claviger.services.adult_access_workflow_service import (
     AdultAccessWorkflowService,
 )
-
-# Services
 from claviger.services.authorization import AuthorizationService
 from claviger.services.catalog_next_coordinator_service import (
     CatalogNextCoordinatorService,
@@ -57,6 +58,18 @@ from claviger.services.catalog_sync_coordinator_service import (
 from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
+)
+from claviger.services.member_interest_questionnaire_service import (
+    MemberInterestQuestionnaireService,
+)
+from claviger.services.member_role_executor_service import (
+    MemberRoleExecutorService,
+)
+from claviger.services.member_role_planner_service import (
+    MemberRolePlannerService,
+)
+from claviger.services.member_workflow_coordinator_service import (
+    MemberWorkflowCoordinatorService,
 )
 from claviger.services.noctis_role_executor_service import (
     NoctisRoleExecutorService,
@@ -116,6 +129,23 @@ class ClavigerBot(discord.Client):
         self.access_catalog_repository = AccessCatalogRepository(
             self.database,
         )
+
+        self.member_interest_questionnaire_service = MemberInterestQuestionnaireService(
+            repository=self.interest_catalog_repository,
+        )
+
+        self.member_role_planner_service = MemberRolePlannerService()
+
+        self.member_role_executor_service = MemberRoleExecutorService(
+            role_manager=self.role_manager,
+        )
+
+        self.member_workflow_coordinator_service = MemberWorkflowCoordinatorService(
+            questionnaire_service=(self.member_interest_questionnaire_service),
+            planner_service=self.member_role_planner_service,
+            executor_service=self.member_role_executor_service,
+        )
+
         self.adult_access_workflow_service = AdultAccessWorkflowService()
 
         self.adult_access_questionnaire_service = AdultAccessQuestionnaireService(
@@ -199,6 +229,15 @@ class ClavigerBot(discord.Client):
         )
 
         self.tree.add_command(
+            create_member_command(
+                self.policy_resolver,
+                self.database_status_service,
+                self.member_workflow_coordinator_service,
+            ),
+            guild=guild,
+        )
+
+        self.tree.add_command(
             create_noctis_command(
                 self.noctis_workflow_coordinator_service,
                 self.policy_resolver,
@@ -207,6 +246,7 @@ class ClavigerBot(discord.Client):
             ),
             guild=guild,
         )
+
         self.tree.add_command(
             create_claviger_group(
                 self.role_discovery_service,
