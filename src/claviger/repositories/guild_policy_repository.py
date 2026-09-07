@@ -40,7 +40,7 @@ class GuildPolicyRepository:
                         member_interest_prefix,
                         adult_access_prefix,
                         salutations_channel_name,
-                        adult_rules_channel_name,
+                        adult_access_channel_name,
                         role_management_enabled,
                         adult_access_enabled
                     FROM guild_settings
@@ -65,7 +65,7 @@ class GuildPolicyRepository:
             member_interest_prefix=row["member_interest_prefix"],
             adult_access_prefix=row["adult_access_prefix"],
             salutations_channel_name=row["salutations_channel_name"],
-            adult_rules_channel_name=row["adult_rules_channel_name"],
+            adult_access_channel_name=row["adult_access_channel_name"],
             role_management_enabled=self._to_optional_bool(
                 row["role_management_enabled"]
             ),
@@ -95,7 +95,7 @@ class GuildPolicyRepository:
                         member_interest_prefix,
                         adult_access_prefix,
                         salutations_channel_name,
-                        adult_rules_channel_name,
+                        adult_access_channel_name,
                         role_management_enabled,
                         adult_access_enabled
                     )
@@ -109,8 +109,8 @@ class GuildPolicyRepository:
                             excluded.adult_access_prefix,
                         salutations_channel_name =
                             excluded.salutations_channel_name,
-                        adult_rules_channel_name =
-                            excluded.adult_rules_channel_name,
+                        adult_access_channel_name =
+                            excluded.adult_access_channel_name,
                         role_management_enabled =
                             excluded.role_management_enabled,
                         adult_access_enabled =
@@ -123,7 +123,7 @@ class GuildPolicyRepository:
                         overrides.member_interest_prefix,
                         overrides.adult_access_prefix,
                         overrides.salutations_channel_name,
-                        overrides.adult_rules_channel_name,
+                        overrides.adult_access_channel_name,
                         overrides.role_management_enabled,
                         overrides.adult_access_enabled,
                     ),

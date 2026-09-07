@@ -12,7 +12,7 @@ class GuildPolicy:
     adult_access_prefix: str
 
     salutations_channel_name: str
-    adult_rules_channel_name: str
+    adult_access_channel_name: str
 
     role_management_enabled: bool
     adult_access_enabled: bool
@@ -29,7 +29,7 @@ class GuildPolicyOverrides:
     adult_access_prefix: str | None = None
 
     salutations_channel_name: str | None = None
-    adult_rules_channel_name: str | None = None
+    adult_access_channel_name: str | None = None
 
     role_management_enabled: bool | None = None
     adult_access_enabled: bool | None = None

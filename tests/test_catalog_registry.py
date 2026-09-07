@@ -23,7 +23,7 @@ def create_policy(
         member_interest_prefix=interest_prefix,
         adult_access_prefix=access_prefix,
         salutations_channel_name="salutations",
-        adult_rules_channel_name="lex-noctis",
+        adult_access_channel_name="aditus-noctis",
         role_management_enabled=True,
         adult_access_enabled=True,
     )

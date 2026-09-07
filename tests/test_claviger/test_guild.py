@@ -43,7 +43,7 @@ async def test_guild_bootstrap_persists_initial_configuration() -> None:
         member_interest_prefix="interest-",
         adult_access_prefix="access-",
         salutations_channel_name="salutations",
-        adult_rules_channel_name="lex-noctis",
+        adult_access_channel_name="aditus-noctis",
         role_management_enabled=True,
         adult_access_enabled=True,
     )

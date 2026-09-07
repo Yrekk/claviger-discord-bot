@@ -91,10 +91,10 @@ class PolicyResolver:
                 if overrides.salutations_channel_name is not None
                 else base_policy.salutations_channel_name
             ),
-            adult_rules_channel_name=(
-                overrides.adult_rules_channel_name
-                if overrides.adult_rules_channel_name is not None
-                else base_policy.adult_rules_channel_name
+            adult_access_channel_name=(
+                overrides.adult_access_channel_name
+                if overrides.adult_access_channel_name is not None
+                else base_policy.adult_access_channel_name
             ),
             role_management_enabled=(
                 overrides.role_management_enabled

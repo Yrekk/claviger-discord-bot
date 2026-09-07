@@ -28,7 +28,7 @@ def create_policy() -> GuildPolicy:
         member_interest_prefix="interest-",
         adult_access_prefix="access-",
         salutations_channel_name="salutations",
-        adult_rules_channel_name="lex-noctis",
+        adult_access_channel_name="aditus-noctis",
         role_management_enabled=True,
         adult_access_enabled=True,
     )
@@ -152,7 +152,7 @@ def test_classifier_uses_policy_specific_prefixes() -> None:
         member_interest_prefix="topic-",
         adult_access_prefix="private-",
         salutations_channel_name="welcome",
-        adult_rules_channel_name="rules",
+        adult_access_channel_name="rules",
         role_management_enabled=True,
         adult_access_enabled=True,
     )
@@ -194,7 +194,7 @@ def test_classifier_ignores_empty_prefixes() -> None:
         member_interest_prefix="",
         adult_access_prefix="",
         salutations_channel_name="salutations",
-        adult_rules_channel_name="adult-rules",
+        adult_access_channel_name="adult-rules",
         role_management_enabled=True,
         adult_access_enabled=True,
     )

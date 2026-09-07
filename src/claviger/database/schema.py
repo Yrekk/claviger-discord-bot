@@ -22,7 +22,7 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             member_interest_prefix TEXT,
             adult_access_prefix TEXT,
             salutations_channel_name TEXT,
-            adult_rules_channel_name TEXT,
+            adult_access_channel_name TEXT,
             role_management_enabled INTEGER
                 CHECK (
                     role_management_enabled IS NULL
@@ -114,6 +114,13 @@ MIGRATIONS: dict[int, Sequence[str]] = {
 
             PRIMARY KEY (guild_id, role_id)
         )
+        """,
+    ),
+    5: (
+        """
+        ALTER TABLE guild_settings
+        RENAME COLUMN adult_rules_channel_name
+        TO adult_access_channel_name
         """,
     ),
 }

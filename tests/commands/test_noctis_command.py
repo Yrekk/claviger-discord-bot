@@ -67,7 +67,7 @@ def create_questionnaire() -> AdultAccessQuestionnaire:
 
 def create_interaction(
     *,
-    channel_name: str = "lex-noctis",
+    channel_name: str = "aditus-noctis",
 ) -> Mock:
     """Create a mocked guild interaction."""
 
@@ -228,7 +228,7 @@ async def test_noctis_rejects_wrong_channel() -> None:
 
     message = interaction.response.send_message.await_args.args[0]
 
-    assert "lex-noctis" in message
+    assert "aditus-noctis" in message
 
 
 @pytest.mark.asyncio

@@ -68,11 +68,11 @@ def create_noctis_command(
                 None,
             )
 
-            if channel_name != policy.adult_rules_channel_name:
+            if channel_name != policy.adult_access_channel_name:
                 await interaction.response.send_message(
                     (
                         "Cette commande doit être utilisée dans "
-                        f"`#{policy.adult_rules_channel_name}` après "
+                        f"`#{policy.adult_access_channel_name}` après "
                         "avoir pris connaissance des règles."
                     ),
                     ephemeral=True,

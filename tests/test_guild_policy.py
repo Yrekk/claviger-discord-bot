@@ -19,7 +19,7 @@ def test_policy_overrides_are_empty_by_default() -> None:
     assert overrides.adult_access_prefix is None
 
     assert overrides.salutations_channel_name is None
-    assert overrides.adult_rules_channel_name is None
+    assert overrides.adult_access_channel_name is None
 
     assert overrides.role_management_enabled is None
     assert overrides.adult_access_enabled is None
@@ -63,7 +63,7 @@ def test_effective_policy_is_immutable() -> None:
         member_interest_prefix="interest-",
         adult_access_prefix="access-",
         salutations_channel_name="salutations",
-        adult_rules_channel_name="adult-rules",
+        adult_access_channel_name="adult-rules",
         role_management_enabled=False,
         adult_access_enabled=False,
     )
