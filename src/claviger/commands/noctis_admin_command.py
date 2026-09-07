@@ -14,8 +14,8 @@ from claviger.reporting.service import ReportService
 from claviger.services.noctis_workflow_coordinator_service import (
     NoctisWorkflowCoordinatorService,
 )
-from claviger.ui.noctis_questionnaire_view import (
-    NoctisQuestionnaireView,
+from claviger.ui.noctis_questionnaire_modal import (
+    NoctisQuestionnaireModal,
 )
 
 
@@ -89,18 +89,13 @@ def create_noctis_admin_group(
                 )
                 return
 
-            view = NoctisQuestionnaireView(
-                coordinator=noctis_workflow_coordinator_service,
-                policy=policy,
+            modal = NoctisQuestionnaireModal(
                 questionnaire=questionnaire,
                 actor_id=interaction.user.id,
-                preview=True,
             )
 
-            await interaction.response.send_message(
-                view.format_content(),
-                ephemeral=True,
-                view=view,
+            await interaction.response.send_modal(
+                modal,
             )
 
         except Exception as error:
