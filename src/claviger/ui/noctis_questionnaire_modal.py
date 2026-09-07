@@ -3,6 +3,10 @@ import discord
 from claviger.models.adult_access_questionnaire_model import (
     AdultAccessQuestionnaire,
 )
+from claviger.policies.guild_policy import GuildPolicy
+from claviger.services.noctis_workflow_coordinator_service import (
+    NoctisWorkflowCoordinatorService,
+)
 from claviger.ui.catalog_selection_modal import (
     CatalogSelectionModal,
     CatalogSelectionOption,
@@ -12,14 +16,18 @@ from claviger.ui.catalog_selection_modal import (
 class NoctisQuestionnaireModal(
     CatalogSelectionModal,
 ):
-    """Noctis questionnaire using the generic catalog selection modal."""
+    """Configure a member's Noctis adult-access selection."""
 
     def __init__(
         self,
         *,
+        coordinator: NoctisWorkflowCoordinatorService,
+        policy: GuildPolicy,
         questionnaire: AdultAccessQuestionnaire,
         actor_id: int,
     ) -> None:
+        self.coordinator = coordinator
+        self.policy = policy
         self.questionnaire = questionnaire
 
         selected_keys = set(
@@ -67,29 +75,53 @@ class NoctisQuestionnaireModal(
         self,
         interaction: discord.Interaction,
     ) -> None:
-        """Display the preview result without modifying roles."""
+        """Apply the submitted Noctis selection."""
 
-        themes_by_key = {theme.theme_key: theme for theme in self.questionnaire.themes}
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette action doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
 
-        selected_labels = [
-            themes_by_key[theme_key].label
-            for theme_key in self.selected_keys
-            if theme_key in themes_by_key
-        ]
-
-        if selected_labels:
-            themes_text = "\n".join(f"- {label}" for label in selected_labels)
-        else:
-            themes_text = "- Aucun"
-
-        ai_text = "activés" if self.ai_checkbox.value else "désactivés"
-
-        await interaction.response.send_message(
-            (
-                "✅ **Aperçu Noctis — aucune modification appliquée**\n\n"
-                "**Accès sélectionnés**\n"
-                f"{themes_text}\n\n"
-                f"**Contenus IA : {ai_text}**"
-            ),
+        # Modal submissions have no originating message to update.
+        # thinking=True creates an editable deferred response.
+        await interaction.response.defer(
             ephemeral=True,
+            thinking=True,
+        )
+
+        await interaction.edit_original_response(
+            content=(
+                "⏳ **Mise à jour de vos accès Noctis...**\n\n"
+                "Claviger applique votre sélection."
+            ),
+        )
+
+        try:
+            result = await self.coordinator.apply_selection(
+                interaction.guild,
+                interaction.user,
+                self.policy,
+                self.selected_keys,
+                include_ai=self.ai_checkbox.value,
+            )
+
+        except Exception:
+            await interaction.edit_original_response(
+                content=(
+                    "❌ **Impossible de mettre à jour vos accès "
+                    "Noctis.**\n\n"
+                    "Vous pouvez relancer `/noctis` pour réessayer. "
+                    "Claviger recalculera les modifications depuis "
+                    "votre état actuel."
+                ),
+            )
+            return
+
+        await interaction.edit_original_response(
+            content=(
+                "✅ **Vos accès Noctis ont été mis à jour.**\n\n"
+                f"Modifications appliquées : {result.change_count}."
+            ),
         )

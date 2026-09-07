@@ -25,8 +25,8 @@ from claviger.reporting.service import ReportService
 from claviger.services.noctis_workflow_coordinator_service import (
     NoctisWorkflowCoordinatorService,
 )
-from claviger.ui.noctis_questionnaire_view import (
-    NoctisQuestionnaireView,
+from claviger.ui.noctis_questionnaire_modal import (
+    NoctisQuestionnaireModal,
 )
 
 
@@ -98,6 +98,7 @@ def create_interaction(
 
     interaction.response = Mock()
     interaction.response.send_message = AsyncMock()
+    interaction.response.send_modal = AsyncMock()
 
     return interaction
 
@@ -156,7 +157,7 @@ def create_command(
 
 @pytest.mark.asyncio
 async def test_noctis_opens_live_questionnaire_in_rules_channel() -> None:
-    """Open the production questionnaire in the configured rules channel."""
+    """Open the production modal in the configured rules channel."""
 
     (
         command,
@@ -186,17 +187,19 @@ async def test_noctis_opens_live_questionnaire_in_rules_channel() -> None:
 
     report_service.emit.assert_not_awaited()
 
-    kwargs = interaction.response.send_message.await_args.kwargs
+    interaction.response.send_modal.assert_awaited_once()
 
-    view = kwargs["view"]
+    modal = interaction.response.send_modal.await_args.args[0]
 
     assert isinstance(
-        view,
-        NoctisQuestionnaireView,
+        modal,
+        NoctisQuestionnaireModal,
     )
 
-    assert view.preview is False
-    assert kwargs["ephemeral"] is True
+    assert modal.coordinator is coordinator
+    assert modal.policy is SUCCUMBRAE_FALLBACK_POLICY
+
+    interaction.response.send_message.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -221,6 +224,7 @@ async def test_noctis_rejects_wrong_channel() -> None:
 
     coordinator.build_questionnaire.assert_not_awaited()
     report_service.emit.assert_not_awaited()
+    interaction.response.send_modal.assert_not_awaited()
 
     message = interaction.response.send_message.await_args.args[0]
 
@@ -256,6 +260,7 @@ async def test_noctis_requires_ready_database() -> None:
     coordinator.build_questionnaire.assert_not_awaited()
     policy_resolver.resolve.assert_not_awaited()
     report_service.emit.assert_not_awaited()
+    interaction.response.send_modal.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -285,6 +290,7 @@ async def test_noctis_rejects_disabled_adult_workflow() -> None:
 
     coordinator.build_questionnaire.assert_not_awaited()
     report_service.emit.assert_not_awaited()
+    interaction.response.send_modal.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -314,6 +320,8 @@ async def test_noctis_reports_empty_catalog() -> None:
     message = interaction.response.send_message.await_args.args[0]
 
     assert "Aucun accès adulte" in message
+
+    interaction.response.send_modal.assert_not_awaited()
     report_service.emit.assert_not_awaited()
 
 
@@ -340,6 +348,8 @@ async def test_noctis_reports_unexpected_failure() -> None:
     )
 
     report_service.emit.assert_awaited_once()
+
+    interaction.response.send_modal.assert_not_awaited()
 
     message = interaction.response.send_message.await_args.args[0]
 

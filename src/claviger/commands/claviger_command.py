@@ -3,9 +3,6 @@ from discord import app_commands
 from claviger.commands.catalog_command import create_catalog_group
 from claviger.commands.database_command import create_database_group
 from claviger.commands.guild import create_guild_group
-from claviger.commands.noctis_admin_command import (
-    create_noctis_admin_group,
-)
 from claviger.commands.report import create_report_group
 from claviger.commands.roles import create_roles_group
 from claviger.database.schema import DatabaseSchema
@@ -19,9 +16,6 @@ from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
-from claviger.services.noctis_workflow_coordinator_service import (
-    NoctisWorkflowCoordinatorService,
-)
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 
@@ -32,7 +26,6 @@ def create_claviger_group(
     role_classifier: RoleClassifier,
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService,
     catalog_next_coordinator_service: CatalogNextCoordinatorService,
-    noctis_workflow_coordinator_service: NoctisWorkflowCoordinatorService,
     guild_policy_bootstrap_service: GuildPolicyBootstrapService,
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
@@ -76,13 +69,6 @@ def create_claviger_group(
         report_service,
     )
 
-    noctis_group = create_noctis_admin_group(
-        noctis_workflow_coordinator_service,
-        policy_resolver,
-        database_status_service,
-        report_service,
-    )
-
     claviger_group.add_command(
         roles_group,
     )
@@ -97,9 +83,6 @@ def create_claviger_group(
     )
     claviger_group.add_command(
         guild_group,
-    )
-    claviger_group.add_command(
-        noctis_group,
     )
 
     return claviger_group

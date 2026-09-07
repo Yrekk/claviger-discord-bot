@@ -214,7 +214,6 @@ class ClavigerBot(discord.Client):
                 self.role_classifier,
                 self.catalog_sync_coordinator_service,
                 self.catalog_next_coordinator_service,
-                self.noctis_workflow_coordinator_service,
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,

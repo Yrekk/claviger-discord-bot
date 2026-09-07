@@ -14,8 +14,8 @@ from claviger.reporting.service import ReportService
 from claviger.services.noctis_workflow_coordinator_service import (
     NoctisWorkflowCoordinatorService,
 )
-from claviger.ui.noctis_questionnaire_view import (
-    NoctisQuestionnaireView,
+from claviger.ui.noctis_questionnaire_modal import (
+    NoctisQuestionnaireModal,
 )
 
 
@@ -46,7 +46,7 @@ def create_noctis_command(
 
             if status.state != DatabaseState.READY:
                 await interaction.response.send_message(
-                    "La configuration des accès est temporairement indisponible.",
+                    ("La configuration des accès est temporairement indisponible."),
                     ephemeral=True,
                 )
                 return
@@ -94,18 +94,15 @@ def create_noctis_command(
                 )
                 return
 
-            view = NoctisQuestionnaireView(
+            modal = NoctisQuestionnaireModal(
                 coordinator=noctis_workflow_coordinator_service,
                 policy=policy,
                 questionnaire=questionnaire,
                 actor_id=interaction.user.id,
-                preview=False,
             )
 
-            await interaction.response.send_message(
-                view.format_content(),
-                ephemeral=True,
-                view=view,
+            await interaction.response.send_modal(
+                modal,
             )
 
         except Exception as error:
