@@ -41,10 +41,10 @@ def get_database_path() -> str:
     )
 
 
-def get_admin_report_forum_id() -> int | None:
+def get_error_report_forum_id() -> int | None:
     """Return the bootstrap Discord forum used for administrative reports."""
     value = os.getenv(
-        "ADMIN_REPORT_FORUM_ID",
+        "ERROR_REPORT_FORUM_ID",
     )
 
     if value is None or not value.strip():

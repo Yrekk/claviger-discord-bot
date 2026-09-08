@@ -9,9 +9,9 @@ from claviger.commands.say import create_say_command
 
 # Config
 from claviger.config import (
-    get_admin_report_forum_id,
     get_database_path,
     get_discord_guild_id,
+    get_error_report_forum_id,
 )
 
 # Database
@@ -202,7 +202,7 @@ class ClavigerBot(discord.Client):
             PythonLoggingReporter(),
         ]
 
-        admin_report_forum_id = get_admin_report_forum_id()
+        admin_report_forum_id = get_error_report_forum_id()
 
         if admin_report_forum_id is not None:
             reporters.append(

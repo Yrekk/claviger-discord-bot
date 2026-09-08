@@ -19,7 +19,7 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(
         bot_module,
-        "get_admin_report_forum_id",
+        "get_error_report_forum_id",
         lambda: None,
     )
 
