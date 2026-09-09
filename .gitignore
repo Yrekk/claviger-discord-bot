@@ -1,195 +1,243 @@
-# Byte-compiled / optimized / DLL files
+# =============================================================================
+# Claviger - Git ignore rules
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Python bytecode / caches
+# -----------------------------------------------------------------------------
+
 __pycache__/
-*.py[codz]
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#   Usually these files are written by a python script from a template
-#   before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
 .pytest_cache/
-cover/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.hypothesis/
 
-# Translations
-*.mo
-*.pot
+.pytest_cache/
+.cache/
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
 
-# Flask stuff:
-instance/
-.webassets-cache
+# -----------------------------------------------------------------------------
+# Python virtual environments
+# -----------------------------------------------------------------------------
 
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# Local configuration
-config/local.json
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-# Pipfile.lock
-
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-# uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-# poetry.lock
-# poetry.toml
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-# pdm.lock
-# pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-# pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# Redis
-*.rdb
-*.aof
-*.pid
-
-# RabbitMQ
-mnesia/
-rabbitmq/
-rabbitmq-data/
-
-# ActiveMQ
-activemq-data/
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
+.venv/
 venv/
+env/
 ENV/
+
 env.bak/
 venv.bak/
 
-# Spyder project settings
-.spyderproject
-.spyproject
+.python-version
 
-# Rope project settings
-.ropeproject
 
-# mkdocs documentation
-/site
+# -----------------------------------------------------------------------------
+# Python build / packaging
+# -----------------------------------------------------------------------------
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+build/
+dist/
+sdist/
+wheels/
 
-# Pyre type checker
-.pyre/
+*.egg
+*.egg-info/
+.eggs/
 
-# pytype static type analyzer
-.pytype/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Cython debug symbols
-cython_debug/
+MANIFEST
 
-# Manualy added
+
+# -----------------------------------------------------------------------------
+# Test / coverage artifacts
+# -----------------------------------------------------------------------------
+
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+nosetests.xml
+
+*.cover
+*.py.cover
+
+.tox/
+.nox/
+
+
+# -----------------------------------------------------------------------------
+# Local environment configuration / secrets
+# -----------------------------------------------------------------------------
+
+# Default local environment
+.env
+
+# Environment-specific files:
+# .env.development
+# .env.production
+# .env.local
+# .env.testing
+# etc.
+.env.*
+
+# The public template must remain versioned
+!.env.example
+
+.envrc
+
+# Other local configuration files
+config/local.json
+local_settings.py
+
+
+# -----------------------------------------------------------------------------
+# Credentials / private keys
+# -----------------------------------------------------------------------------
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+credentials.json
+secrets.json
+
+
+# -----------------------------------------------------------------------------
+# SQLite / runtime databases
+# -----------------------------------------------------------------------------
+
+# Claviger runtime database directory
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/*.db-journal
 
-# Streamlit
-.streamlit/secrets.toml
+# Defensive global SQLite exclusion
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+
+# -----------------------------------------------------------------------------
+# Runtime logs / temporary files
+# -----------------------------------------------------------------------------
+
+*.log
+logs/
+
+*.tmp
+*.temp
+
+tmp/
+temp/
+
+
+# -----------------------------------------------------------------------------
+# IDE / editor local state
+# -----------------------------------------------------------------------------
+
+# Keep shared VS Code settings, ignore machine-specific VS Code state
+.vscode/*
+!.vscode/settings.json
+
+# JetBrains IDEs
+.idea/
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject/
+
+
+# -----------------------------------------------------------------------------
+# Jupyter / IPython
+# -----------------------------------------------------------------------------
+
+.ipynb_checkpoints/
+
+profile_default/
+ipython_config.py
+
+
+# -----------------------------------------------------------------------------
+# Documentation build artifacts
+# -----------------------------------------------------------------------------
+
+docs/_build/
+site/
+
+
+# -----------------------------------------------------------------------------
+# OS generated files
+# -----------------------------------------------------------------------------
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+
+
+# -----------------------------------------------------------------------------
+# Miscellaneous development artifacts
+# -----------------------------------------------------------------------------
+
+target/
+.pybuilder/
+
+.pdm-python
+.pdm-build/
+
+.pixi/
+
+__pypackages__/
+
+cython_debug/
+
+
+# -----------------------------------------------------------------------------
+# Local service / framework state
+# -----------------------------------------------------------------------------
+
+instance/
+.webassets-cache/
+
+.scrapy/
+
+.streamlit/secrets.toml
+
+celerybeat-schedule
+celerybeat.pid
+
+*.rdb
+*.aof
+
+mnesia/
+rabbitmq/
+rabbitmq-data/
