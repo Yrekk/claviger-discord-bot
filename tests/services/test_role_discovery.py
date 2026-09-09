@@ -54,14 +54,14 @@ async def test_get_hierarchy_splits_roles_around_claviger() -> None:
     """Split trusted and manageable roles around Claviger's role."""
     service = RoleDiscoveryService()
 
-    dux = create_role(
+    admin = create_role(
         role_id=1,
-        name="Dux Inutilis",
+        name="Administrator",
         position=100,
     )
-    frater = create_role(
+    honorific = create_role(
         role_id=2,
-        name="Frater Sapientissimus",
+        name="Honorific Role",
         position=90,
     )
     claviger = create_role(
@@ -76,17 +76,17 @@ async def test_get_hierarchy_splits_roles_around_claviger() -> None:
     )
     adult = create_role(
         role_id=5,
-        name="Civis Noctis · 18+",
+        name="adult-access",
         position=30,
     )
 
     guild = create_guild(
         roles=[
             member,
-            dux,
+            admin,
             adult,
             claviger,
-            frater,
+            honorific,
         ],
         bot_role=claviger,
     )
@@ -95,25 +95,28 @@ async def test_get_hierarchy_splits_roles_around_claviger() -> None:
 
     assert hierarchy.bot_role is claviger
     assert hierarchy.trusted_roles == [
-        dux,
-        frater,
+        admin,
+        honorific,
     ]
     assert hierarchy.manageable_roles == [
         member,
         adult,
     ]
-
+    assert hierarchy.unmanageable_roles == [
+        admin,
+        honorific,
+    ]
     guild.fetch_roles.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
-async def test_get_hierarchy_ignores_default_and_managed_roles() -> None:
+async def test_get_hierarchy_keeps_managed_roles_as_unmanageable() -> None:
     """Ignore @everyone and roles managed automatically by Discord."""
     service = RoleDiscoveryService()
 
     trusted = create_role(
         role_id=1,
-        name="Imperatrix Augusta",
+        name="Honorific Role",
         position=100,
     )
     managed_above = create_role(
@@ -165,6 +168,12 @@ async def test_get_hierarchy_ignores_default_and_managed_roles() -> None:
     assert hierarchy.manageable_roles == [
         member,
     ]
+    assert hierarchy.unmanageable_roles == [
+        trusted,
+        managed_above,
+        managed_below,
+    ]
+    assert everyone not in hierarchy.unmanageable_roles
 
 
 @pytest.mark.asyncio
@@ -249,4 +258,7 @@ async def test_get_hierarchy_handles_roles_with_same_position() -> None:
     ]
     assert hierarchy.manageable_roles == [
         lower_role,
+    ]
+    assert hierarchy.unmanageable_roles == [
+        higher_role,
     ]

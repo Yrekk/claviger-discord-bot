@@ -1,11 +1,42 @@
+from collections.abc import Iterable
+
 import discord
 from discord import app_commands
 
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.services.adult_access_classifier import (
+    AdultAccessClassifier,
+)
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
+
+
+def _extract_access_keys(
+    roles: Iterable[discord.Role],
+    *,
+    prefix: str,
+) -> tuple[str, ...]:
+    """Extract adult-access catalog keys from Discord role names."""
+
+    if not prefix:
+        return ()
+
+    return tuple(
+        role.name[len(prefix) :].strip()
+        for role in roles
+        if role.name.startswith(prefix)
+    )
+
+
+def _format_access_role_name(
+    prefix: str,
+    access_key: str,
+) -> str:
+    """Rebuild the Discord role name represented by one access key."""
+
+    return f"{prefix}{access_key}"
 
 
 def create_roles_group(
@@ -15,6 +46,8 @@ def create_roles_group(
     report_service: ReportService,
 ) -> app_commands.Group:
     """Create Claviger's role administration command group."""
+
+    adult_access_classifier = AdultAccessClassifier()
 
     roles_group = app_commands.Group(
         name="roles",
@@ -60,6 +93,35 @@ def create_roles_group(
                 policy,
             )
 
+            unmanageable_access_roles = (
+                [
+                    role
+                    for role in hierarchy.unmanageable_roles
+                    if (
+                        policy.adult_access_prefix
+                        and role.name.startswith(
+                            policy.adult_access_prefix,
+                        )
+                    )
+                ]
+                if policy.adult_access_prefix
+                else []
+            )
+
+            all_access_roles = (
+                *classification.access_roles,
+                *unmanageable_access_roles,
+            )
+
+            access_keys = _extract_access_keys(
+                all_access_roles,
+                prefix=policy.adult_access_prefix,
+            )
+
+            adult_access_classification = adult_access_classifier.classify(
+                access_keys,
+            )
+
         except Exception as error:
             await report_service.emit(
                 ReportEvent(
@@ -95,8 +157,8 @@ def create_roles_group(
             ),
             f"- Rôle membre attendu : {policy.member_role_name}",
             f"- Rôle adulte attendu : {policy.adult_role_name}",
-            (f"- Préfixe intérêts membre : {policy.member_interest_prefix}"),
-            (f"- Préfixe accès adulte : {policy.adult_access_prefix}"),
+            f"- Préfixe intérêts membre : {policy.member_interest_prefix}",
+            f"- Préfixe accès adulte : {policy.adult_access_prefix}",
             "",
             f"**Rôles de confiance ({len(hierarchy.trusted_roles)})**",
         ]
@@ -133,7 +195,7 @@ def create_roles_group(
         lines.extend(
             [
                 "",
-                (f"**Intérêts membre ({len(classification.interest_roles)})**"),
+                f"**Intérêts membre ({len(classification.interest_roles)})**",
             ]
         )
 
@@ -145,14 +207,163 @@ def create_roles_group(
         lines.extend(
             [
                 "",
-                (f"**Accès adultes ({len(classification.access_roles)})**"),
+                (
+                    "**Accès adultes — Paires "
+                    f"({len(adult_access_classification.pairs)})**"
+                ),
             ]
         )
 
-        if classification.access_roles:
-            lines.extend(f"- {role.name}" for role in classification.access_roles)
+        if adult_access_classification.pairs:
+            for pair in adult_access_classification.pairs:
+                no_ai_name = _format_access_role_name(
+                    policy.adult_access_prefix,
+                    pair.no_ai_key,
+                )
+
+                ai_name = _format_access_role_name(
+                    policy.adult_access_prefix,
+                    pair.ai_key,
+                )
+
+                lines.append(f"- {pair.theme_key} : {no_ai_name} + {ai_name}")
+        else:
+            lines.append("- Aucune")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Accès adultes — Solo "
+                    f"({len(adult_access_classification.solo_keys)})**"
+                ),
+            ]
+        )
+
+        if adult_access_classification.solo_keys:
+            lines.extend(
+                (
+                    "- "
+                    + _format_access_role_name(
+                        policy.adult_access_prefix,
+                        access_key,
+                    )
+                )
+                for access_key in adult_access_classification.solo_keys
+            )
         else:
             lines.append("- Aucun")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Accès adultes — IA uniquement "
+                    f"({len(adult_access_classification.ai_only_keys)})**"
+                ),
+            ]
+        )
+
+        if adult_access_classification.ai_only_keys:
+            lines.extend(
+                (
+                    "- "
+                    + _format_access_role_name(
+                        policy.adult_access_prefix,
+                        access_key,
+                    )
+                )
+                for access_key in adult_access_classification.ai_only_keys
+            )
+        else:
+            lines.append("- Aucun")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Accès adultes — No-IA sans paire "
+                    f"({len(adult_access_classification.no_ai_only_keys)})**"
+                ),
+            ]
+        )
+
+        if adult_access_classification.no_ai_only_keys:
+            lines.extend(
+                (
+                    "- "
+                    + _format_access_role_name(
+                        policy.adult_access_prefix,
+                        access_key,
+                    )
+                )
+                for access_key in adult_access_classification.no_ai_only_keys
+            )
+        else:
+            lines.append("- Aucun")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Accès adultes non manipulables "
+                    f"({len(unmanageable_access_roles)})**"
+                ),
+            ]
+        )
+
+        if unmanageable_access_roles:
+            lines.extend(f"- {role.name}" for role in unmanageable_access_roles)
+        else:
+            lines.append("- Aucun")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Clés d'accès adultes invalides "
+                    f"({len(adult_access_classification.invalid_keys)})**"
+                ),
+            ]
+        )
+
+        if adult_access_classification.invalid_keys:
+            lines.extend(
+                (
+                    "- "
+                    + _format_access_role_name(
+                        policy.adult_access_prefix,
+                        access_key,
+                    )
+                )
+                for access_key in adult_access_classification.invalid_keys
+            )
+        else:
+            lines.append("- Aucune")
+
+        lines.extend(
+            [
+                "",
+                (
+                    "**Clés d'accès adultes dupliquées "
+                    f"({len(adult_access_classification.duplicate_keys)})**"
+                ),
+            ]
+        )
+
+        if adult_access_classification.duplicate_keys:
+            lines.extend(
+                (
+                    "- "
+                    + _format_access_role_name(
+                        policy.adult_access_prefix,
+                        access_key,
+                    )
+                )
+                for access_key in adult_access_classification.duplicate_keys
+            )
+        else:
+            lines.append("- Aucune")
 
         lines.extend(
             [
@@ -186,12 +397,41 @@ def create_roles_group(
                     f'Plusieurs rôles "{policy.adult_role_name}" détectés.'
                 )
 
-            if not classification.access_roles:
+            if not all_access_roles:
                 anomalies.append(
                     (
                         "Aucun rôle d'accès adulte correspondant "
                         f'au préfixe "{policy.adult_access_prefix}" détecté.'
                     )
+                )
+
+            for access_key in adult_access_classification.no_ai_only_keys:
+                role_name = _format_access_role_name(
+                    policy.adult_access_prefix,
+                    access_key,
+                )
+
+                anomalies.append((f'Accès no-IA sans variante IA : "{role_name}".'))
+
+            for access_key in adult_access_classification.invalid_keys:
+                role_name = _format_access_role_name(
+                    policy.adult_access_prefix,
+                    access_key,
+                )
+
+                anomalies.append(f'Clé d\'accès adulte invalide : "{role_name}".')
+
+            for access_key in adult_access_classification.duplicate_keys:
+                role_name = _format_access_role_name(
+                    policy.adult_access_prefix,
+                    access_key,
+                )
+
+                anomalies.append(f'Clé d\'accès adulte dupliquée : "{role_name}".')
+
+            for role in unmanageable_access_roles:
+                anomalies.append(
+                    f'Rôle d\'accès adulte non manipulable : "{role.name}".'
                 )
 
         lines.extend(

@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from claviger.policies.guild_policy import GuildPolicy
 from claviger.reporting.event import ReportSeverity
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
@@ -86,12 +87,13 @@ async def test_role_scan_rejects_non_owner() -> None:
 @pytest.mark.asyncio
 async def test_role_scan_displays_classified_hierarchy() -> None:
     """Display the hierarchy classified using the effective guild policy."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
 
-    dux = create_role(
-        name="Dux Inutilis",
+    administrator = create_role(
+        name="Administrator",
         position=100,
     )
 
@@ -101,27 +103,27 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
     )
 
     adult = create_role(
-        name="Civis Noctis - 18+",
+        name="Adult - 18+",
         position=45,
     )
 
     member = create_role(
-        name="Membre",
+        name="Member",
         position=40,
     )
 
     interest = create_role(
-        name="interest-ia",
+        name="interest-ai",
         position=35,
     )
 
     access = create_role(
-        name="access-ia-yuri",
+        name="access-ia-casino",
         position=30,
     )
 
     unmanaged = create_role(
-        name="Archivum",
+        name="Archives",
         position=20,
     )
 
@@ -129,7 +131,7 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
         return_value=RoleHierarchy(
             bot_role=claviger,
             trusted_roles=[
-                dux,
+                administrator,
             ],
             manageable_roles=[
                 adult,
@@ -151,6 +153,17 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
         report_service,
     ) = get_scan_command(
         service,
+    )
+
+    policy_resolver.resolve.return_value = GuildPolicy(
+        member_role_name="Member",
+        adult_role_name="Adult - 18+",
+        member_interest_prefix="interest-",
+        adult_access_prefix="access-",
+        salutations_channel_name="welcome",
+        adult_access_channel_name="adult-access",
+        role_management_enabled=True,
+        adult_access_enabled=True,
     )
 
     await command.callback(
@@ -176,26 +189,35 @@ async def test_role_scan_displays_classified_hierarchy() -> None:
     message = interaction.followup.send.await_args.args[0]
 
     assert "Claviger" in message
-    assert "Dux Inutilis" in message
+    assert "Administrator" in message
 
     assert "**Policy effective**" in message
     assert "Gestion des rôles : activée" in message
     assert "Accès adulte : activé" in message
 
     assert "**Rôle membre (1)**" in message
-    assert "Membre" in message
+    assert "Member" in message
 
     assert "**Intérêts membre (1)**" in message
-    assert "interest-ia" in message
+    assert "interest-ai" in message
 
     assert "**Rôle adulte (1)**" in message
-    assert "Civis Noctis - 18+" in message
+    assert "Adult - 18+" in message
 
-    assert "**Accès adultes (1)**" in message
-    assert "access-ia-yuri" in message
+    assert "**Accès adultes — Paires (0)**" in message
+    assert "**Accès adultes — Solo (0)**" in message
+
+    assert "**Accès adultes — IA uniquement (1)**" in message
+    assert "- access-ia-casino" in message
+
+    assert "**Accès adultes — No-IA sans paire (0)**" in message
+    assert "**Accès adultes non manipulables (0)**" in message
+
+    assert "**Clés d'accès adultes invalides (0)**" in message
+    assert "**Clés d'accès adultes dupliquées (0)**" in message
 
     assert "**Autres rôles sous Claviger (1)**" in message
-    assert "Archivum" in message
+    assert "Archives" in message
 
     assert "**Anomalies (0)**" in message
     assert "- Aucune" in message
@@ -300,3 +322,102 @@ async def test_role_scan_reports_unexpected_error() -> None:
         "Impossible d'analyser les rôles : Unexpected Discord failure.",
         ephemeral=True,
     )
+
+
+@pytest.mark.asyncio
+async def test_role_scan_displays_adult_access_semantics() -> None:
+    """Display every supported adult-access semantic shape."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+
+    bot_role = create_role(
+        name="Bot",
+        position=50,
+    )
+
+    pair_no_ai = create_role(
+        name="access-no-ia-paired",
+        position=40,
+    )
+
+    pair_ai = create_role(
+        name="access-ia-paired",
+        position=39,
+    )
+
+    solo = create_role(
+        name="access-solo",
+        position=38,
+    )
+
+    ai_only = create_role(
+        name="access-ia-ai-only",
+        position=37,
+    )
+
+    no_ai_only = create_role(
+        name="access-no-ia-incomplete",
+        position=36,
+    )
+
+    unmanageable = create_role(
+        name="access-unmanageable",
+        position=60,
+    )
+
+    service.get_hierarchy = AsyncMock(
+        return_value=RoleHierarchy(
+            bot_role=bot_role,
+            trusted_roles=[],
+            manageable_roles=[
+                pair_no_ai,
+                pair_ai,
+                solo,
+                ai_only,
+                no_ai_only,
+            ],
+            unmanageable_roles=[
+                unmanageable,
+            ],
+        )
+    )
+
+    interaction = create_interaction(
+        guild_id=123,
+    )
+
+    (
+        command,
+        _,
+        _,
+    ) = get_scan_command(
+        service,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "**Accès adultes — Paires (1)**" in message
+    assert "- paired : access-no-ia-paired + access-ia-paired" in message
+
+    assert "**Accès adultes — Solo (2)**" in message
+    assert "- access-solo" in message
+    assert "- access-unmanageable" in message
+
+    assert "**Accès adultes — IA uniquement (1)**" in message
+    assert "- access-ia-ai-only" in message
+
+    assert "**Accès adultes — No-IA sans paire (1)**" in message
+    assert "- access-no-ia-incomplete" in message
+
+    assert "**Accès adultes non manipulables (1)**" in message
+    assert "- access-unmanageable" in message
+
+    assert 'Accès no-IA sans variante IA : "access-no-ia-incomplete".' in message
+
+    assert 'Rôle d\'accès adulte non manipulable : "access-unmanageable".' in message
