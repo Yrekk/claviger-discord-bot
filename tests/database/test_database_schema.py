@@ -10,7 +10,6 @@ from claviger.database.schema import (
     UnsupportedSchemaVersionError,
 )
 
-
 GUILD_SETTINGS_V2_SQL = """
 CREATE TABLE guild_settings (
     guild_id INTEGER PRIMARY KEY,

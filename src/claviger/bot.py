@@ -10,6 +10,7 @@ from claviger.commands.say import create_say_command
 # Config
 from claviger.config import (
     get_database_path,
+    get_discord_bot_user_id,
     get_discord_guild_id,
     get_error_report_forum_id,
 )
@@ -98,6 +99,7 @@ class ClavigerBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
         self.guild_id = get_discord_guild_id()
+        self.expected_bot_user_id = get_discord_bot_user_id()
 
         self.role_manager = RoleManager()
         self.role_discovery_service = RoleDiscoveryService()
@@ -262,7 +264,24 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
+    def _validate_authenticated_bot_identity(self) -> None:
+        """Ensure the authenticated Discord bot matches this environment."""
+
+        if self.user is None:
+            raise RuntimeError(
+                "Discord bot identity is unavailable before command synchronization."
+            )
+
+        if self.user.id != self.expected_bot_user_id:
+            raise RuntimeError(
+                "Authenticated Discord bot identity does not match configuration. "
+                f"Expected DISCORD_BOT_USER_ID={self.expected_bot_user_id}, "
+                f"but Discord authenticated user ID {self.user.id}."
+            )
+
     async def setup_hook(self) -> None:
+        self._validate_authenticated_bot_identity()
+
         guild = discord.Object(
             id=self.guild_id,
         )
