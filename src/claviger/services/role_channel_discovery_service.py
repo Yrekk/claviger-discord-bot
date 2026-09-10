@@ -5,6 +5,9 @@ from claviger.models.role_channel_discovery_model import (
     DiscordRoleSnapshot,
     GuildRoleChannelSnapshot,
 )
+from claviger.services.role_manageability_service import (
+    is_role_manageable,
+)
 
 
 class RoleChannelDiscoveryService:
@@ -45,7 +48,10 @@ class RoleChannelDiscoveryService:
             DiscordRoleSnapshot(
                 role_id=role.id,
                 role_name=role.name,
-                role_manageable=role < bot_member.top_role,
+                role_manageable=is_role_manageable(
+                    role,
+                    bot_member,
+                ),
                 explicit_channel_ids=tuple(
                     channel.id
                     for channel in content_channels

@@ -13,6 +13,7 @@ def create_role(
     role_id: int,
     name: str,
     below_bot: bool = True,
+    managed: bool = False,
 ) -> MagicMock:
     """Create a Discord role mock with deterministic hierarchy behavior."""
 
@@ -22,6 +23,7 @@ def create_role(
 
     role.id = role_id
     role.name = name
+    role.managed = managed
     role.__lt__.return_value = below_bot
 
     return role
@@ -123,7 +125,7 @@ def test_build_snapshot_contains_all_roles_and_content_channels() -> None:
 
     access_role = create_role(
         role_id=101,
-        name="access-ia-futa",
+        name="ia-casino",
     )
 
     ordinary_role = create_role(
@@ -274,7 +276,7 @@ def test_build_snapshot_records_role_manageability() -> None:
 
     unmanageable_role = create_role(
         role_id=101,
-        name="access-ia-futa",
+        name="ia-casino",
         below_bot=False,
     )
 
@@ -310,3 +312,27 @@ def test_build_snapshot_requires_claviger_guild_member() -> None:
         RoleChannelDiscoveryService().build_snapshot(
             guild,
         )
+
+
+def test_build_snapshot_rejects_discord_managed_role_as_manageable() -> None:
+    """Never report Discord-managed roles as manageable by Claviger."""
+
+    managed_role = create_role(
+        role_id=100,
+        name="managed-role",
+        below_bot=True,
+        managed=True,
+    )
+
+    guild = create_guild(
+        roles=[
+            managed_role,
+        ],
+        channels=[],
+    )
+
+    snapshot = RoleChannelDiscoveryService().build_snapshot(
+        guild,
+    )
+
+    assert snapshot.roles[0].role_manageable is False
