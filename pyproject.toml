@@ -19,6 +19,7 @@ claviger = "claviger.main:main"
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24,<2.0",
+    "pytest-cov>=6.0,<8.0",
     "ruff>=0.9",
 ]
 voice = [
@@ -30,6 +31,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=claviger --cov-report=term-missing"
 [tool.ruff]
 target-version = "py312"
 line-length = 88
