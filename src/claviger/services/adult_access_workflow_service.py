@@ -4,53 +4,62 @@ from claviger.models.adult_access import AdultAccess
 from claviger.models.adult_access_theme_model import (
     AdultAccessTheme,
 )
+from claviger.services.adult_access_classifier import (
+    AdultAccessClassifier,
+)
 
 
 class AdultAccessWorkflowService:
     """Build logical user choices from technical adult-access entries."""
 
-    BASE_PREFIX = "no-ia-"
-    AI_PREFIX = "ia-"
+    def __init__(
+        self,
+        classifier: AdultAccessClassifier | None = None,
+    ) -> None:
+        self.classifier = (
+            classifier if classifier is not None else AdultAccessClassifier()
+        )
 
     def build_themes(
         self,
         accesses: Iterable[AdultAccess],
     ) -> tuple[AdultAccessTheme, ...]:
-        """Build questionnaire themes from available no-IA accesses."""
+        """Build paired questionnaire themes from publicly ready accesses."""
 
-        entries = tuple(accesses)
+        ready_accesses = tuple(
+            access for access in accesses if access.is_publicly_ready
+        )
 
-        ai_by_theme = {
-            self._extract_theme_key(
+        classification = self.classifier.classify(
+            access.access_key for access in ready_accesses
+        )
+
+        access_by_key: dict[str, AdultAccess] = {}
+
+        for access in ready_accesses:
+            access_by_key.setdefault(
                 access.access_key,
-                prefix=self.AI_PREFIX,
-            ): access
-            for access in entries
-            if (
-                access.access_key.startswith(self.AI_PREFIX)
-                and access.is_publicly_ready
+                access,
             )
-        }
+
+        duplicate_keys = set(
+            classification.duplicate_keys,
+        )
 
         themes: list[AdultAccessTheme] = []
 
-        for access in entries:
-            if not access.access_key.startswith(self.BASE_PREFIX):
+        for pair in classification.pairs:
+            if pair.no_ai_key in duplicate_keys or pair.ai_key in duplicate_keys:
                 continue
 
-            if not access.is_publicly_ready:
-                continue
-
-            theme_key = self._extract_theme_key(
-                access.access_key,
-                prefix=self.BASE_PREFIX,
-            )
+            base_access = access_by_key[pair.no_ai_key]
+            ai_access = access_by_key[pair.ai_key]
 
             themes.append(
                 AdultAccessTheme(
-                    theme_key=theme_key,
-                    base_access=access,
-                    ai_access=ai_by_theme.get(theme_key),
+                    theme_key=pair.theme_key,
+                    base_access=base_access,
+                    ai_access=ai_access,
                 )
             )
 
@@ -80,7 +89,9 @@ class AdultAccessWorkflowService:
         unknown_keys = selected_keys - known_keys
 
         if unknown_keys:
-            unknown_key = sorted(unknown_keys)[0]
+            unknown_key = sorted(
+                unknown_keys,
+            )[0]
 
             raise ValueError(f"Unknown adult access theme: {unknown_key!r}.")
 
@@ -90,26 +101,13 @@ class AdultAccessWorkflowService:
             if theme.theme_key not in selected_keys:
                 continue
 
-            role_ids.append(theme.base_access.role_id)
+            role_ids.append(
+                theme.base_access.role_id,
+            )
 
             if include_ai and theme.ai_access is not None:
-                role_ids.append(theme.ai_access.role_id)
+                role_ids.append(
+                    theme.ai_access.role_id,
+                )
 
         return tuple(role_ids)
-
-    @staticmethod
-    def _extract_theme_key(
-        access_key: str,
-        *,
-        prefix: str,
-    ) -> str:
-        """Extract and validate the logical theme key."""
-
-        theme_key = access_key.removeprefix(
-            prefix,
-        )
-
-        if not theme_key:
-            raise ValueError(f"Invalid adult access key: {access_key!r}.")
-
-        return theme_key

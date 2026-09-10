@@ -58,6 +58,7 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.authorization_service is not None
     assert bot.say_service is not None
     assert bot.role_classifier is not None
+    assert bot.adult_access_classifier is not None
 
     assert bot.database is not None
     assert bot.database_schema is not None
@@ -84,6 +85,7 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.member_workflow_coordinator_service is not None
 
     assert bot.adult_access_workflow_service is not None
+    assert bot.adult_access_workflow_service.classifier is bot.adult_access_classifier
     assert bot.adult_access_questionnaire_service is not None
     assert bot.noctis_role_planner_service is not None
     assert bot.noctis_role_executor_service is not None

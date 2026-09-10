@@ -40,6 +40,9 @@ from claviger.repositories.guild_policy_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
+from claviger.services.adult_access_classifier import (
+    AdultAccessClassifier,
+)
 
 # Services
 from claviger.services.adult_access_questionnaire_service import (
@@ -106,6 +109,7 @@ class ClavigerBot(discord.Client):
         self.authorization_service = AuthorizationService()
         self.say_service = SayService()
         self.role_classifier = RoleClassifier()
+        self.adult_access_classifier = AdultAccessClassifier()
 
         self.database = DatabaseConnection(
             get_database_path(),
@@ -148,7 +152,9 @@ class ClavigerBot(discord.Client):
             executor_service=self.member_role_executor_service,
         )
 
-        self.adult_access_workflow_service = AdultAccessWorkflowService()
+        self.adult_access_workflow_service = AdultAccessWorkflowService(
+            classifier=self.adult_access_classifier,
+        )
 
         self.adult_access_questionnaire_service = AdultAccessQuestionnaireService(
             repository=self.access_catalog_repository,
