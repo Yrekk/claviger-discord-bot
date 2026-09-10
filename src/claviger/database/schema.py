@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -121,6 +121,139 @@ MIGRATIONS: dict[int, Sequence[str]] = {
         ALTER TABLE guild_settings
         RENAME COLUMN adult_rules_channel_name
         TO adult_access_channel_name
+        """,
+    ),
+    6: (
+        """
+        CREATE TABLE guild_catalogs (
+            guild_id INTEGER NOT NULL,
+            catalog_key TEXT NOT NULL,
+
+            role_prefix TEXT NOT NULL,
+
+            display_name TEXT NOT NULL,
+            entry_name TEXT NOT NULL,
+            description TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                catalog_key
+            ),
+
+            UNIQUE (
+                guild_id,
+                role_prefix
+            )
+        )
+        """,
+        """
+        CREATE TABLE guild_workflows (
+            guild_id INTEGER NOT NULL,
+            workflow_key TEXT NOT NULL,
+
+            command_name TEXT NOT NULL,
+            command_description TEXT NOT NULL,
+
+            title TEXT NOT NULL,
+            description TEXT,
+
+            policy_key TEXT NOT NULL,
+
+            channel_mode TEXT NOT NULL DEFAULT 'restricted'
+                CHECK (
+                    channel_mode IN (
+                        'restricted',
+                        'any'
+                    )
+                ),
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                workflow_key
+            ),
+
+            UNIQUE (
+                guild_id,
+                command_name
+            )
+        )
+        """,
+        """
+        CREATE TABLE guild_workflow_catalogs (
+            guild_id INTEGER NOT NULL,
+            workflow_key TEXT NOT NULL,
+            catalog_key TEXT NOT NULL,
+
+            policy_key TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                workflow_key,
+                catalog_key
+            ),
+
+            FOREIGN KEY (
+                guild_id,
+                workflow_key
+            )
+            REFERENCES guild_workflows (
+                guild_id,
+                workflow_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (
+                guild_id,
+                catalog_key
+            )
+            REFERENCES guild_catalogs (
+                guild_id,
+                catalog_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE RESTRICT
+        )
+        """,
+        """
+        CREATE TABLE guild_workflow_channels (
+            guild_id INTEGER NOT NULL,
+            workflow_key TEXT NOT NULL,
+            channel_id INTEGER NOT NULL
+                CHECK (channel_id > 0),
+
+            PRIMARY KEY (
+                guild_id,
+                workflow_key,
+                channel_id
+            ),
+
+            FOREIGN KEY (
+                guild_id,
+                workflow_key
+            )
+            REFERENCES guild_workflows (
+                guild_id,
+                workflow_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE
+        )
         """,
     ),
 }
