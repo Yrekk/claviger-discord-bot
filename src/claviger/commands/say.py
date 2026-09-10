@@ -19,10 +19,9 @@ def create_say_command(
 
     @app_commands.command(
         name="say",
-        description="Fait envoyer un message par Claviger dans le salon choisi.",
+        description="Fait envoyer un message par Claviger dans le salon actuel.",
     )
     @app_commands.describe(
-        salon="Salon dans lequel Claviger doit envoyer le message.",
         message="Message que Claviger doit envoyer.",
         style="Style du message. Embed par défaut.",
     )
@@ -40,13 +39,24 @@ def create_say_command(
     )
     async def say(
         interaction: discord.Interaction,
-        salon: discord.TextChannel,
         message: str,
         style: str = SayStyle.EMBED.value,
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
                 "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        channel = interaction.channel
+
+        if not isinstance(
+            channel,
+            discord.TextChannel,
+        ):
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée dans un salon textuel.",
                 ephemeral=True,
             )
             return
@@ -62,13 +72,6 @@ def create_say_command(
             )
             return
 
-        if salon.guild.id != interaction.guild.id:
-            await interaction.response.send_message(
-                "Le salon sélectionné n'appartient pas à ce serveur.",
-                ephemeral=True,
-            )
-            return
-
         say_style = SayStyle(style)
 
         if say_style is SayStyle.PLAIN and not await authorization_service.is_allowed(
@@ -77,20 +80,23 @@ def create_say_command(
             Capability.SAY_PLAIN,
         ):
             await interaction.response.send_message(
-                "Vous n'êtes pas autorisé à envoyer un message sans signature visuelle.",
+                (
+                    "Vous n'êtes pas autorisé à envoyer un message "
+                    "sans signature visuelle."
+                ),
                 ephemeral=True,
             )
             return
 
         await say_service.send(
-            salon,
+            channel,
             message,
             style=say_style,
             color=interaction.user.color,
         )
 
         await interaction.response.send_message(
-            f"Message envoyé dans {salon.mention}.",
+            f"Message envoyé dans {channel.mention}.",
             ephemeral=True,
         )
 
