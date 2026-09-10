@@ -1,6 +1,9 @@
 from claviger.services.adult_access_classifier import (
     AdultAccessClassifier,
 )
+from claviger.services.catalog_variant_classifier import (
+    CatalogVariantClassifier,
+)
 
 
 def test_classifier_identifies_all_supported_access_shapes() -> None:
@@ -188,3 +191,24 @@ def test_classifier_accepts_empty_catalog() -> None:
     assert classification.no_ai_only_keys == ()
     assert classification.invalid_keys == ()
     assert classification.duplicate_keys == ()
+
+
+def test_legacy_classifier_matches_generic_classifier() -> None:
+    """Keep the legacy adult classifier compatible during migration."""
+
+    keys = (
+        "no-ia-casino",
+        "ia-casino",
+        "gaming",
+        "ia-studio",
+    )
+
+    legacy_result = AdultAccessClassifier().classify(
+        keys,
+    )
+
+    generic_result = CatalogVariantClassifier().classify(
+        keys,
+    )
+
+    assert legacy_result == generic_result

@@ -1,11 +1,11 @@
 import pytest
 
 from claviger.models.adult_access import AdultAccess
-from claviger.services.adult_access_classifier import (
-    AdultAccessClassifier,
-)
 from claviger.services.adult_access_workflow_service import (
     AdultAccessWorkflowService,
+)
+from claviger.services.catalog_variant_classifier import (
+    CatalogVariantClassifier,
 )
 
 
@@ -49,7 +49,7 @@ def create_service() -> AdultAccessWorkflowService:
     """Create the adult-access workflow service."""
 
     return AdultAccessWorkflowService(
-        classifier=AdultAccessClassifier(),
+        classifier=CatalogVariantClassifier(),
     )
 
 

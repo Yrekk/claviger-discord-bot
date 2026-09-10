@@ -4,8 +4,8 @@ from claviger.models.adult_access import AdultAccess
 from claviger.models.adult_access_theme_model import (
     AdultAccessTheme,
 )
-from claviger.services.adult_access_classifier import (
-    AdultAccessClassifier,
+from claviger.services.catalog_variant_classifier import (
+    CatalogVariantClassifier,
 )
 
 
@@ -14,10 +14,10 @@ class AdultAccessWorkflowService:
 
     def __init__(
         self,
-        classifier: AdultAccessClassifier | None = None,
+        classifier: CatalogVariantClassifier | None = None,
     ) -> None:
         self.classifier = (
-            classifier if classifier is not None else AdultAccessClassifier()
+            classifier if classifier is not None else CatalogVariantClassifier()
         )
 
     def build_themes(
