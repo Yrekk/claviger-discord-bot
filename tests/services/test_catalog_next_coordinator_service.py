@@ -13,8 +13,8 @@ from claviger.services.catalog_next_coordinator_service import (
     CatalogNotRegisteredError,
 )
 from claviger.services.catalog_registry_service import (
-    CatalogDefinition,
     CatalogRegistry,
+    RuntimeCatalogDefinition,
 )
 
 
@@ -44,10 +44,10 @@ def create_definition(
     entry_name: str,
     prefix: str,
     repository: Mock,
-) -> CatalogDefinition:
-    """Create a catalog definition for coordinator tests."""
+) -> RuntimeCatalogDefinition:
+    """Create a legacy runtime catalog definition for coordinator tests."""
 
-    return CatalogDefinition(
+    return RuntimeCatalogDefinition(
         catalog_key=catalog_key,
         display_name=display_name,
         entry_name=entry_name,
@@ -68,14 +68,14 @@ async def test_get_next_returns_interest_before_access() -> None:
 
     interest_entry = create_entry(
         role_id=100,
-        role_name="interest-ludus",
-        catalog_key="ludus",
+        role_name="interest-gaming",
+        catalog_key="gaming",
     )
 
     access_entry = create_entry(
         role_id=101,
-        role_name="access-ia-yuri",
-        catalog_key="ia-yuri",
+        role_name="access-ia-casino",
+        catalog_key="ia-casino",
     )
 
     interest_repository.get_next_incomplete.return_value = interest_entry
@@ -84,6 +84,7 @@ async def test_get_next_returns_interest_before_access() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",
@@ -123,7 +124,7 @@ async def test_get_next_returns_interest_before_access() -> None:
 
 @pytest.mark.asyncio
 async def test_get_next_falls_back_to_access_catalog() -> None:
-    """Search the next catalog when Interest is already complete."""
+    """Search the next catalog when interests are already complete."""
 
     interest_repository = Mock()
     interest_repository.get_next_incomplete = AsyncMock(
@@ -135,8 +136,8 @@ async def test_get_next_falls_back_to_access_catalog() -> None:
 
     access_entry = create_entry(
         role_id=101,
-        role_name="access-ia-yuri",
-        catalog_key="ia-yuri",
+        role_name="access-ia-casino",
+        catalog_key="ia-casino",
     )
 
     access_repository.get_next_incomplete.return_value = access_entry
@@ -144,6 +145,7 @@ async def test_get_next_falls_back_to_access_catalog() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",
@@ -200,6 +202,7 @@ async def test_get_next_returns_none_when_all_catalogs_are_complete() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",
@@ -239,7 +242,7 @@ async def test_get_next_returns_none_when_all_catalogs_are_complete() -> None:
 
 @pytest.mark.asyncio
 async def test_update_metadata_routes_to_interest_catalog() -> None:
-    """Update metadata through the Interest catalog repository."""
+    """Update metadata through the interest catalog repository."""
 
     interest_repository = Mock()
     interest_repository.update_metadata = AsyncMock(
@@ -252,6 +255,7 @@ async def test_update_metadata_routes_to_interest_catalog() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",
@@ -278,9 +282,9 @@ async def test_update_metadata_routes_to_interest_catalog() -> None:
         SUCCUMBRAE_FALLBACK_POLICY,
         "member_interests",
         100,
-        label="Intelligence artificielle",
-        description="Discussions et ressources autour de l'IA.",
-        emoji="🤖",
+        label="Artificial intelligence",
+        description="Discussions and resources about artificial intelligence.",
+        emoji=None,
     )
 
     assert result == "updated-interest"
@@ -288,9 +292,9 @@ async def test_update_metadata_routes_to_interest_catalog() -> None:
     interest_repository.update_metadata.assert_awaited_once_with(
         123,
         100,
-        label="Intelligence artificielle",
-        description="Discussions et ressources autour de l'IA.",
-        emoji="🤖",
+        label="Artificial intelligence",
+        description="Discussions and resources about artificial intelligence.",
+        emoji=None,
     )
 
     access_repository.update_metadata.assert_not_awaited()
@@ -298,7 +302,7 @@ async def test_update_metadata_routes_to_interest_catalog() -> None:
 
 @pytest.mark.asyncio
 async def test_update_metadata_routes_to_access_catalog() -> None:
-    """Update metadata through the Adult Access catalog repository."""
+    """Update metadata through the adult access catalog repository."""
 
     interest_repository = Mock()
     interest_repository.update_metadata = AsyncMock()
@@ -311,6 +315,7 @@ async def test_update_metadata_routes_to_access_catalog() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",
@@ -337,8 +342,8 @@ async def test_update_metadata_routes_to_access_catalog() -> None:
         SUCCUMBRAE_FALLBACK_POLICY,
         "adult_accesses",
         101,
-        label="Yuri IA",
-        description="Accès au contenu Yuri généré par IA.",
+        label="Casino IA",
+        description="Accès au contenu casino généré par IA.",
         emoji=None,
     )
 
@@ -349,8 +354,8 @@ async def test_update_metadata_routes_to_access_catalog() -> None:
     access_repository.update_metadata.assert_awaited_once_with(
         123,
         101,
-        label="Yuri IA",
-        description="Accès au contenu Yuri généré par IA.",
+        label="Casino IA",
+        description="Accès au contenu casino généré par IA.",
         emoji=None,
     )
 
@@ -368,6 +373,7 @@ async def test_update_metadata_rejects_unknown_catalog() -> None:
     registry = Mock(
         spec=CatalogRegistry,
     )
+
     registry.for_policy.return_value = (
         create_definition(
             catalog_key="member_interests",

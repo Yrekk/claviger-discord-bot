@@ -14,8 +14,8 @@ from claviger.repositories.role_channel_catalog_repository import (
 
 
 @dataclass(frozen=True)
-class CatalogDefinition:
-    """Describe one role-to-channel catalog managed by Claviger."""
+class RuntimeCatalogDefinition:
+    """Describe one legacy runtime role-to-channel catalog."""
 
     catalog_key: str
     display_name: str
@@ -25,7 +25,7 @@ class CatalogDefinition:
 
 
 class CatalogRegistry:
-    """Build the role catalog definitions enabled for a guild policy."""
+    """Build the legacy runtime catalogs enabled for a guild policy."""
 
     def __init__(
         self,
@@ -38,18 +38,18 @@ class CatalogRegistry:
     def for_policy(
         self,
         policy: GuildPolicy,
-    ) -> tuple[CatalogDefinition, ...]:
-        """Return every catalog using the guild's effective prefixes."""
+    ) -> tuple[RuntimeCatalogDefinition, ...]:
+        """Return legacy catalogs using the guild's effective prefixes."""
 
         return (
-            CatalogDefinition(
+            RuntimeCatalogDefinition(
                 catalog_key="member_interests",
                 display_name="Member interests",
                 entry_name="Member interest",
                 prefix=policy.member_interest_prefix,
                 repository=self.interest_repository,
             ),
-            CatalogDefinition(
+            RuntimeCatalogDefinition(
                 catalog_key="adult_accesses",
                 display_name="Adult accesses",
                 entry_name="Adult access",
