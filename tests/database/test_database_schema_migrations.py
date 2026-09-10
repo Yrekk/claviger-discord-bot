@@ -5,6 +5,7 @@ import pytest
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import (
     CURRENT_SCHEMA_VERSION,
+    MIGRATIONS,
     DatabaseSchema,
 )
 
@@ -135,6 +136,12 @@ async def _prepare_historical_database(
                 TO adult_access_channel_name
                 """
             )
+
+        if version >= 6:
+            for statement in MIGRATIONS[6]:
+                await connection.execute(
+                    statement,
+                )
 
         await connection.execute(f"PRAGMA user_version = {version}")
 

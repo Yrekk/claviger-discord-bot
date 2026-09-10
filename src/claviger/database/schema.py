@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -253,6 +253,97 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             )
             ON UPDATE CASCADE
             ON DELETE CASCADE
+        )
+        """,
+    ),
+    7: (
+        """
+        CREATE TABLE guild_context_definitions (
+            guild_id INTEGER NOT NULL,
+            context_key TEXT NOT NULL,
+
+            capability_key TEXT NOT NULL,
+
+            value_type TEXT NOT NULL
+                CHECK (
+                    value_type IN (
+                        'boolean'
+                    )
+                ),
+
+            role_id INTEGER NOT NULL
+                CHECK (role_id > 0),
+
+            label TEXT NOT NULL,
+            description TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                context_key
+            ),
+
+            UNIQUE (
+                guild_id,
+                role_id
+            ),
+
+            UNIQUE (
+                guild_id,
+                capability_key
+            )
+        )
+        """,
+        """
+        CREATE TABLE guild_workflow_contexts (
+            guild_id INTEGER NOT NULL,
+            workflow_key TEXT NOT NULL,
+            context_key TEXT NOT NULL,
+
+            interaction_mode TEXT NOT NULL
+                CHECK (
+                    interaction_mode IN (
+                        'editable',
+                        'read_only'
+                    )
+                ),
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                workflow_key,
+                context_key
+            ),
+
+            FOREIGN KEY (
+                guild_id,
+                workflow_key
+            )
+            REFERENCES guild_workflows (
+                guild_id,
+                workflow_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (
+                guild_id,
+                context_key
+            )
+            REFERENCES guild_context_definitions (
+                guild_id,
+                context_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE RESTRICT
         )
         """,
     ),

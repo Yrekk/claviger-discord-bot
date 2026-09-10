@@ -80,6 +80,8 @@ async def test_initialize_creates_expected_tables(
         "guild_workflows",
         "guild_workflow_catalogs",
         "guild_workflow_channels",
+        "guild_context_definitions",
+        "guild_workflow_contexts",
     }.issubset(table_names)
 
 
@@ -260,4 +262,51 @@ async def test_workflow_channel_table_has_expected_columns(
         "guild_id",
         "workflow_key",
         "channel_id",
+    }
+
+
+async def test_context_definition_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the declarative workflow context definition schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "guild_context_definitions",
+    ) == {
+        "guild_id",
+        "context_key",
+        "capability_key",
+        "value_type",
+        "role_id",
+        "label",
+        "description",
+        "sort_order",
+        "enabled",
+    }
+
+
+async def test_workflow_context_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the workflow-to-context binding schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "guild_workflow_contexts",
+    ) == {
+        "guild_id",
+        "workflow_key",
+        "context_key",
+        "interaction_mode",
+        "sort_order",
+        "enabled",
     }

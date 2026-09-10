@@ -87,6 +87,40 @@ async def _insert_catalog(
     )
 
 
+async def _insert_context(
+    connection: aiosqlite.Connection,
+    *,
+    guild_id: int = 123,
+    context_key: str = "ai-content",
+    capability_key: str = "ai_preference",
+    value_type: str = "boolean",
+    role_id: int = 987654321,
+) -> None:
+    """Insert one valid context definition."""
+
+    await connection.execute(
+        """
+        INSERT INTO guild_context_definitions (
+            guild_id,
+            context_key,
+            capability_key,
+            value_type,
+            role_id,
+            label
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            guild_id,
+            context_key,
+            capability_key,
+            value_type,
+            role_id,
+            "Allow AI-generated content?",
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_member_interest_requires_channel_mapping(
     tmp_path: Path,
@@ -418,6 +452,337 @@ async def test_workflow_catalog_requires_existing_catalog(
                     "member",
                     "missing-catalog",
                 ),
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_context_role_id_must_be_positive(
+    tmp_path: Path,
+) -> None:
+    """Reject invalid Discord role identifiers for context state."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await _insert_context(
+                connection,
+                role_id=0,
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_context_role_id_is_unique_per_guild(
+    tmp_path: Path,
+) -> None:
+    """Prevent two context definitions from owning the same Discord role."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_context(
+            connection,
+            context_key="ai-content",
+            role_id=987654321,
+        )
+
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await _insert_context(
+                connection,
+                context_key="other-context",
+                role_id=987654321,
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_same_context_role_id_is_allowed_in_different_guilds(
+    tmp_path: Path,
+) -> None:
+    """Keep Discord role identity isolated by guild."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_context(
+            connection,
+            guild_id=123,
+            role_id=987654321,
+        )
+
+        await _insert_context(
+            connection,
+            guild_id=456,
+            role_id=987654321,
+        )
+
+        await connection.commit()
+
+
+@pytest.mark.asyncio
+async def test_context_rejects_unsupported_value_type(
+    tmp_path: Path,
+) -> None:
+    """Reject context value types not supported by the current engine."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await _insert_context(
+                connection,
+                value_type="arbitrary-python-object",
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_workflow_context_requires_existing_workflow(
+    tmp_path: Path,
+) -> None:
+    """Reject context bindings for an unknown workflow."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_context(
+            connection,
+        )
+
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await connection.execute(
+                """
+                INSERT INTO guild_workflow_contexts (
+                    guild_id,
+                    workflow_key,
+                    context_key,
+                    interaction_mode
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    123,
+                    "missing-workflow",
+                    "ai-content",
+                    "editable",
+                ),
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_workflow_context_requires_existing_context(
+    tmp_path: Path,
+) -> None:
+    """Reject workflow bindings for an unknown context definition."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_workflow(
+            connection,
+        )
+
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await connection.execute(
+                """
+                INSERT INTO guild_workflow_contexts (
+                    guild_id,
+                    workflow_key,
+                    context_key,
+                    interaction_mode
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    123,
+                    "member",
+                    "missing-context",
+                    "editable",
+                ),
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_workflow_context_accepts_editable_mode(
+    tmp_path: Path,
+) -> None:
+    """Allow a workflow to expose an editable context."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_workflow(
+            connection,
+        )
+
+        await _insert_context(
+            connection,
+        )
+
+        await connection.execute(
+            """
+            INSERT INTO guild_workflow_contexts (
+                guild_id,
+                workflow_key,
+                context_key,
+                interaction_mode
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                123,
+                "member",
+                "ai-content",
+                "editable",
+            ),
+        )
+
+        await connection.commit()
+
+
+@pytest.mark.asyncio
+async def test_workflow_context_accepts_read_only_mode(
+    tmp_path: Path,
+) -> None:
+    """Allow a workflow to consume a context without editing it."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_workflow(
+            connection,
+        )
+
+        await _insert_context(
+            connection,
+        )
+
+        await connection.execute(
+            """
+            INSERT INTO guild_workflow_contexts (
+                guild_id,
+                workflow_key,
+                context_key,
+                interaction_mode
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                123,
+                "member",
+                "ai-content",
+                "read_only",
+            ),
+        )
+
+        await connection.commit()
+
+
+@pytest.mark.asyncio
+async def test_workflow_context_rejects_unknown_interaction_mode(
+    tmp_path: Path,
+) -> None:
+    """Reject workflow context modes unsupported by the engine."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_workflow(
+            connection,
+        )
+
+        await _insert_context(
+            connection,
+        )
+
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await connection.execute(
+                """
+                INSERT INTO guild_workflow_contexts (
+                    guild_id,
+                    workflow_key,
+                    context_key,
+                    interaction_mode
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    123,
+                    "member",
+                    "ai-content",
+                    "whatever",
+                ),
+            )
+
+        await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_context_capability_is_unique_per_guild(
+    tmp_path: Path,
+) -> None:
+    """Prevent two contexts from owning the same engine capability."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    async with database.connect() as connection:
+        await _insert_context(
+            connection,
+            context_key="ai-content",
+            capability_key="ai_preference",
+            role_id=111,
+        )
+
+        with pytest.raises(
+            aiosqlite.IntegrityError,
+        ):
+            await _insert_context(
+                connection,
+                context_key="other-ai-content",
+                capability_key="ai_preference",
+                role_id=222,
             )
 
         await connection.rollback()

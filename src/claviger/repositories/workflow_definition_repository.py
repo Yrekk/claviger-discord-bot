@@ -9,9 +9,15 @@ from claviger.database.connection import (
     DatabaseUnavailableError,
 )
 from claviger.models.catalog_definition_model import CatalogDefinition
+from claviger.models.context_definition_model import (
+    ContextDefinition,
+    ContextValueType,
+)
 from claviger.models.workflow_definition_model import (
     WorkflowCatalogBinding,
     WorkflowChannelMode,
+    WorkflowContextBinding,
+    WorkflowContextInteractionMode,
     WorkflowDefinition,
 )
 
@@ -168,13 +174,19 @@ class WorkflowDefinitionRepository:
         connection: aiosqlite.Connection,
         row: aiosqlite.Row,
     ) -> WorkflowDefinition:
-        """Load channels and catalogs belonging to one workflow."""
+        """Load channels, contexts and catalogs belonging to one workflow."""
 
         guild_id = int(row["guild_id"])
 
         workflow_key = str(row["workflow_key"])
 
         channel_ids = await self._load_channel_ids(
+            connection,
+            guild_id=guild_id,
+            workflow_key=workflow_key,
+        )
+
+        contexts = await self._load_contexts(
             connection,
             guild_id=guild_id,
             workflow_key=workflow_key,
@@ -202,6 +214,7 @@ class WorkflowDefinitionRepository:
             enabled=bool(row["enabled"]),
             channel_ids=channel_ids,
             catalogs=catalogs,
+            contexts=contexts,
         )
 
     async def _load_channel_ids(
@@ -230,6 +243,80 @@ class WorkflowDefinitionRepository:
         rows = await cursor.fetchall()
 
         return tuple(int(row["channel_id"]) for row in rows)
+
+    async def _load_contexts(
+        self,
+        connection: aiosqlite.Connection,
+        *,
+        guild_id: int,
+        workflow_key: str,
+    ) -> tuple[WorkflowContextBinding, ...]:
+        """Load context definitions bound to one workflow."""
+
+        cursor = await connection.execute(
+            """
+            SELECT
+                context.guild_id,
+                context.context_key,
+                context.capability_key,
+                context.value_type,
+                context.role_id,
+                context.label,
+                context.description,
+                context.sort_order AS context_sort_order,
+                context.enabled AS context_enabled,
+
+                binding.interaction_mode,
+                binding.sort_order AS binding_sort_order,
+                binding.enabled AS binding_enabled
+
+            FROM guild_workflow_contexts AS binding
+
+            INNER JOIN guild_context_definitions AS context
+                ON context.guild_id = binding.guild_id
+            AND context.context_key = binding.context_key
+
+            WHERE binding.guild_id = ?
+            AND binding.workflow_key = ?
+
+            ORDER BY
+                binding.sort_order,
+                context.sort_order,
+                context.context_key
+            """,
+            (
+                guild_id,
+                workflow_key,
+            ),
+        )
+
+        rows: Sequence[aiosqlite.Row] = await cursor.fetchall()
+
+        return tuple(
+            WorkflowContextBinding(
+                context=ContextDefinition(
+                    guild_id=row["guild_id"],
+                    context_key=row["context_key"],
+                    capability_key=row["capability_key"],
+                    value_type=cast(
+                        ContextValueType,
+                        row["value_type"],
+                    ),
+                    role_id=row["role_id"],
+                    label=row["label"],
+                    description=row["description"],
+                    sort_order=row["context_sort_order"],
+                    enabled=bool(row["context_enabled"]),
+                ),
+                interaction_mode=cast(
+                    WorkflowContextInteractionMode,
+                    row["interaction_mode"],
+                ),
+                sort_order=row["binding_sort_order"],
+                enabled=bool(row["binding_enabled"]),
+            )
+            for row in rows
+        )
 
     async def _load_catalogs(
         self,

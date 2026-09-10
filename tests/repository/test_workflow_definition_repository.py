@@ -8,8 +8,10 @@ from claviger.database.connection import (
 )
 from claviger.database.schema import DatabaseSchema
 from claviger.models.catalog_definition_model import CatalogDefinition
+from claviger.models.context_definition_model import ContextDefinition
 from claviger.models.workflow_definition_model import (
     WorkflowCatalogBinding,
+    WorkflowContextBinding,
     WorkflowDefinition,
 )
 from claviger.repositories.workflow_definition_repository import (
@@ -192,6 +194,86 @@ async def _bind_channel(
                 guild_id,
                 workflow_key,
                 channel_id,
+            ),
+        )
+
+        await connection.commit()
+
+
+async def _insert_context(
+    database: DatabaseConnection,
+    *,
+    guild_id: int = 123,
+    context_key: str = "ai-content",
+    capability_key: str = "ai_preference",
+    role_id: int = 987654321,
+    sort_order: int = 0,
+    enabled: bool = True,
+) -> None:
+    """Insert one context used by workflow tests."""
+
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            INSERT INTO guild_context_definitions (
+                guild_id,
+                context_key,
+                capability_key,
+                value_type,
+                role_id,
+                label,
+                sort_order,
+                enabled
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                guild_id,
+                context_key,
+                capability_key,
+                "boolean",
+                role_id,
+                context_key,
+                sort_order,
+                enabled,
+            ),
+        )
+
+        await connection.commit()
+
+
+async def _bind_context(
+    database: DatabaseConnection,
+    *,
+    guild_id: int = 123,
+    workflow_key: str = "member",
+    context_key: str,
+    interaction_mode: str,
+    sort_order: int = 0,
+    enabled: bool = True,
+) -> None:
+    """Bind one context to one workflow."""
+
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            INSERT INTO guild_workflow_contexts (
+                guild_id,
+                workflow_key,
+                context_key,
+                interaction_mode,
+                sort_order,
+                enabled
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                guild_id,
+                workflow_key,
+                context_key,
+                interaction_mode,
+                sort_order,
+                enabled,
             ),
         )
 
@@ -489,3 +571,89 @@ async def test_get_does_not_create_missing_database(
         )
 
     assert database_path.exists() is False
+
+
+async def test_get_hydrates_workflow_contexts(
+    tmp_path: Path,
+) -> None:
+    """Hydrate workflow context definitions and interaction modes."""
+
+    database, repository = await _create_repository(
+        tmp_path,
+    )
+
+    await _insert_workflow(
+        database,
+    )
+
+    await _insert_context(
+        database,
+        context_key="secondary-setting",
+        capability_key="secondary_setting",
+        role_id=222,
+        sort_order=20,
+    )
+
+    await _insert_context(
+        database,
+        context_key="ai-content",
+        capability_key="ai_preference",
+        role_id=111,
+        sort_order=10,
+    )
+
+    await _bind_context(
+        database,
+        context_key="secondary-setting",
+        interaction_mode="read_only",
+        sort_order=20,
+    )
+
+    await _bind_context(
+        database,
+        context_key="ai-content",
+        interaction_mode="editable",
+        sort_order=10,
+    )
+
+    result = await repository.get(
+        guild_id=123,
+        workflow_key="member",
+    )
+
+    assert result is not None
+
+    assert result.contexts == (
+        WorkflowContextBinding(
+            context=ContextDefinition(
+                guild_id=123,
+                context_key="ai-content",
+                capability_key="ai_preference",
+                value_type="boolean",
+                role_id=111,
+                label="ai-content",
+                description=None,
+                sort_order=10,
+                enabled=True,
+            ),
+            interaction_mode="editable",
+            sort_order=10,
+            enabled=True,
+        ),
+        WorkflowContextBinding(
+            context=ContextDefinition(
+                guild_id=123,
+                context_key="secondary-setting",
+                capability_key="secondary_setting",
+                value_type="boolean",
+                role_id=222,
+                label="secondary-setting",
+                description=None,
+                sort_order=20,
+                enabled=True,
+            ),
+            interaction_mode="read_only",
+            sort_order=20,
+            enabled=True,
+        ),
+    )
