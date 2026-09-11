@@ -250,7 +250,9 @@ def create_database_group(
         await interaction.followup.send(
             (
                 "Base de données initialisée et liée à cette application. "
-                f"Version du schéma : `{final_status.current_version}`."
+                f"Version du schéma : `{final_status.current_version}`. "
+                f"Utilise `/{admin_command_name} restart` pour activer "
+                "les commandes dépendantes de la base."
             ),
             ephemeral=True,
         )
@@ -379,7 +381,9 @@ def create_database_group(
         await interaction.followup.send(
             (
                 "Base de données migrée et liée à cette application : "
-                f"`{previous_version}` → `{final_status.current_version}`."
+                f"`{previous_version}` → `{final_status.current_version}`. "
+                f"Utilise `/{admin_command_name} restart` pour activer "
+                "les commandes dépendantes de la base."
             ),
             ephemeral=True,
         )
@@ -477,7 +481,11 @@ def create_database_group(
         )
 
         await interaction.followup.send(
-            "Base de données liée à cette application Discord.",
+            (
+                "Base de données liée à cette application Discord. "
+                f"Utilise `/{admin_command_name} restart` pour activer "
+                "les commandes dépendantes de la base."
+            ),
             ephemeral=True,
         )
 

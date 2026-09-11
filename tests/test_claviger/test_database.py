@@ -24,6 +24,7 @@ from .helpers import (
 @pytest.mark.asyncio
 async def test_database_status_displays_current_state() -> None:
     """Display the current database state without modifying it."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -67,6 +68,7 @@ async def test_database_status_displays_current_state() -> None:
 @pytest.mark.asyncio
 async def test_database_status_rejects_non_owner() -> None:
     """Prevent non-owners from inspecting database administration."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -101,6 +103,7 @@ async def test_database_status_rejects_non_owner() -> None:
 @pytest.mark.asyncio
 async def test_database_status_reports_unexpected_failure() -> None:
     """Report unexpected database diagnostic failures."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -153,6 +156,7 @@ async def test_database_status_reports_unexpected_failure() -> None:
 @pytest.mark.asyncio
 async def test_database_initialize_creates_missing_database() -> None:
     """Initialize a missing database and verify its final state."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -200,7 +204,9 @@ async def test_database_initialize_creates_missing_database() -> None:
     interaction.followup.send.assert_awaited_once_with(
         (
             "Base de données initialisée et liée à cette application. "
-            "Version du schéma : `2`."
+            "Version du schéma : `2`. "
+            "Utilise `/claviger restart` pour activer "
+            "les commandes dépendantes de la base."
         ),
         ephemeral=True,
     )
@@ -209,6 +215,7 @@ async def test_database_initialize_creates_missing_database() -> None:
 @pytest.mark.asyncio
 async def test_database_initialize_rejects_ready_database() -> None:
     """Do not initialize an already ready database."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -251,6 +258,7 @@ async def test_database_initialize_rejects_ready_database() -> None:
 @pytest.mark.asyncio
 async def test_database_initialize_rejects_non_owner() -> None:
     """Prevent non-owners from initializing the database."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -287,6 +295,7 @@ async def test_database_initialize_rejects_non_owner() -> None:
 @pytest.mark.asyncio
 async def test_database_initialize_reports_failure() -> None:
     """Report database initialization failures."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -332,6 +341,7 @@ async def test_database_initialize_reports_failure() -> None:
 @pytest.mark.asyncio
 async def test_database_migrate_upgrades_outdated_database() -> None:
     """Migrate an outdated database and verify its final state."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -378,7 +388,12 @@ async def test_database_migrate_upgrades_outdated_database() -> None:
     assert event.details == ("Schema version: 1 -> 2; application_id: 789")
 
     interaction.followup.send.assert_awaited_once_with(
-        ("Base de données migrée et liée à cette application : `1` → `2`."),
+        (
+            "Base de données migrée et liée à cette application : "
+            "`1` → `2`. "
+            "Utilise `/claviger restart` pour activer "
+            "les commandes dépendantes de la base."
+        ),
         ephemeral=True,
     )
 
@@ -386,6 +401,7 @@ async def test_database_migrate_upgrades_outdated_database() -> None:
 @pytest.mark.asyncio
 async def test_database_migrate_rejects_ready_database() -> None:
     """Do not migrate an already up-to-date database."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -428,6 +444,7 @@ async def test_database_migrate_rejects_ready_database() -> None:
 @pytest.mark.asyncio
 async def test_database_migrate_rejects_uninitialized_database() -> None:
     """Require initialization before migration."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -469,6 +486,7 @@ async def test_database_migrate_rejects_uninitialized_database() -> None:
 @pytest.mark.asyncio
 async def test_database_migrate_rejects_non_owner() -> None:
     """Prevent non-owners from migrating the database."""
+
     service = Mock(
         spec=RoleDiscoveryService,
     )
@@ -566,6 +584,15 @@ async def test_database_bind_assigns_current_application() -> None:
     event = report_service.emit.await_args.args[0]
 
     assert event.event_type == "database.bind.success"
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "Base de données liée à cette application Discord. "
+            "Utilise `/claviger restart` pour activer "
+            "les commandes dépendantes de la base."
+        ),
+        ephemeral=True,
+    )
 
 
 @pytest.mark.asyncio

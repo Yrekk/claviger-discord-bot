@@ -173,6 +173,8 @@ def create_test_group(
         database_ownership_service.validate = AsyncMock()
     role_classifier = RoleClassifier()
 
+    restart_callback = AsyncMock()
+
     group = create_claviger_group(
         role_discovery_service=role_discovery_service,
         policy_resolver=policy_resolver,
@@ -187,6 +189,7 @@ def create_test_group(
         command_name=command_name,
         application_name=application_name,
         application_id=application_id,
+        restart_callback=restart_callback,
     )
 
     return (

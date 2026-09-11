@@ -1,5 +1,8 @@
+import logging
+
 import discord
 from discord import app_commands
+from discord.http import Route
 
 # Commands
 from claviger.commands.claviger_command import create_claviger_group
@@ -18,12 +21,16 @@ from claviger.config import (
 # Database
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
-from claviger.database.status import DatabaseStatusService
+from claviger.database.status import (
+    DatabaseState,
+    DatabaseStatusService,
+)
 
 # Models
 from claviger.models.discord_runtime_identity_model import (
     DiscordRuntimeIdentity,
 )
+from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 # Policies
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
@@ -70,6 +77,7 @@ from claviger.services.catalog_sync_coordinator_service import (
 from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
 from claviger.services.database_ownership_service import (
     DatabaseOwnershipService,
+    DatabaseOwnershipUnboundError,
 )
 from claviger.services.discord_identity_service import DiscordIdentityService
 from claviger.services.guild_policy_bootstrap import (
@@ -104,9 +112,15 @@ from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.role_manager_service import RoleManager
 from claviger.services.say_service import SayService
 
+logger = logging.getLogger(__name__)
+
 
 class ClavigerBot(discord.Client):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        startup_restart_request: RuntimeRestartRequest | None = None,
+    ) -> None:
         intents = discord.Intents.default()
 
         super().__init__(intents=intents)
@@ -115,6 +129,13 @@ class ClavigerBot(discord.Client):
 
         self.guild_id = get_discord_guild_id()
         self.expected_bot_user_id = get_discord_bot_user_id()
+
+        self.restart_requested = False
+        self.pending_restart_request: RuntimeRestartRequest | None = None
+
+        self.startup_restart_request = startup_restart_request
+        self.started_from_restart = startup_restart_request is not None
+        self._ready_announced = False
 
         self.discord_identity_service = DiscordIdentityService()
         self.runtime_identity: DiscordRuntimeIdentity | None = None
@@ -129,6 +150,7 @@ class ClavigerBot(discord.Client):
         self.database = DatabaseConnection(
             get_database_path(),
         )
+
         self.database_ownership_repository = DatabaseOwnershipRepository(
             self.database,
         )
@@ -256,16 +278,81 @@ class ClavigerBot(discord.Client):
 
         if self.user.id != self.expected_bot_user_id:
             raise RuntimeError(
-                "Authenticated Discord bot identity does not match configuration. "
+                "Authenticated Discord bot identity does not match "
+                "configuration. "
                 f"Expected DISCORD_BOT_USER_ID={self.expected_bot_user_id}, "
                 f"but Discord authenticated user ID {self.user.id}."
             )
 
+    async def _database_is_operational(
+        self,
+        identity: DiscordRuntimeIdentity,
+    ) -> bool:
+        """Return whether database-backed commands may be exposed."""
+
+        status = await self.database_status_service.check()
+
+        if status.state != DatabaseState.READY:
+            return False
+
+        try:
+            await self.database_ownership_service.validate(
+                identity.application_id,
+            )
+        except DatabaseOwnershipUnboundError:
+            return False
+
+        return True
+
+    async def request_restart(
+        self,
+        restart_request: RuntimeRestartRequest,
+    ) -> None:
+        """Request a clean runtime restart and close the Discord client."""
+
+        logger.info("Redémarrage demandé depuis Discord.")
+
+        self.restart_requested = True
+        self.pending_restart_request = restart_request
+
+        logger.info("Fermeture de l'instance courante pour redémarrage...")
+
+        await self.close()
+
+    async def _complete_restart_feedback(self) -> None:
+        """Mark the original Discord restart response as completed."""
+
+        restart_request = self.startup_restart_request
+
+        if restart_request is None:
+            return
+
+        route = Route(
+            "PATCH",
+            "/webhooks/{webhook_id}/{webhook_token}/messages/@original",
+            webhook_id=restart_request.application_id,
+            webhook_token=restart_request.interaction_token,
+        )
+
+        await self.http.request(
+            route,
+            json={
+                "content": (
+                    "Redémarrage terminé. L'application est de nouveau opérationnelle."
+                ),
+                "allowed_mentions": {
+                    "parse": [],
+                },
+            },
+        )
+
     def _register_guild_commands(
         self,
         identity: DiscordRuntimeIdentity,
+        *,
+        database_operational: bool,
     ) -> None:
-        """Register guild commands using the resolved Discord identity."""
+        """Register commands allowed by the current runtime state."""
 
         if identity.guild_id != self.guild_id:
             raise RuntimeError(
@@ -289,24 +376,25 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        self.tree.add_command(
-            create_member_command(
-                self.policy_resolver,
-                self.database_status_service,
-                self.member_workflow_coordinator_service,
-            ),
-            guild=guild,
-        )
+        if database_operational:
+            self.tree.add_command(
+                create_member_command(
+                    self.policy_resolver,
+                    self.database_status_service,
+                    self.member_workflow_coordinator_service,
+                ),
+                guild=guild,
+            )
 
-        self.tree.add_command(
-            create_noctis_command(
-                self.noctis_workflow_coordinator_service,
-                self.policy_resolver,
-                self.database_status_service,
-                self.report_service,
-            ),
-            guild=guild,
-        )
+            self.tree.add_command(
+                create_noctis_command(
+                    self.noctis_workflow_coordinator_service,
+                    self.policy_resolver,
+                    self.database_status_service,
+                    self.report_service,
+                ),
+                guild=guild,
+            )
 
         self.tree.add_command(
             create_claviger_group(
@@ -323,11 +411,18 @@ class ClavigerBot(discord.Client):
                 command_name=identity.admin_command_name,
                 application_name=identity.application_name,
                 application_id=identity.application_id,
+                restart_callback=self.request_restart,
+                maintenance_only=not database_operational,
             ),
             guild=guild,
         )
 
     async def setup_hook(self) -> None:
+        if self.started_from_restart:
+            logger.info("Redémarrage de l'application en cours...")
+        else:
+            logger.info("Démarrage de l'application en cours...")
+
         self._validate_authenticated_bot_identity()
 
         identity = await self.discord_identity_service.resolve(
@@ -335,10 +430,15 @@ class ClavigerBot(discord.Client):
             self.guild_id,
         )
 
+        database_operational = await self._database_is_operational(
+            identity,
+        )
+
         self.runtime_identity = identity
 
         self._register_guild_commands(
             identity,
+            database_operational=database_operational,
         )
 
         guild = discord.Object(
@@ -349,7 +449,10 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        print(f"Commandes synchronisées : {len(synced)}")
+        logger.info(
+            "Commandes synchronisées : %s",
+            len(synced),
+        )
 
     async def on_ready(self) -> None:
         if self.user is None:
@@ -358,8 +461,36 @@ class ClavigerBot(discord.Client):
         if self.runtime_identity is None:
             return
 
-        print(
-            f"{self.runtime_identity.application_name} connecté en tant que "
-            f"{self.runtime_identity.bot_display_name} ({self.user.id})"
+        logger.info(
+            "%s connecté en tant que %s (%s)",
+            self.runtime_identity.application_name,
+            self.runtime_identity.bot_display_name,
+            self.user.id,
         )
-        print(f"Serveurs accessibles : {len(self.guilds)}")
+
+        logger.info(
+            "Serveurs accessibles : %s",
+            len(self.guilds),
+        )
+
+        if self._ready_announced:
+            return
+
+        if self.started_from_restart:
+            try:
+                await self._complete_restart_feedback()
+
+            except Exception:
+                logger.exception(
+                    "Impossible de mettre à jour le message Discord de redémarrage."
+                )
+
+            finally:
+                self.startup_restart_request = None
+
+            logger.info("Redémarrage terminé. Application opérationnelle.")
+
+        else:
+            logger.info("Démarrage terminé. Application opérationnelle.")
+
+        self._ready_announced = True

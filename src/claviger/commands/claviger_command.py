@@ -4,6 +4,10 @@ from claviger.commands.catalog_command import create_catalog_group
 from claviger.commands.database_command import create_database_group
 from claviger.commands.guild import create_guild_group
 from claviger.commands.report import create_report_group
+from claviger.commands.restart_command import (
+    RestartCallback,
+    create_restart_command,
+)
 from claviger.commands.roles import create_roles_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import DatabaseStatusService
@@ -38,16 +42,14 @@ def create_claviger_group(
     command_name: str,
     application_name: str,
     application_id: int,
+    restart_callback: RestartCallback,
+    maintenance_only: bool = False,
 ) -> app_commands.Group:
     """Create the application's administrative command group."""
 
     admin_group = app_commands.Group(
         name=command_name,
         description=f"Commandes d'administration de {application_name}.",
-    )
-
-    report_group = create_report_group(
-        report_service,
     )
 
     database_group = create_database_group(
@@ -57,6 +59,25 @@ def create_claviger_group(
         report_service,
         application_id=application_id,
         admin_command_name=command_name,
+    )
+
+    restart_command = create_restart_command(
+        restart_callback,
+    )
+
+    admin_group.add_command(
+        database_group,
+    )
+
+    admin_group.add_command(
+        restart_command,
+    )
+
+    if maintenance_only:
+        return admin_group
+
+    report_group = create_report_group(
+        report_service,
     )
 
     guild_group = create_guild_group(
@@ -83,15 +104,15 @@ def create_claviger_group(
     admin_group.add_command(
         roles_group,
     )
+
     admin_group.add_command(
         catalog_group,
     )
+
     admin_group.add_command(
         report_group,
     )
-    admin_group.add_command(
-        database_group,
-    )
+
     admin_group.add_command(
         guild_group,
     )
