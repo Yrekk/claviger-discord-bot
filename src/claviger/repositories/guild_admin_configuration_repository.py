@@ -59,9 +59,9 @@ class GuildAdminConfigurationRepository:
         return GuildAdminConfiguration(
             guild_id=int(row[0]),
             category_id=int(row[1]),
-            command_channel_id=int(row[2]),
+            command_channel_id=(int(row[2]) if row[2] is not None else None),
             activity_forum_id=int(row[3]),
-            error_forum_id=int(row[4]),
+            error_forum_id=(int(row[4]) if row[4] is not None else None),
         )
 
     async def save(
@@ -119,19 +119,29 @@ class GuildAdminConfigurationRepository:
     ) -> None:
         """Reject structurally impossible administrative configuration."""
 
-        identifiers = {
+        required_identifiers = {
             "guild_id": configuration.guild_id,
             "category_id": configuration.category_id,
-            "command_channel_id": configuration.command_channel_id,
             "activity_forum_id": configuration.activity_forum_id,
-            "error_forum_id": configuration.error_forum_id,
         }
 
-        for name, value in identifiers.items():
+        for name, value in required_identifiers.items():
             if value <= 0:
                 raise ValueError(f"{name} must be greater than zero.")
 
-        if configuration.activity_forum_id == configuration.error_forum_id:
+        optional_identifiers = {
+            "command_channel_id": configuration.command_channel_id,
+            "error_forum_id": configuration.error_forum_id,
+        }
+
+        for name, value in optional_identifiers.items():
+            if value is not None and value <= 0:
+                raise ValueError(f"{name} must be greater than zero when configured.")
+
+        if (
+            configuration.error_forum_id is not None
+            and configuration.activity_forum_id == configuration.error_forum_id
+        ):
             raise ValueError("Activity and error forums must be different.")
 
     def _ensure_database_exists(

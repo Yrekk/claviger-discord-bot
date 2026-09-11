@@ -367,17 +367,24 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             category_id INTEGER NOT NULL
                 CHECK (category_id > 0),
 
-            command_channel_id INTEGER NOT NULL
-                CHECK (command_channel_id > 0),
+            command_channel_id INTEGER
+                CHECK (
+                    command_channel_id IS NULL
+                    OR command_channel_id > 0
+                ),
 
             activity_forum_id INTEGER NOT NULL
                 CHECK (activity_forum_id > 0),
 
-            error_forum_id INTEGER NOT NULL
-                CHECK (error_forum_id > 0),
+            error_forum_id INTEGER
+                CHECK (
+                    error_forum_id IS NULL
+                    OR error_forum_id > 0
+                ),
 
             CHECK (
-                activity_forum_id != error_forum_id
+                error_forum_id IS NULL
+                OR activity_forum_id != error_forum_id
             )
         )
         """,

@@ -49,6 +49,36 @@ async def test_get_returns_none_when_guild_is_not_configured(
     )
 
 
+async def test_save_persists_bootstrap_admin_configuration(
+    tmp_path: Path,
+) -> None:
+    """Persist the minimal administrative bootstrap configuration."""
+
+    repository = await _create_repository(
+        tmp_path,
+    )
+
+    configuration = GuildAdminConfiguration(
+        guild_id=123,
+        category_id=1000,
+        activity_forum_id=1002,
+        command_channel_id=None,
+        error_forum_id=None,
+    )
+
+    await repository.save(
+        configuration,
+    )
+
+    loaded = await repository.get(
+        123,
+    )
+
+    assert loaded == configuration
+    assert loaded is not None
+    assert loaded.is_complete is False
+
+
 async def test_save_persists_complete_admin_configuration(
     tmp_path: Path,
 ) -> None:
@@ -61,8 +91,8 @@ async def test_save_persists_complete_admin_configuration(
     configuration = GuildAdminConfiguration(
         guild_id=123,
         category_id=1000,
-        command_channel_id=1001,
         activity_forum_id=1002,
+        command_channel_id=1001,
         error_forum_id=1003,
     )
 
@@ -70,18 +100,19 @@ async def test_save_persists_complete_admin_configuration(
         configuration,
     )
 
-    assert (
-        await repository.get(
-            123,
-        )
-        == configuration
+    loaded = await repository.get(
+        123,
     )
 
+    assert loaded == configuration
+    assert loaded is not None
+    assert loaded.is_complete is True
 
-async def test_save_updates_existing_admin_configuration(
+
+async def test_save_updates_bootstrap_to_complete_configuration(
     tmp_path: Path,
 ) -> None:
-    """Replace the existing routing without creating duplicate guild rows."""
+    """Complete an existing bootstrap configuration without duplicate rows."""
 
     repository = await _create_repository(
         tmp_path,
@@ -91,30 +122,55 @@ async def test_save_updates_existing_admin_configuration(
         GuildAdminConfiguration(
             guild_id=123,
             category_id=1000,
-            command_channel_id=1001,
             activity_forum_id=1002,
-            error_forum_id=1003,
+            command_channel_id=None,
+            error_forum_id=None,
         )
     )
 
     updated = GuildAdminConfiguration(
         guild_id=123,
-        category_id=2000,
-        command_channel_id=2001,
-        activity_forum_id=2002,
-        error_forum_id=2003,
+        category_id=1000,
+        activity_forum_id=1002,
+        command_channel_id=1001,
+        error_forum_id=1003,
     )
 
     await repository.save(
         updated,
     )
 
-    assert (
-        await repository.get(
-            123,
-        )
-        == updated
+    loaded = await repository.get(
+        123,
     )
+
+    assert loaded == updated
+    assert loaded is not None
+    assert loaded.is_complete is True
+
+
+async def test_save_rejects_invalid_optional_identifier(
+    tmp_path: Path,
+) -> None:
+    """Reject invalid optional Discord identifiers when configured."""
+
+    repository = await _create_repository(
+        tmp_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="command_channel_id must be greater than zero when configured",
+    ):
+        await repository.save(
+            GuildAdminConfiguration(
+                guild_id=123,
+                category_id=1000,
+                activity_forum_id=1002,
+                command_channel_id=0,
+                error_forum_id=None,
+            )
+        )
 
 
 async def test_save_rejects_same_activity_and_error_forum(
@@ -134,8 +190,8 @@ async def test_save_rejects_same_activity_and_error_forum(
             GuildAdminConfiguration(
                 guild_id=123,
                 category_id=1000,
-                command_channel_id=1001,
                 activity_forum_id=1002,
+                command_channel_id=1001,
                 error_forum_id=1002,
             )
         )
