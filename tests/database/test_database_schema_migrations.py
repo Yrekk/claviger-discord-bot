@@ -143,6 +143,12 @@ async def _prepare_historical_database(
                     statement,
                 )
 
+        if version >= 7:
+            for statement in MIGRATIONS[7]:
+                await connection.execute(
+                    statement,
+                )
+
         await connection.execute(f"PRAGMA user_version = {version}")
 
         await connection.commit()

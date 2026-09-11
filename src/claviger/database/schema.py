@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -344,6 +344,17 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             )
             ON UPDATE CASCADE
             ON DELETE RESTRICT
+        )
+        """,
+    ),
+    8: (
+        """
+        CREATE TABLE database_ownership (
+            singleton_id INTEGER PRIMARY KEY
+                CHECK (singleton_id = 1),
+
+            application_id INTEGER NOT NULL
+                CHECK (application_id > 0)
         )
         """,
     ),

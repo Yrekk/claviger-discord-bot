@@ -82,6 +82,7 @@ async def test_initialize_creates_expected_tables(
         "guild_workflow_channels",
         "guild_context_definitions",
         "guild_workflow_contexts",
+        "database_ownership",
     }.issubset(table_names)
 
 
@@ -309,4 +310,22 @@ async def test_workflow_context_table_has_expected_columns(
         "interaction_mode",
         "sort_order",
         "enabled",
+    }
+
+
+async def test_database_ownership_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the database-level Discord application ownership schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "database_ownership",
+    ) == {
+        "singleton_id",
+        "application_id",
     }
