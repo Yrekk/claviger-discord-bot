@@ -696,7 +696,7 @@ async def test_request_restart_closes_client(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Store restart context before closing Discord."""
+    """Store restart context and command signature before closing Discord."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -704,6 +704,8 @@ async def test_request_restart_closes_client(
     )
 
     bot = ClavigerBot()
+
+    bot.command_tree_signature = "tree-signature"
 
     close = AsyncMock()
 
@@ -726,7 +728,12 @@ async def test_request_restart_closes_client(
     )
 
     assert bot.restart_requested is True
-    assert bot.pending_restart_request == restart_request
+
+    assert bot.pending_restart_request == RuntimeRestartRequest(
+        application_id=789,
+        interaction_token="restart-token",
+        command_tree_signature="tree-signature",
+    )
 
     close.assert_awaited_once_with()
 
@@ -776,3 +783,159 @@ async def test_complete_restart_feedback_edits_original_response(
             "parse": [],
         },
     }
+
+
+@pytest.mark.asyncio
+async def test_setup_hook_skips_sync_when_restart_tree_is_unchanged(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Avoid Discord synchronization when an internal restart keeps the same tree."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+        bot_user_id=456,
+    )
+
+    restart_request = RuntimeRestartRequest(
+        application_id=789,
+        interaction_token="restart-token",
+        command_tree_signature="same-tree",
+    )
+
+    bot = ClavigerBot(
+        startup_restart_request=restart_request,
+    )
+
+    bot._connection.user = SimpleNamespace(
+        id=456,
+    )
+
+    identity = _create_runtime_identity()
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve",
+        AsyncMock(
+            return_value=identity,
+        ),
+    )
+
+    monkeypatch.setattr(
+        bot.database_status_service,
+        "check",
+        AsyncMock(
+            return_value=DatabaseStatus(
+                state=DatabaseState.READY,
+                current_version=8,
+                target_version=8,
+            )
+        ),
+    )
+
+    monkeypatch.setattr(
+        bot.database_ownership_service,
+        "validate",
+        AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        bot,
+        "_build_command_tree_signature",
+        lambda guild: "same-tree",
+    )
+
+    sync = AsyncMock(
+        return_value=[],
+    )
+
+    monkeypatch.setattr(
+        bot.tree,
+        "sync",
+        sync,
+    )
+
+    await bot.setup_hook()
+
+    sync.assert_not_awaited()
+
+    assert bot.command_tree_signature == "same-tree"
+
+
+@pytest.mark.asyncio
+async def test_setup_hook_resyncs_when_restart_tree_changes(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Synchronize Discord when an internal restart changes the command tree."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+        bot_user_id=456,
+    )
+
+    restart_request = RuntimeRestartRequest(
+        application_id=789,
+        interaction_token="restart-token",
+        command_tree_signature="old-tree",
+    )
+
+    bot = ClavigerBot(
+        startup_restart_request=restart_request,
+    )
+
+    bot._connection.user = SimpleNamespace(
+        id=456,
+    )
+
+    identity = _create_runtime_identity()
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve",
+        AsyncMock(
+            return_value=identity,
+        ),
+    )
+
+    monkeypatch.setattr(
+        bot.database_status_service,
+        "check",
+        AsyncMock(
+            return_value=DatabaseStatus(
+                state=DatabaseState.READY,
+                current_version=8,
+                target_version=8,
+            )
+        ),
+    )
+
+    monkeypatch.setattr(
+        bot.database_ownership_service,
+        "validate",
+        AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        bot,
+        "_build_command_tree_signature",
+        lambda guild: "new-tree",
+    )
+
+    sync = AsyncMock(
+        return_value=[],
+    )
+
+    monkeypatch.setattr(
+        bot.tree,
+        "sync",
+        sync,
+    )
+
+    await bot.setup_hook()
+
+    sync.assert_awaited_once()
+
+    assert bot.command_tree_signature == "new-tree"

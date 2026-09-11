@@ -14,6 +14,14 @@ def test_main_starts_bot_with_discord_token(monkeypatch) -> None:
         return_value=fake_bot,
     )
 
+    configure_logging = Mock()
+
+    monkeypatch.setattr(
+        main_module,
+        "configure_logging",
+        configure_logging,
+    )
+
     monkeypatch.setattr(
         main_module,
         "get_discord_token",
@@ -28,12 +36,15 @@ def test_main_starts_bot_with_discord_token(monkeypatch) -> None:
 
     main_module.main()
 
+    configure_logging.assert_called_once_with()
+
     bot_factory.assert_called_once_with(
         startup_restart_request=None,
     )
 
     fake_bot.run.assert_called_once_with(
         "test-token",
+        log_handler=None,
     )
 
 
@@ -59,6 +70,14 @@ def test_main_recreates_bot_after_restart_request(monkeypatch) -> None:
         ]
     )
 
+    configure_logging = Mock()
+
+    monkeypatch.setattr(
+        main_module,
+        "configure_logging",
+        configure_logging,
+    )
+
     monkeypatch.setattr(
         main_module,
         "get_discord_token",
@@ -73,6 +92,8 @@ def test_main_recreates_bot_after_restart_request(monkeypatch) -> None:
 
     main_module.main()
 
+    configure_logging.assert_called_once_with()
+
     assert bot_factory.call_args_list == [
         call(
             startup_restart_request=None,
@@ -84,8 +105,10 @@ def test_main_recreates_bot_after_restart_request(monkeypatch) -> None:
 
     first_bot.run.assert_called_once_with(
         "test-token",
+        log_handler=None,
     )
 
     second_bot.run.assert_called_once_with(
         "test-token",
+        log_handler=None,
     )

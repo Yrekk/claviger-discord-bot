@@ -1,4 +1,7 @@
+import hashlib
+import json
 import logging
+from time import perf_counter
 
 import discord
 from discord import app_commands
@@ -132,6 +135,8 @@ class ClavigerBot(discord.Client):
 
         self.restart_requested = False
         self.pending_restart_request: RuntimeRestartRequest | None = None
+
+        self.command_tree_signature: str | None = None
 
         self.startup_restart_request = startup_restart_request
         self.started_from_restart = startup_restart_request is not None
@@ -304,6 +309,37 @@ class ClavigerBot(discord.Client):
 
         return True
 
+    def _build_command_tree_signature(
+        self,
+        guild: discord.Object,
+    ) -> str:
+        """Build a deterministic signature of the local slash-command tree."""
+
+        payloads = [
+            command.to_dict(self.tree)
+            for command in self.tree.get_commands(
+                guild=guild,
+            )
+        ]
+
+        payloads.sort(
+            key=lambda payload: (
+                payload["type"],
+                payload["name"],
+            )
+        )
+
+        serialized = json.dumps(
+            payloads,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+
+        return hashlib.sha256(
+            serialized.encode("utf-8"),
+        ).hexdigest()
+
     async def request_restart(
         self,
         restart_request: RuntimeRestartRequest,
@@ -313,7 +349,12 @@ class ClavigerBot(discord.Client):
         logger.info("Redémarrage demandé depuis Discord.")
 
         self.restart_requested = True
-        self.pending_restart_request = restart_request
+
+        self.pending_restart_request = RuntimeRestartRequest(
+            application_id=restart_request.application_id,
+            interaction_token=restart_request.interaction_token,
+            command_tree_signature=self.command_tree_signature,
+        )
 
         logger.info("Fermeture de l'instance courante pour redémarrage...")
 
@@ -418,40 +459,106 @@ class ClavigerBot(discord.Client):
         )
 
     async def setup_hook(self) -> None:
+        setup_started = perf_counter()
+
         if self.started_from_restart:
             logger.info("Redémarrage de l'application en cours...")
         else:
             logger.info("Démarrage de l'application en cours...")
 
+        step_started = perf_counter()
+
         self._validate_authenticated_bot_identity()
+
+        logger.info(
+            "Timing startup — validation identité authentifiée : %.3f s",
+            perf_counter() - step_started,
+        )
+
+        step_started = perf_counter()
 
         identity = await self.discord_identity_service.resolve(
             self,
             self.guild_id,
         )
 
+        logger.info(
+            "Timing startup — résolution identité Discord : %.3f s",
+            perf_counter() - step_started,
+        )
+
+        step_started = perf_counter()
+
         database_operational = await self._database_is_operational(
             identity,
         )
 
+        logger.info(
+            "Timing startup — validation base / ownership : %.3f s",
+            perf_counter() - step_started,
+        )
+
         self.runtime_identity = identity
+
+        step_started = perf_counter()
 
         self._register_guild_commands(
             identity,
             database_operational=database_operational,
         )
 
+        logger.info(
+            "Timing startup — construction arbre local : %.3f s",
+            perf_counter() - step_started,
+        )
+
         guild = discord.Object(
             id=self.guild_id,
         )
 
-        synced = await self.tree.sync(
-            guild=guild,
+        current_signature = self._build_command_tree_signature(
+            guild,
         )
 
+        previous_signature = None
+
+        if self.startup_restart_request is not None:
+            previous_signature = self.startup_restart_request.command_tree_signature
+
+        tree_is_unchanged = (
+            self.started_from_restart
+            and previous_signature is not None
+            and previous_signature == current_signature
+        )
+
+        step_started = perf_counter()
+
+        if tree_is_unchanged:
+            logger.info(
+                "Synchronisation Discord ignorée : arbre de commandes inchangé."
+            )
+
+        else:
+            synced = await self.tree.sync(
+                guild=guild,
+            )
+
+            logger.info(
+                "Commandes synchronisées : %s",
+                len(synced),
+            )
+
         logger.info(
-            "Commandes synchronisées : %s",
-            len(synced),
+            "Timing startup — synchronisation Discord : %.3f s%s",
+            perf_counter() - step_started,
+            " (ignorée)" if tree_is_unchanged else "",
+        )
+
+        self.command_tree_signature = current_signature
+
+        logger.info(
+            "Timing startup — setup_hook total : %.3f s",
+            perf_counter() - setup_started,
         )
 
     async def on_ready(self) -> None:
