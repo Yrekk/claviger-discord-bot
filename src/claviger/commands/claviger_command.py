@@ -15,6 +15,9 @@ from claviger.services.catalog_next_coordinator_service import (
 from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
+from claviger.services.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
@@ -29,10 +32,12 @@ def create_claviger_group(
     guild_policy_bootstrap_service: GuildPolicyBootstrapService,
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
+    database_ownership_service: DatabaseOwnershipService,
     report_service: ReportService,
     *,
     command_name: str,
     application_name: str,
+    application_id: int,
 ) -> app_commands.Group:
     """Create the application's administrative command group."""
 
@@ -48,7 +53,10 @@ def create_claviger_group(
     database_group = create_database_group(
         database_schema,
         database_status_service,
+        database_ownership_service,
         report_service,
+        application_id=application_id,
+        admin_command_name=command_name,
     )
 
     guild_group = create_guild_group(

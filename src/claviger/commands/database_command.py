@@ -9,6 +9,9 @@ from claviger.database.status import (
 )
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.services.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 
 
 def _format_database_status(
@@ -58,9 +61,13 @@ def _format_database_status(
 def create_database_group(
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
+    database_ownership_service: DatabaseOwnershipService,
     report_service: ReportService,
+    *,
+    application_id: int,
+    admin_command_name: str,
 ) -> app_commands.Group:
-    """Create Claviger's database administration command group."""
+    """Create the database administration command group."""
 
     database_group = app_commands.Group(
         name="database",
@@ -155,7 +162,11 @@ def create_database_group(
 
             if status.state == DatabaseState.READY:
                 await interaction.followup.send(
-                    "La base de données est déjà initialisée et prête.",
+                    (
+                        "La base de données est déjà initialisée. "
+                        f"Utilise `/{admin_command_name} database bind` "
+                        "si son application propriétaire doit être vérifiée."
+                    ),
                     ephemeral=True,
                 )
                 return
@@ -164,7 +175,8 @@ def create_database_group(
                 await interaction.followup.send(
                     (
                         "La base de données existe déjà mais nécessite "
-                        "une migration. Utilise `/claviger database migrate`."
+                        f"une migration. Utilise `/{admin_command_name} "
+                        "database migrate`."
                     ),
                     ephemeral=True,
                 )
@@ -180,6 +192,10 @@ def create_database_group(
                 raise RuntimeError("La base de données est actuellement indisponible.")
 
             await database_schema.initialize()
+
+            await database_ownership_service.bind(
+                application_id,
+            )
 
             final_status = await database_status_service.check()
 
@@ -220,7 +236,10 @@ def create_database_group(
                 summary=(
                     "La base de données de Claviger a été initialisée avec succès."
                 ),
-                details=(f"Schema version: {final_status.current_version}"),
+                details=(
+                    f"Schema version: {final_status.current_version}; "
+                    f"application_id: {application_id}"
+                ),
                 guild_id=interaction.guild.id,
                 guild_label=interaction.guild.name,
                 actor_id=interaction.user.id,
@@ -230,7 +249,7 @@ def create_database_group(
 
         await interaction.followup.send(
             (
-                "Base de données initialisée avec succès. "
+                "Base de données initialisée et liée à cette application. "
                 f"Version du schéma : `{final_status.current_version}`."
             ),
             ephemeral=True,
@@ -266,7 +285,11 @@ def create_database_group(
 
             if status.state == DatabaseState.READY:
                 await interaction.followup.send(
-                    "La base de données est déjà à jour.",
+                    (
+                        "La base de données est déjà à jour. "
+                        f"Utilise `/{admin_command_name} database bind` "
+                        "si son application propriétaire doit être vérifiée."
+                    ),
                     ephemeral=True,
                 )
                 return
@@ -278,7 +301,7 @@ def create_database_group(
                 await interaction.followup.send(
                     (
                         "La base de données n'est pas initialisée. "
-                        "Utilise `/claviger database initialize`."
+                        f"Utilise `/{admin_command_name} database initialize`."
                     ),
                     ephemeral=True,
                 )
@@ -299,6 +322,10 @@ def create_database_group(
             previous_version = status.current_version
 
             await database_schema.migrate()
+
+            await database_ownership_service.bind(
+                application_id,
+            )
 
             final_status = await database_status_service.check()
 
@@ -339,7 +366,8 @@ def create_database_group(
                 summary=("La base de données de Claviger a été migrée avec succès."),
                 details=(
                     f"Schema version: {previous_version} "
-                    f"-> {final_status.current_version}"
+                    f"-> {final_status.current_version}; "
+                    f"application_id: {application_id}"
                 ),
                 guild_id=interaction.guild.id,
                 guild_label=interaction.guild.name,
@@ -350,9 +378,106 @@ def create_database_group(
 
         await interaction.followup.send(
             (
-                "Base de données migrée avec succès : "
+                "Base de données migrée et liée à cette application : "
                 f"`{previous_version}` → `{final_status.current_version}`."
             ),
+            ephemeral=True,
+        )
+
+    @database_group.command(
+        name="bind",
+        description="Lie explicitement la base à l'application Discord actuelle.",
+    )
+    async def database_bind(
+        interaction: discord.Interaction,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Cette commande doit être utilisée sur un serveur.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "Cette commande est réservée au propriétaire du serveur.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(
+            ephemeral=True,
+        )
+
+        try:
+            status = await database_status_service.check()
+
+            if status.state != DatabaseState.READY:
+                await interaction.followup.send(
+                    (
+                        "La base de données doit être initialisée et à jour "
+                        "avant de pouvoir être liée à une application."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
+            await database_ownership_service.bind(
+                application_id,
+            )
+
+            owner_application_id = (
+                await database_ownership_service.get_owner_application_id()
+            )
+
+            if owner_application_id != application_id:
+                raise RuntimeError(
+                    "Database ownership binding completed with an unexpected owner."
+                )
+
+        except Exception as error:
+            await report_service.emit(
+                ReportEvent(
+                    event_type="database.bind.failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec de la liaison de la base de données",
+                    summary=(
+                        "Claviger n'a pas pu lier la base de données "
+                        "à l'application Discord actuelle."
+                    ),
+                    details=str(error),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await interaction.followup.send(
+                "Échec de la liaison de la base de données.",
+                ephemeral=True,
+            )
+            return
+
+        await report_service.emit(
+            ReportEvent(
+                event_type="database.bind.success",
+                severity=ReportSeverity.INFO,
+                title="Base de données liée",
+                summary=(
+                    "La base de données de Claviger est liée "
+                    "à l'application Discord actuelle."
+                ),
+                details=f"application_id: {application_id}",
+                guild_id=interaction.guild.id,
+                guild_label=interaction.guild.name,
+                actor_id=interaction.user.id,
+                actor_label=interaction.user.display_name,
+            )
+        )
+
+        await interaction.followup.send(
+            "Base de données liée à cette application Discord.",
             ephemeral=True,
         )
 

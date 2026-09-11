@@ -39,6 +39,9 @@ from claviger.reporting.service import ReportService
 from claviger.repositories.access_catalog_repository import (
     AccessCatalogRepository,
 )
+from claviger.repositories.database_ownership_repository import (
+    DatabaseOwnershipRepository,
+)
 from claviger.repositories.guild_policy_repository import (
     GuildPolicyRepository,
 )
@@ -65,6 +68,9 @@ from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
 from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
+from claviger.services.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 from claviger.services.discord_identity_service import DiscordIdentityService
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
@@ -122,6 +128,13 @@ class ClavigerBot(discord.Client):
 
         self.database = DatabaseConnection(
             get_database_path(),
+        )
+        self.database_ownership_repository = DatabaseOwnershipRepository(
+            self.database,
+        )
+
+        self.database_ownership_service = DatabaseOwnershipService(
+            self.database_ownership_repository,
         )
 
         self.database_schema = DatabaseSchema(
@@ -305,9 +318,11 @@ class ClavigerBot(discord.Client):
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,
+                self.database_ownership_service,
                 self.report_service,
                 command_name=identity.admin_command_name,
                 application_name=identity.application_name,
+                application_id=identity.application_id,
             ),
             guild=guild,
         )

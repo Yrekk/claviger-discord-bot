@@ -20,6 +20,9 @@ from claviger.services.catalog_next_coordinator_service import (
 from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
+from claviger.services.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
 )
@@ -94,6 +97,11 @@ def create_test_group(
     guild_policy_bootstrap_service: GuildPolicyBootstrapService | None = None,
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService | None = None,
     catalog_next_coordinator_service: CatalogNextCoordinatorService | None = None,
+    database_ownership_service: DatabaseOwnershipService | None = None,
+    *,
+    command_name: str = "claviger",
+    application_name: str = "Claviger",
+    application_id: int = 789,
 ):
     """Create Claviger's command group with mocked external services."""
 
@@ -152,6 +160,17 @@ def create_test_group(
         catalog_next_coordinator_service.get_next = AsyncMock()
         catalog_next_coordinator_service.update_metadata = AsyncMock()
 
+    if database_ownership_service is None:
+        database_ownership_service = Mock(
+            spec=DatabaseOwnershipService,
+        )
+
+        database_ownership_service.get_owner_application_id = AsyncMock(
+            return_value=application_id,
+        )
+
+        database_ownership_service.bind = AsyncMock()
+        database_ownership_service.validate = AsyncMock()
     role_classifier = RoleClassifier()
 
     group = create_claviger_group(
@@ -163,9 +182,11 @@ def create_test_group(
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
+        database_ownership_service=database_ownership_service,
         report_service=report_service,
-        command_name="claviger",
-        application_name="Claviger",
+        command_name=command_name,
+        application_name=application_name,
+        application_id=application_id,
     )
 
     return (

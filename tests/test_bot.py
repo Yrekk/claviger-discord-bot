@@ -69,6 +69,8 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.database is not None
     assert bot.database_schema is not None
     assert bot.database_status_service is not None
+    assert bot.database_ownership_repository is not None
+    assert bot.database_ownership_service is not None
 
     assert bot.guild_policy_repository is not None
     assert bot.policy_resolver is not None

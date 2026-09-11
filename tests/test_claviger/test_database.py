@@ -7,10 +7,14 @@ from claviger.database.status import (
     DatabaseStatus,
 )
 from claviger.reporting.event import ReportSeverity
+from claviger.services.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 from claviger.services.role_discovery import RoleDiscoveryService
 
 from .helpers import (
     create_interaction,
+    create_test_group,
     get_database_initialize_command,
     get_database_migrate_command,
     get_database_status_command,
@@ -194,7 +198,10 @@ async def test_database_initialize_creates_missing_database() -> None:
     assert event.severity == ReportSeverity.INFO
 
     interaction.followup.send.assert_awaited_once_with(
-        ("Base de données initialisée avec succès. Version du schéma : `2`."),
+        (
+            "Base de données initialisée et liée à cette application. "
+            "Version du schéma : `2`."
+        ),
         ephemeral=True,
     )
 
@@ -232,7 +239,11 @@ async def test_database_initialize_rejects_ready_database() -> None:
     report_service.emit.assert_not_awaited()
 
     interaction.followup.send.assert_awaited_once_with(
-        "La base de données est déjà initialisée et prête.",
+        (
+            "La base de données est déjà initialisée. "
+            "Utilise `/claviger database bind` "
+            "si son application propriétaire doit être vérifiée."
+        ),
         ephemeral=True,
     )
 
@@ -364,10 +375,10 @@ async def test_database_migrate_upgrades_outdated_database() -> None:
 
     assert event.event_type == "database.migrate.success"
     assert event.severity == ReportSeverity.INFO
-    assert event.details == "Schema version: 1 -> 2"
+    assert event.details == ("Schema version: 1 -> 2; application_id: 789")
 
     interaction.followup.send.assert_awaited_once_with(
-        "Base de données migrée avec succès : `1` → `2`.",
+        ("Base de données migrée et liée à cette application : `1` → `2`."),
         ephemeral=True,
     )
 
@@ -405,7 +416,11 @@ async def test_database_migrate_rejects_ready_database() -> None:
     report_service.emit.assert_not_awaited()
 
     interaction.followup.send.assert_awaited_once_with(
-        "La base de données est déjà à jour.",
+        (
+            "La base de données est déjà à jour. "
+            "Utilise `/claviger database bind` "
+            "si son application propriétaire doit être vérifiée."
+        ),
         ephemeral=True,
     )
 
@@ -483,5 +498,129 @@ async def test_database_migrate_rejects_non_owner() -> None:
 
     interaction.response.send_message.assert_awaited_once_with(
         "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_database_bind_assigns_current_application() -> None:
+    """Bind a ready database to the current Discord application."""
+
+    role_discovery_service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    role_discovery_service.get_hierarchy = AsyncMock()
+
+    ownership_service = Mock(
+        spec=DatabaseOwnershipService,
+    )
+    ownership_service.bind = AsyncMock()
+    ownership_service.get_owner_application_id = AsyncMock(
+        return_value=789,
+    )
+
+    (
+        group,
+        _,
+        _,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        database_ownership_service=ownership_service,
+        application_id=789,
+    )
+
+    database_group = group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    command = database_group.get_command(
+        "bind",
+    )
+
+    assert command is not None
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.READY,
+        current_version=8,
+        target_version=8,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    ownership_service.bind.assert_awaited_once_with(
+        789,
+    )
+
+    ownership_service.get_owner_application_id.assert_awaited_once()
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "database.bind.success"
+
+
+@pytest.mark.asyncio
+async def test_database_initialize_uses_dynamic_admin_command_name() -> None:
+    """Reference the current application's admin namespace in guidance."""
+
+    role_discovery_service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    role_discovery_service.get_hierarchy = AsyncMock()
+
+    (
+        group,
+        _,
+        database_schema,
+        database_status_service,
+        report_service,
+    ) = create_test_group(
+        role_discovery_service,
+        command_name="experimentum",
+        application_name="Experimentum",
+        application_id=789,
+    )
+
+    database_group = group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    command = database_group.get_command(
+        "initialize",
+    )
+
+    assert command is not None
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.MIGRATION_REQUIRED,
+        current_version=7,
+        target_version=8,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    database_schema.initialize.assert_not_awaited()
+    report_service.emit.assert_not_awaited()
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "La base de données existe déjà mais nécessite "
+            "une migration. Utilise `/experimentum database migrate`."
+        ),
         ephemeral=True,
     )
