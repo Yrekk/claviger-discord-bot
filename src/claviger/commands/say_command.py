@@ -5,7 +5,7 @@ from claviger.services.authorization import (
     AuthorizationService,
     Capability,
 )
-from claviger.services.say import (
+from claviger.services.say_service import (
     SayService,
     SayStyle,
 )
@@ -14,15 +14,19 @@ from claviger.services.say import (
 def create_say_command(
     authorization_service: AuthorizationService,
     say_service: SayService,
+    *,
+    bot_display_name: str,
 ) -> app_commands.Command:
     """Create the say command."""
 
     @app_commands.command(
         name="say",
-        description="Fait envoyer un message par Claviger dans le salon actuel.",
+        description=(
+            f"Fait envoyer un message par {bot_display_name} dans le salon actuel."
+        ),
     )
     @app_commands.describe(
-        message="Message que Claviger doit envoyer.",
+        message=f"Message que {bot_display_name} doit envoyer.",
         style="Style du message. Embed par défaut.",
     )
     @app_commands.choices(

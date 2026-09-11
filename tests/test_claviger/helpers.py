@@ -164,6 +164,8 @@ def create_test_group(
         database_schema=database_schema,
         database_status_service=database_status_service,
         report_service=report_service,
+        command_name="claviger",
+        application_name="Claviger",
     )
 
     return (

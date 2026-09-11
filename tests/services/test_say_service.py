@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.services.say import SayService, SayStyle
+from claviger.services.say_service import SayService, SayStyle
 
 
 def create_channel() -> Mock:

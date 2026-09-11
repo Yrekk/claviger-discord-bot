@@ -5,7 +5,7 @@ from discord import app_commands
 from claviger.commands.claviger_command import create_claviger_group
 from claviger.commands.member_command import create_member_command
 from claviger.commands.noctis_command import create_noctis_command
-from claviger.commands.say import create_say_command
+from claviger.commands.say_command import create_say_command
 
 # Config
 from claviger.config import (
@@ -19,6 +19,11 @@ from claviger.config import (
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import DatabaseStatusService
+
+# Models
+from claviger.models.discord_runtime_identity_model import (
+    DiscordRuntimeIdentity,
+)
 
 # Policies
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
@@ -40,11 +45,11 @@ from claviger.repositories.guild_policy_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
+
+# Services
 from claviger.services.adult_access_classifier import (
     AdultAccessClassifier,
 )
-
-# Services
 from claviger.services.adult_access_questionnaire_service import (
     AdultAccessQuestionnaireService,
 )
@@ -60,6 +65,7 @@ from claviger.services.catalog_sync_coordinator_service import (
     CatalogSyncCoordinatorService,
 )
 from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
+from claviger.services.discord_identity_service import DiscordIdentityService
 from claviger.services.guild_policy_bootstrap import (
     GuildPolicyBootstrapService,
 )
@@ -90,7 +96,7 @@ from claviger.services.role_channel_discovery_service import (
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.role_manager_service import RoleManager
-from claviger.services.say import SayService
+from claviger.services.say_service import SayService
 
 
 class ClavigerBot(discord.Client):
@@ -103,6 +109,9 @@ class ClavigerBot(discord.Client):
 
         self.guild_id = get_discord_guild_id()
         self.expected_bot_user_id = get_discord_bot_user_id()
+
+        self.discord_identity_service = DiscordIdentityService()
+        self.runtime_identity: DiscordRuntimeIdentity | None = None
 
         self.role_manager = RoleManager()
         self.role_discovery_service = RoleDiscoveryService()
@@ -147,7 +156,7 @@ class ClavigerBot(discord.Client):
         )
 
         self.member_workflow_coordinator_service = MemberWorkflowCoordinatorService(
-            questionnaire_service=(self.member_interest_questionnaire_service),
+            questionnaire_service=self.member_interest_questionnaire_service,
             planner_service=self.member_role_planner_service,
             executor_service=self.member_role_executor_service,
         )
@@ -224,14 +233,45 @@ class ClavigerBot(discord.Client):
             reporters=reporters,
         )
 
+    def _validate_authenticated_bot_identity(self) -> None:
+        """Ensure the authenticated Discord bot matches this environment."""
+
+        if self.user is None:
+            raise RuntimeError(
+                "Discord bot identity is unavailable before command synchronization."
+            )
+
+        if self.user.id != self.expected_bot_user_id:
+            raise RuntimeError(
+                "Authenticated Discord bot identity does not match configuration. "
+                f"Expected DISCORD_BOT_USER_ID={self.expected_bot_user_id}, "
+                f"but Discord authenticated user ID {self.user.id}."
+            )
+
+    def _register_guild_commands(
+        self,
+        identity: DiscordRuntimeIdentity,
+    ) -> None:
+        """Register guild commands using the resolved Discord identity."""
+
+        if identity.guild_id != self.guild_id:
+            raise RuntimeError(
+                "Discord runtime identity belongs to an unexpected guild."
+            )
+
         guild = discord.Object(
             id=self.guild_id,
+        )
+
+        self.tree.clear_commands(
+            guild=guild,
         )
 
         self.tree.add_command(
             create_say_command(
                 self.authorization_service,
                 self.say_service,
+                bot_display_name=identity.bot_display_name,
             ),
             guild=guild,
         )
@@ -266,27 +306,25 @@ class ClavigerBot(discord.Client):
                 self.database_schema,
                 self.database_status_service,
                 self.report_service,
+                command_name=identity.admin_command_name,
+                application_name=identity.application_name,
             ),
             guild=guild,
         )
 
-    def _validate_authenticated_bot_identity(self) -> None:
-        """Ensure the authenticated Discord bot matches this environment."""
-
-        if self.user is None:
-            raise RuntimeError(
-                "Discord bot identity is unavailable before command synchronization."
-            )
-
-        if self.user.id != self.expected_bot_user_id:
-            raise RuntimeError(
-                "Authenticated Discord bot identity does not match configuration. "
-                f"Expected DISCORD_BOT_USER_ID={self.expected_bot_user_id}, "
-                f"but Discord authenticated user ID {self.user.id}."
-            )
-
     async def setup_hook(self) -> None:
         self._validate_authenticated_bot_identity()
+
+        identity = await self.discord_identity_service.resolve(
+            self,
+            self.guild_id,
+        )
+
+        self.runtime_identity = identity
+
+        self._register_guild_commands(
+            identity,
+        )
 
         guild = discord.Object(
             id=self.guild_id,
@@ -302,5 +340,11 @@ class ClavigerBot(discord.Client):
         if self.user is None:
             return
 
-        print(f"Claviger connecté en tant que {self.user} ({self.user.id})")
+        if self.runtime_identity is None:
+            return
+
+        print(
+            f"{self.runtime_identity.application_name} connecté en tant que "
+            f"{self.runtime_identity.bot_display_name} ({self.user.id})"
+        )
         print(f"Serveurs accessibles : {len(self.guilds)}")

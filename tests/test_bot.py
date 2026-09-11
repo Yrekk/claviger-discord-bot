@@ -5,6 +5,9 @@ import pytest
 
 from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
+from claviger.models.discord_runtime_identity_model import (
+    DiscordRuntimeIdentity,
+)
 
 
 def _patch_bot_configuration(
@@ -53,6 +56,9 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.guild_id == 123
     assert bot.expected_bot_user_id == 456
 
+    assert bot.discord_identity_service is not None
+    assert bot.runtime_identity is None
+
     assert bot.role_manager is not None
     assert bot.role_discovery_service is not None
     assert bot.authorization_service is not None
@@ -91,25 +97,19 @@ def test_claviger_bot_composition(monkeypatch, tmp_path) -> None:
     assert bot.noctis_role_executor_service is not None
     assert bot.noctis_workflow_coordinator_service is not None
 
-    commands = {
-        command.name
-        for command in bot.tree.get_commands(
-            guild=bot_module.discord.Object(id=123),
-        )
-    }
+    commands = bot.tree.get_commands(
+        guild=bot_module.discord.Object(id=123),
+    )
 
-    assert "say" in commands
-    assert "membre" in commands
-    assert "noctis" in commands
-    assert "claviger" in commands
+    assert commands == []
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_syncs_when_bot_identity_matches(
+async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Synchronize commands only when Discord authenticated the expected bot."""
+    """Resolve runtime identity before registering and synchronizing commands."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -123,6 +123,25 @@ async def test_setup_hook_syncs_when_bot_identity_matches(
         id=456,
     )
 
+    identity = DiscordRuntimeIdentity(
+        application_id=789,
+        application_name="Experimentum",
+        bot_user_id=456,
+        guild_id=123,
+        bot_display_name="Vespera DEV",
+        admin_command_name="experimentum",
+    )
+
+    resolve = AsyncMock(
+        return_value=identity,
+    )
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve",
+        resolve,
+    )
+
     sync = AsyncMock(
         return_value=[],
     )
@@ -134,6 +153,37 @@ async def test_setup_hook_syncs_when_bot_identity_matches(
     )
 
     await bot.setup_hook()
+
+    resolve.assert_awaited_once_with(
+        bot,
+        123,
+    )
+
+    assert bot.runtime_identity == identity
+
+    commands = {
+        command.name: command
+        for command in bot.tree.get_commands(
+            guild=bot_module.discord.Object(id=123),
+        )
+    }
+
+    assert set(commands) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    assert "claviger" not in commands
+
+    assert commands["say"].description == (
+        "Fait envoyer un message par Vespera DEV dans le salon actuel."
+    )
+
+    assert commands["experimentum"].description == (
+        "Commandes d'administration de Experimentum."
+    )
 
     sync.assert_awaited_once()
 
@@ -161,6 +211,14 @@ async def test_setup_hook_rejects_unexpected_bot_identity_before_sync(
         id=999,
     )
 
+    resolve = AsyncMock()
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve",
+        resolve,
+    )
+
     sync = AsyncMock(
         return_value=[],
     )
@@ -177,6 +235,7 @@ async def test_setup_hook_rejects_unexpected_bot_identity_before_sync(
     ):
         await bot.setup_hook()
 
+    resolve.assert_not_awaited()
     sync.assert_not_awaited()
 
 
@@ -197,6 +256,14 @@ async def test_setup_hook_rejects_missing_authenticated_identity(
 
     bot._connection.user = None
 
+    resolve = AsyncMock()
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve",
+        resolve,
+    )
+
     sync = AsyncMock(
         return_value=[],
     )
@@ -213,4 +280,5 @@ async def test_setup_hook_rejects_missing_authenticated_identity(
     ):
         await bot.setup_hook()
 
+    resolve.assert_not_awaited()
     sync.assert_not_awaited()

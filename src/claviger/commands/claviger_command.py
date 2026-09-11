@@ -30,12 +30,15 @@ def create_claviger_group(
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
     report_service: ReportService,
+    *,
+    command_name: str,
+    application_name: str,
 ) -> app_commands.Group:
-    """Create Claviger's administrative command group."""
+    """Create the application's administrative command group."""
 
-    claviger_group = app_commands.Group(
-        name="claviger",
-        description="Commandes d'administration de Claviger.",
+    admin_group = app_commands.Group(
+        name=command_name,
+        description=f"Commandes d'administration de {application_name}.",
     )
 
     report_group = create_report_group(
@@ -69,20 +72,20 @@ def create_claviger_group(
         report_service,
     )
 
-    claviger_group.add_command(
+    admin_group.add_command(
         roles_group,
     )
-    claviger_group.add_command(
+    admin_group.add_command(
         catalog_group,
     )
-    claviger_group.add_command(
+    admin_group.add_command(
         report_group,
     )
-    claviger_group.add_command(
+    admin_group.add_command(
         database_group,
     )
-    claviger_group.add_command(
+    admin_group.add_command(
         guild_group,
     )
 
-    return claviger_group
+    return admin_group

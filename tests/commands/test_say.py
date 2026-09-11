@@ -3,12 +3,12 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.commands.say import create_say_command
+from claviger.commands.say_command import create_say_command
 from claviger.services.authorization import (
     AuthorizationService,
     Capability,
 )
-from claviger.services.say import (
+from claviger.services.say_service import (
     SayService,
     SayStyle,
 )
@@ -91,6 +91,7 @@ async def test_say_rejects_interaction_outside_guild(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -120,6 +121,7 @@ async def test_say_rejects_non_text_channel(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -153,6 +155,7 @@ async def test_say_rejects_unauthorized_user(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -186,6 +189,7 @@ async def test_say_uses_current_channel_with_embed_style_by_default(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -224,6 +228,7 @@ async def test_say_allows_plain_style_with_permission(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -271,6 +276,7 @@ async def test_say_rejects_plain_style_without_permission(
     command = create_say_command(
         authorization_service,
         say_service,
+        bot_display_name="Vespera",
     )
 
     interaction = create_interaction()
@@ -287,3 +293,27 @@ async def test_say_rejects_plain_style_without_permission(
         ("Vous n'êtes pas autorisé à envoyer un message sans signature visuelle."),
         ephemeral=True,
     )
+
+
+def test_say_uses_bot_display_name_in_discord_metadata(
+    authorization_service: Mock,
+    say_service: Mock,
+) -> None:
+    """Expose the guild bot display name in the say command metadata."""
+
+    command = create_say_command(
+        authorization_service,
+        say_service,
+        bot_display_name="Vespera",
+    )
+
+    assert command.name == "say"
+    assert command.description == (
+        "Fait envoyer un message par Vespera dans le salon actuel."
+    )
+
+    message_parameter = next(
+        parameter for parameter in command.parameters if parameter.name == "message"
+    )
+
+    assert message_parameter.description == "Message que Vespera doit envoyer."
