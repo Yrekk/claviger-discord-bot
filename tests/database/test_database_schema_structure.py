@@ -83,6 +83,7 @@ async def test_initialize_creates_expected_tables(
         "guild_context_definitions",
         "guild_workflow_contexts",
         "database_ownership",
+        "guild_admin_configuration",
     }.issubset(table_names)
 
 
@@ -222,6 +223,7 @@ async def test_workflow_table_has_expected_columns(
         "channel_mode",
         "sort_order",
         "enabled",
+        "category_id",
     }
 
 
@@ -328,4 +330,25 @@ async def test_database_ownership_table_has_expected_columns(
     ) == {
         "singleton_id",
         "application_id",
+    }
+
+
+async def test_admin_configuration_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the guild-specific administrative routing schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "guild_admin_configuration",
+    ) == {
+        "guild_id",
+        "category_id",
+        "command_channel_id",
+        "activity_forum_id",
+        "error_forum_id",
     }

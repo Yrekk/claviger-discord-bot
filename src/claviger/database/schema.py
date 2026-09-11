@@ -4,7 +4,7 @@ import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
 
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -356,6 +356,38 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             application_id INTEGER NOT NULL
                 CHECK (application_id > 0)
         )
+        """,
+    ),
+    9: (
+        """
+        CREATE TABLE guild_admin_configuration (
+            guild_id INTEGER PRIMARY KEY
+                CHECK (guild_id > 0),
+
+            category_id INTEGER NOT NULL
+                CHECK (category_id > 0),
+
+            command_channel_id INTEGER NOT NULL
+                CHECK (command_channel_id > 0),
+
+            activity_forum_id INTEGER NOT NULL
+                CHECK (activity_forum_id > 0),
+
+            error_forum_id INTEGER NOT NULL
+                CHECK (error_forum_id > 0),
+
+            CHECK (
+                activity_forum_id != error_forum_id
+            )
+        )
+        """,
+        """
+        ALTER TABLE guild_workflows
+        ADD COLUMN category_id INTEGER
+            CHECK (
+                category_id IS NULL
+                OR category_id > 0
+            )
         """,
     ),
 }
