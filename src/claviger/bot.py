@@ -470,7 +470,7 @@ class ClavigerBot(discord.Client):
 
         self._validate_authenticated_bot_identity()
 
-        logger.info(
+        logger.debug(
             "Timing startup — validation identité authentifiée : %.3f s",
             perf_counter() - step_started,
         )
@@ -482,7 +482,7 @@ class ClavigerBot(discord.Client):
             self.guild_id,
         )
 
-        logger.info(
+        logger.debug(
             "Timing startup — résolution identité Discord : %.3f s",
             perf_counter() - step_started,
         )
@@ -493,7 +493,7 @@ class ClavigerBot(discord.Client):
             identity,
         )
 
-        logger.info(
+        logger.debug(
             "Timing startup — validation base / ownership : %.3f s",
             perf_counter() - step_started,
         )
@@ -507,7 +507,7 @@ class ClavigerBot(discord.Client):
             database_operational=database_operational,
         )
 
-        logger.info(
+        logger.debug(
             "Timing startup — construction arbre local : %.3f s",
             perf_counter() - step_started,
         )
@@ -548,7 +548,7 @@ class ClavigerBot(discord.Client):
                 len(synced),
             )
 
-        logger.info(
+        logger.debug(
             "Timing startup — synchronisation Discord : %.3f s%s",
             perf_counter() - step_started,
             " (ignorée)" if tree_is_unchanged else "",
@@ -556,7 +556,7 @@ class ClavigerBot(discord.Client):
 
         self.command_tree_signature = current_signature
 
-        logger.info(
+        logger.debug(
             "Timing startup — setup_hook total : %.3f s",
             perf_counter() - setup_started,
         )

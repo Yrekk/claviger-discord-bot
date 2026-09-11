@@ -3,7 +3,10 @@ import logging
 import discord
 
 from claviger.bot import ClavigerBot
-from claviger.config import get_discord_token
+from claviger.config import (
+    get_discord_token,
+    get_log_level,
+)
 from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 logger = logging.getLogger(__name__)
@@ -12,9 +15,23 @@ logger = logging.getLogger(__name__)
 def configure_logging() -> None:
     """Configure application-wide console logging once per process."""
 
+    claviger_level = get_log_level()
+
     discord.utils.setup_logging(
         level=logging.INFO,
         root=True,
+    )
+
+    logging.getLogger(
+        "claviger",
+    ).setLevel(
+        claviger_level,
+    )
+
+    logging.getLogger(
+        "discord",
+    ).setLevel(
+        logging.INFO,
     )
 
 

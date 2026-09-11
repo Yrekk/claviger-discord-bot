@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -10,6 +11,12 @@ SUPPORTED_ENVIRONMENTS = frozenset(
         "production",
     }
 )
+SUPPORTED_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+}
+
+DEFAULT_LOG_LEVEL_NAME = "INFO"
 
 DEFAULT_SELECTOR_PATH = Path(".env")
 
@@ -249,6 +256,41 @@ def get_environment_name(
     )
 
     return environment
+
+
+def get_log_level(
+    selector_path: Path = DEFAULT_SELECTOR_PATH,
+) -> int:
+    """Return the configured Claviger application log level."""
+
+    environment, values = _load_environment_values(
+        selector_path,
+    )
+
+    raw_value = values.get(
+        "CLAVIGER_LOG_LEVEL",
+    )
+
+    if raw_value is None or not raw_value.strip():
+        level_name = DEFAULT_LOG_LEVEL_NAME
+    else:
+        level_name = raw_value.strip().upper()
+
+    level = SUPPORTED_LOG_LEVELS.get(
+        level_name,
+    )
+
+    if level is None:
+        supported = ", ".join(
+            sorted(SUPPORTED_LOG_LEVELS),
+        )
+
+        raise RuntimeError(
+            f"Unsupported CLAVIGER_LOG_LEVEL '{level_name}' for the "
+            f"'{environment}' environment. Expected one of: {supported}."
+        )
+
+    return level
 
 
 def get_discord_token(
