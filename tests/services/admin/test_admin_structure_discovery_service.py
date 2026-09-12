@@ -15,6 +15,7 @@ def _permissions(
     *,
     view_channel: bool,
     send_messages: bool = False,
+    create_public_threads: bool = False,
 ) -> discord.Permissions:
     """Create deterministic effective Discord permissions."""
 
@@ -23,6 +24,7 @@ def _permissions(
     permissions.update(
         view_channel=view_channel,
         send_messages=send_messages,
+        create_public_threads=create_public_threads,
     )
 
     return permissions
@@ -33,6 +35,7 @@ def _permission_resolver(
     everyone_can_view: bool,
     bot_can_view: bool,
     bot_can_send: bool,
+    bot_can_create_public_threads: bool = False,
 ):
     """Build a permissions_for side effect for Discord channel mocks."""
 
@@ -48,6 +51,7 @@ def _permission_resolver(
             return _permissions(
                 view_channel=bot_can_view,
                 send_messages=bot_can_send,
+                create_public_threads=bot_can_create_public_threads,
             )
 
         return discord.Permissions.none()
@@ -88,6 +92,7 @@ def _create_forum_channel(
     everyone_can_view: bool = False,
     bot_can_view: bool = True,
     bot_can_send: bool = True,
+    bot_can_create_public_threads: bool = False,
 ) -> MagicMock:
     """Create one Discord forum channel mock."""
 
@@ -102,6 +107,7 @@ def _create_forum_channel(
         everyone_can_view=everyone_can_view,
         bot_can_view=bot_can_view,
         bot_can_send=bot_can_send,
+        bot_can_create_public_threads=bot_can_create_public_threads,
     )
 
     return channel
@@ -511,3 +517,71 @@ def test_discover_requires_claviger_guild_member() -> None:
         AdminStructureDiscoveryService().discover(
             guild,
         )
+
+
+def test_forum_is_usable_with_send_messages_without_create_public_threads() -> None:
+    """Use Discord forum-post permissions rather than text-thread permissions."""
+
+    forum = _create_forum_channel(
+        channel_id=201,
+        name="activity",
+        bot_can_send=True,
+        bot_can_create_public_threads=False,
+    )
+
+    category = _create_category(
+        category_id=100,
+        name="admin",
+        children=[forum],
+    )
+
+    guild = _create_guild(
+        channels=[category],
+    )
+
+    candidate = (
+        AdminStructureDiscoveryService()
+        .discover(
+            guild,
+        )
+        .single_candidate
+    )
+
+    assert candidate is not None
+    assert len(candidate.forum_channels) == 1
+    assert candidate.forum_channels[0].bot_usable is True
+
+
+def test_create_public_threads_does_not_make_forum_usable_without_send_messages() -> (
+    None
+):
+    """Reject forum posting when Discord's SEND_MESSAGES permission is absent."""
+
+    forum = _create_forum_channel(
+        channel_id=201,
+        name="activity",
+        bot_can_send=False,
+        bot_can_create_public_threads=True,
+    )
+
+    category = _create_category(
+        category_id=100,
+        name="admin",
+        children=[forum],
+    )
+
+    guild = _create_guild(
+        channels=[category],
+    )
+
+    candidate = (
+        AdminStructureDiscoveryService()
+        .discover(
+            guild,
+        )
+        .single_candidate
+    )
+
+    assert candidate is not None
+    assert len(candidate.forum_channels) == 1
+    assert candidate.forum_channels[0].bot_usable is False
