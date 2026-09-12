@@ -547,6 +547,8 @@ async def test_database_bind_assigns_current_application() -> None:
         role_discovery_service,
         database_ownership_service=ownership_service,
         application_id=789,
+        database_state=DatabaseState.READY,
+        database_ownership_bound=False,
     )
 
     database_group = group.get_command(
@@ -615,6 +617,8 @@ async def test_database_initialize_uses_dynamic_admin_command_name() -> None:
         command_name="experimentum",
         application_name="Experimentum",
         application_id=789,
+        database_state=DatabaseState.MISSING,
+        database_ownership_bound=False,
     )
 
     database_group = group.get_command(

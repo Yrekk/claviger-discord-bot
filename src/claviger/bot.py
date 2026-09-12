@@ -26,6 +26,7 @@ from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
+    DatabaseStatus,
     DatabaseStatusService,
 )
 
@@ -292,10 +293,9 @@ class ClavigerBot(discord.Client):
     async def _database_is_operational(
         self,
         identity: DiscordRuntimeIdentity,
+        status: DatabaseStatus,
     ) -> bool:
         """Return whether database-backed commands may be exposed."""
-
-        status = await self.database_status_service.check()
 
         if status.state != DatabaseState.READY:
             return False
@@ -304,6 +304,7 @@ class ClavigerBot(discord.Client):
             await self.database_ownership_service.validate(
                 identity.application_id,
             )
+
         except DatabaseOwnershipUnboundError:
             return False
 
@@ -391,6 +392,7 @@ class ClavigerBot(discord.Client):
         self,
         identity: DiscordRuntimeIdentity,
         *,
+        database_status: DatabaseStatus,
         database_operational: bool,
     ) -> None:
         """Register commands allowed by the current runtime state."""
@@ -452,6 +454,8 @@ class ClavigerBot(discord.Client):
                 command_name=identity.admin_command_name,
                 application_name=identity.application_name,
                 application_id=identity.application_id,
+                database_state=database_status.state,
+                database_ownership_bound=database_operational,
                 restart_callback=self.request_restart,
                 maintenance_only=not database_operational,
             ),
@@ -489,8 +493,11 @@ class ClavigerBot(discord.Client):
 
         step_started = perf_counter()
 
+        database_status = await self.database_status_service.check()
+
         database_operational = await self._database_is_operational(
             identity,
+            database_status,
         )
 
         logger.debug(
@@ -504,6 +511,7 @@ class ClavigerBot(discord.Client):
 
         self._register_guild_commands(
             identity,
+            database_status=database_status,
             database_operational=database_operational,
         )
 

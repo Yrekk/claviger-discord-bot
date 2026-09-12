@@ -10,7 +10,10 @@ from claviger.commands.restart_command import (
 )
 from claviger.commands.roles import create_roles_group
 from claviger.database.schema import DatabaseSchema
-from claviger.database.status import DatabaseStatusService
+from claviger.database.status import (
+    DatabaseState,
+    DatabaseStatusService,
+)
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
 from claviger.services.catalog_next_coordinator_service import (
@@ -25,6 +28,47 @@ from claviger.services.database_ownership_service import (
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
+
+
+def _configure_database_command_availability(
+    database_group: app_commands.Group,
+    *,
+    database_state: DatabaseState,
+    database_ownership_bound: bool,
+) -> None:
+    """Expose only database actions that make sense for the current state."""
+
+    available_commands = {
+        "status",
+    }
+
+    if database_state in (
+        DatabaseState.MISSING,
+        DatabaseState.UNINITIALIZED,
+    ):
+        available_commands.add(
+            "initialize",
+        )
+
+    elif database_state == DatabaseState.MIGRATION_REQUIRED:
+        available_commands.add(
+            "migrate",
+        )
+
+    elif database_state == DatabaseState.READY and not database_ownership_bound:
+        available_commands.add(
+            "bind",
+        )
+
+    for command_name in (
+        "initialize",
+        "migrate",
+        "bind",
+    ):
+        if command_name not in available_commands:
+            database_group.remove_command(
+                command_name,
+            )
 
 
 def create_claviger_group(
@@ -42,6 +86,8 @@ def create_claviger_group(
     command_name: str,
     application_name: str,
     application_id: int,
+    database_state: DatabaseState,
+    database_ownership_bound: bool,
     restart_callback: RestartCallback,
     maintenance_only: bool = False,
 ) -> app_commands.Group:
@@ -59,6 +105,12 @@ def create_claviger_group(
         report_service,
         application_id=application_id,
         admin_command_name=command_name,
+    )
+
+    _configure_database_command_availability(
+        database_group,
+        database_state=database_state,
+        database_ownership_bound=database_ownership_bound,
     )
 
     restart_command = create_restart_command(

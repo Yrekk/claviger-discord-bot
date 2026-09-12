@@ -102,6 +102,8 @@ def create_test_group(
     command_name: str = "claviger",
     application_name: str = "Claviger",
     application_id: int = 789,
+    database_state: DatabaseState = DatabaseState.READY,
+    database_ownership_bound: bool = True,
 ):
     """Create Claviger's command group with mocked external services."""
 
@@ -126,8 +128,16 @@ def create_test_group(
 
     database_status_service.check = AsyncMock(
         return_value=DatabaseStatus(
-            state=DatabaseState.READY,
-            current_version=2,
+            state=database_state,
+            current_version=(
+                2
+                if database_state
+                not in (
+                    DatabaseState.MISSING,
+                    DatabaseState.UNINITIALIZED,
+                )
+                else (0 if database_state == DatabaseState.UNINITIALIZED else None)
+            ),
             target_version=2,
         )
     )
@@ -166,11 +176,12 @@ def create_test_group(
         )
 
         database_ownership_service.get_owner_application_id = AsyncMock(
-            return_value=application_id,
+            return_value=(application_id if database_ownership_bound else None),
         )
 
         database_ownership_service.bind = AsyncMock()
         database_ownership_service.validate = AsyncMock()
+
     role_classifier = RoleClassifier()
 
     restart_callback = AsyncMock()
@@ -189,6 +200,8 @@ def create_test_group(
         command_name=command_name,
         application_name=application_name,
         application_id=application_id,
+        database_state=database_state,
+        database_ownership_bound=database_ownership_bound,
         restart_callback=restart_callback,
     )
 
@@ -316,6 +329,8 @@ def get_database_initialize_command(
         report_service,
     ) = create_test_group(
         role_discovery_service,
+        database_state=DatabaseState.MISSING,
+        database_ownership_bound=False,
     )
 
     database_group = group.get_command(
@@ -351,6 +366,8 @@ def get_database_migrate_command(
         report_service,
     ) = create_test_group(
         role_discovery_service,
+        database_state=DatabaseState.MIGRATION_REQUIRED,
+        database_ownership_bound=False,
     )
 
     database_group = group.get_command(

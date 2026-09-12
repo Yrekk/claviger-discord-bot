@@ -248,6 +248,16 @@ async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
 
     admin_group = commands["experimentum"]
 
+    database_group = admin_group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+
+    assert {command.name for command in database_group.commands} == {
+        "status",
+    }
+
     assert {command.name for command in admin_group.commands} == {
         "roles",
         "catalog",
@@ -356,8 +366,6 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
     assert {command.name for command in database_group.commands} == {
         "status",
         "initialize",
-        "migrate",
-        "bind",
     }
 
     sync.assert_awaited_once()
@@ -471,8 +479,6 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
 
     assert {command.name for command in database_group.commands} == {
         "status",
-        "initialize",
-        "migrate",
         "bind",
     }
 
