@@ -94,6 +94,7 @@ async def _insert_workflow(
     command_name: str = "membre",
     policy_key: str = "public",
     channel_mode: str = "restricted",
+    category_id: int | None = None,
     sort_order: int = 0,
     enabled: bool = True,
 ) -> None:
@@ -111,10 +112,11 @@ async def _insert_workflow(
                 description,
                 policy_key,
                 channel_mode,
+                category_id,
                 sort_order,
                 enabled
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 guild_id,
@@ -125,6 +127,7 @@ async def _insert_workflow(
                 f"{workflow_key.title()} workflow.",
                 policy_key,
                 channel_mode,
+                category_id,
                 sort_order,
                 enabled,
             ),
@@ -657,3 +660,26 @@ async def test_get_hydrates_workflow_contexts(
             enabled=True,
         ),
     )
+
+
+async def test_repository_hydrates_workflow_category_id(
+    tmp_path: Path,
+) -> None:
+    """Expose the Discord category associated with a workflow."""
+
+    database, repository = await _create_repository(
+        tmp_path,
+    )
+
+    await _insert_workflow(
+        database,
+        category_id=987654321,
+    )
+
+    result = await repository.get(
+        guild_id=123,
+        workflow_key="member",
+    )
+
+    assert result is not None
+    assert result.category_id == 987654321

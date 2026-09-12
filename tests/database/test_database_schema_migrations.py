@@ -120,13 +120,19 @@ async def _prepare_historical_database(
 
     async with database.connect() as connection:
         if version >= 2:
-            await connection.execute(GUILD_SETTINGS_V2_SQL)
+            await connection.execute(
+                GUILD_SETTINGS_V2_SQL,
+            )
 
         if version >= 3:
-            await connection.execute(GUILD_MEMBER_INTERESTS_V3_SQL)
+            await connection.execute(
+                GUILD_MEMBER_INTERESTS_V3_SQL,
+            )
 
         if version >= 4:
-            await connection.execute(GUILD_ADULT_ACCESSES_V4_SQL)
+            await connection.execute(
+                GUILD_ADULT_ACCESSES_V4_SQL,
+            )
 
         if version >= 5:
             await connection.execute(
@@ -145,6 +151,12 @@ async def _prepare_historical_database(
 
         if version >= 7:
             for statement in MIGRATIONS[7]:
+                await connection.execute(
+                    statement,
+                )
+
+        if version >= 8:
+            for statement in MIGRATIONS[8]:
                 await connection.execute(
                     statement,
                 )
@@ -359,3 +371,124 @@ async def test_migrate_upgrades_version_five_database_to_current_schema(
         "guild_workflow_catalogs",
         "guild_workflow_channels",
     }.issubset(table_names)
+
+
+async def test_migrate_version_eight_database_to_version_nine_preserves_data(
+    tmp_path: Path,
+) -> None:
+    """Add V9 admin structure fields without losing V8 application data."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger-v8.db",
+    )
+
+    await _prepare_historical_database(
+        database,
+        version=8,
+    )
+
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            INSERT INTO database_ownership (
+                singleton_id,
+                application_id
+            )
+            VALUES (?, ?)
+            """,
+            (
+                1,
+                789,
+            ),
+        )
+
+        await connection.execute(
+            """
+            INSERT INTO guild_workflows (
+                guild_id,
+                workflow_key,
+                command_name,
+                command_description,
+                title,
+                description,
+                policy_key,
+                channel_mode,
+                sort_order,
+                enabled
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                123,
+                "member",
+                "membre",
+                "Configure member.",
+                "Member",
+                "Member workflow.",
+                "public",
+                "restricted",
+                10,
+                1,
+            ),
+        )
+
+        await connection.commit()
+
+    schema = DatabaseSchema(
+        database,
+    )
+
+    await schema.migrate()
+
+    assert await schema.get_version() == CURRENT_SCHEMA_VERSION
+
+    table_names = await _get_table_names(
+        database,
+    )
+
+    assert "guild_admin_configuration" in table_names
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_workflows)")
+
+        workflow_columns = {row[1] for row in await cursor.fetchall()}
+
+        cursor = await connection.execute(
+            """
+            SELECT
+                guild_id,
+                workflow_key,
+                command_name,
+                category_id
+            FROM guild_workflows
+            WHERE guild_id = ?
+              AND workflow_key = ?
+            """,
+            (
+                123,
+                "member",
+            ),
+        )
+
+        workflow_row = await cursor.fetchone()
+
+        cursor = await connection.execute(
+            """
+            SELECT application_id
+            FROM database_ownership
+            WHERE singleton_id = 1
+            """
+        )
+
+        ownership_row = await cursor.fetchone()
+
+    assert "category_id" in workflow_columns
+
+    assert workflow_row == (
+        123,
+        "member",
+        "membre",
+        None,
+    )
+
+    assert ownership_row == (789,)

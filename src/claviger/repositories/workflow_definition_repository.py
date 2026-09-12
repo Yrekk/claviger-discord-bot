@@ -82,6 +82,7 @@ class WorkflowDefinitionRepository:
                         description,
                         policy_key,
                         channel_mode,
+                        category_id,
                         sort_order,
                         enabled
                     FROM guild_workflows
@@ -142,11 +143,12 @@ class WorkflowDefinitionRepository:
                         description,
                         policy_key,
                         channel_mode,
+                        category_id,
                         sort_order,
                         enabled
                     FROM guild_workflows
                     WHERE guild_id = ?
-                      AND {column_name} = ?
+                    AND {column_name} = ?
                     """,
                     (
                         guild_id,
@@ -176,9 +178,13 @@ class WorkflowDefinitionRepository:
     ) -> WorkflowDefinition:
         """Load channels, contexts and catalogs belonging to one workflow."""
 
-        guild_id = int(row["guild_id"])
+        guild_id = int(
+            row["guild_id"],
+        )
 
-        workflow_key = str(row["workflow_key"])
+        workflow_key = str(
+            row["workflow_key"],
+        )
 
         channel_ids = await self._load_channel_ids(
             connection,
@@ -198,6 +204,14 @@ class WorkflowDefinitionRepository:
             workflow_key=workflow_key,
         )
 
+        category_id = (
+            int(
+                row["category_id"],
+            )
+            if row["category_id"] is not None
+            else None
+        )
+
         return WorkflowDefinition(
             guild_id=guild_id,
             workflow_key=workflow_key,
@@ -211,9 +225,12 @@ class WorkflowDefinitionRepository:
                 row["channel_mode"],
             ),
             sort_order=row["sort_order"],
-            enabled=bool(row["enabled"]),
+            enabled=bool(
+                row["enabled"],
+            ),
             channel_ids=channel_ids,
             catalogs=catalogs,
+            category_id=category_id,
             contexts=contexts,
         )
 
