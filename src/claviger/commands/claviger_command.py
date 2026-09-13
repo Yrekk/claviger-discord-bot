@@ -1,6 +1,9 @@
 from discord import app_commands
 
 from claviger.commands.catalog_command import create_catalog_group
+from claviger.commands.config_server_command import (
+    create_config_server_command,
+)
 from claviger.commands.database_command import create_database_group
 from claviger.commands.guild import create_guild_group
 from claviger.commands.report import create_report_group
@@ -16,6 +19,9 @@ from claviger.database.status import (
 )
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
+from claviger.services.admin_configuration_coordinator_service import (
+    AdminConfigurationCoordinatorService,
+)
 from claviger.services.catalog_next_coordinator_service import (
     CatalogNextCoordinatorService,
 )
@@ -83,6 +89,7 @@ def create_claviger_group(
     database_ownership_service: DatabaseOwnershipService,
     report_service: ReportService,
     *,
+    admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
     command_name: str,
     application_name: str,
     application_id: int,
@@ -117,12 +124,23 @@ def create_claviger_group(
         restart_callback,
     )
 
+    config_server_command = create_config_server_command(
+        admin_configuration_coordinator_service,
+        admin_command_name=command_name,
+        database_state=database_state,
+        database_ownership_bound=database_ownership_bound,
+    )
+
     admin_group.add_command(
         database_group,
     )
 
     admin_group.add_command(
         restart_command,
+    )
+
+    admin_group.add_command(
+        config_server_command,
     )
 
     if maintenance_only:

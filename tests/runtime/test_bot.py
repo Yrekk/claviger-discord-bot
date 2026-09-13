@@ -265,6 +265,7 @@ async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
         "database",
         "guild",
         "restart",
+        "config-server",
     }
 
     sync.assert_awaited_once()
@@ -355,6 +356,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
     assert {command.name for command in admin_group.commands} == {
         "database",
         "restart",
+        "config-server",
     }
 
     database_group = admin_group.get_command(
@@ -469,6 +471,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
     assert {command.name for command in admin_group.commands} == {
         "database",
         "restart",
+        "config-server",
     }
 
     database_group = admin_group.get_command(

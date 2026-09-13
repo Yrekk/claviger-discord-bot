@@ -1,0 +1,310 @@
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+
+from claviger.database.status import DatabaseState
+from claviger.models.admin_configuration_coordination_model import (
+    AdminConfigurationCoordinationResult,
+)
+from claviger.models.admin_configuration_reconciliation_model import (
+    AdminConfigurationReconciliationDecision,
+    AdminConfigurationReconciliationResult,
+)
+from claviger.models.admin_structure_provisioning_model import (
+    AdminStructureProvisioningResult,
+)
+from claviger.models.guild_admin_configuration_model import (
+    GuildAdminConfiguration,
+)
+from claviger.services.role_discovery import RoleDiscoveryService
+
+from .helpers import (
+    create_interaction,
+    get_config_server_command,
+)
+
+
+def _role_discovery_service() -> Mock:
+    """Create one unused role discovery dependency."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+
+    service.get_hierarchy = AsyncMock()
+
+    return service
+
+
+def _configuration() -> GuildAdminConfiguration:
+    """Create one complete deterministic ADMIN configuration."""
+
+    return GuildAdminConfiguration(
+        guild_id=123,
+        category_id=100,
+        command_channel_id=200,
+        activity_forum_id=201,
+        error_forum_id=202,
+    )
+
+
+def _coordination_result(
+    decision: AdminConfigurationReconciliationDecision,
+    *,
+    configuration_after: GuildAdminConfiguration | None = None,
+    configuration_updated: bool = False,
+    changed: bool = False,
+) -> AdminConfigurationCoordinationResult:
+    """Create one deterministic config-server backend result."""
+
+    reconciliation = AdminConfigurationReconciliationResult(
+        decision=decision,
+        category=None,
+    )
+
+    provisioning = AdminStructureProvisioningResult(
+        guild_id=123,
+        decision=decision,
+        category_id=100,
+        created_category=changed,
+        configuration=configuration_after,
+    )
+
+    return AdminConfigurationCoordinationResult(
+        guild_id=123,
+        configuration_before=None,
+        configuration_after=configuration_after,
+        reconciliation=reconciliation,
+        provisioning=provisioning,
+        configuration_updated=configuration_updated,
+    )
+
+
+@pytest.mark.asyncio
+async def test_config_server_requires_guild() -> None:
+    """Reject config-server outside a Discord guild."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    interaction = create_interaction()
+    interaction.guild = None
+
+    await command.callback(
+        interaction,
+    )
+
+    coordinator.configure.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande doit être utilisée sur un serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_config_server_requires_guild_owner() -> None:
+    """Restrict structural server configuration to the guild owner."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    interaction = create_interaction(
+        owner_id=42,
+        user_id=84,
+    )
+
+    await command.callback(
+        interaction,
+    )
+
+    coordinator.configure.assert_not_awaited()
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Cette commande est réservée au propriétaire du serveur.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_config_server_requires_ready_database() -> None:
+    """Keep config-server visible but safe while database maintenance is required."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+        database_state=DatabaseState.MIGRATION_REQUIRED,
+        database_ownership_bound=False,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    coordinator.configure.assert_not_awaited()
+
+    message = interaction.response.send_message.await_args.args[0]
+
+    assert "/claviger database status" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_requires_database_ownership() -> None:
+    """Never configure a guild through an unbound application database."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+        database_state=DatabaseState.READY,
+        database_ownership_bound=False,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    coordinator.configure.assert_not_awaited()
+
+    message = interaction.response.send_message.await_args.args[0]
+
+    assert "/claviger database bind" in message
+    assert "/claviger restart" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_create_runs_current_guild_configuration() -> None:
+    """Create and persist ADMIN structure through the current interaction guild."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    coordinator.configure.return_value = _coordination_result(
+        AdminConfigurationReconciliationDecision.CREATE,
+        configuration_after=_configuration(),
+        configuration_updated=True,
+        changed=True,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    interaction.response.defer.assert_awaited_once_with(
+        ephemeral=True,
+    )
+
+    coordinator.configure.assert_awaited_once_with(
+        interaction.guild,
+    )
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "créée avec succès" in message
+    assert "routage" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_keep_reports_valid_configuration() -> None:
+    """Report an already converged ADMIN configuration without mutation."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    coordinator.configure.return_value = _coordination_result(
+        AdminConfigurationReconciliationDecision.KEEP,
+        configuration_after=_configuration(),
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "Configuration du serveur valide" in message
+    assert "Aucun changement" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_import_does_not_guess_semantic_routing() -> None:
+    """Require explicit activity/error selection for an existing ADMIN structure."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    coordinator.configure.return_value = _coordination_result(
+        AdminConfigurationReconciliationDecision.IMPORT,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "structure ADMIN compatible" in message
+    assert "sélectionnés explicitement" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_needs_choice_never_mutates_implicitly() -> None:
+    """Explain ambiguous discovery without pretending a structure was selected."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    coordinator.configure.return_value = _coordination_result(
+        AdminConfigurationReconciliationDecision.NEEDS_CHOICE,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "choix explicite" in message
+    assert "Aucun changement" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_reports_unexpected_failure() -> None:
+    """Fail safely when ADMIN coordination raises unexpectedly."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+    )
+
+    coordinator.configure.side_effect = RuntimeError(
+        "Provisioning exploded.",
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    interaction.followup.send.assert_awaited_once_with(
+        (
+            "Échec de la configuration du serveur. "
+            "Aucune déduction automatique supplémentaire n'a été faite."
+        ),
+        ephemeral=True,
+    )

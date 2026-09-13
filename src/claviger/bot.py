@@ -53,6 +53,9 @@ from claviger.repositories.access_catalog_repository import (
 from claviger.repositories.database_ownership_repository import (
     DatabaseOwnershipRepository,
 )
+from claviger.repositories.guild_admin_configuration_repository import (
+    GuildAdminConfigurationRepository,
+)
 from claviger.repositories.guild_policy_repository import (
     GuildPolicyRepository,
 )
@@ -61,6 +64,18 @@ from claviger.repositories.interest_catalog_repository import (
 )
 
 # Services
+from claviger.services.admin_configuration_coordinator_service import (
+    AdminConfigurationCoordinatorService,
+)
+from claviger.services.admin_configuration_reconciliation_service import (
+    AdminConfigurationReconciliationService,
+)
+from claviger.services.admin_structure_discovery_service import (
+    AdminStructureDiscoveryService,
+)
+from claviger.services.admin_structure_provisioning_service import (
+    AdminStructureProvisioningService,
+)
 from claviger.services.adult_access_classifier import (
     AdultAccessClassifier,
 )
@@ -186,6 +201,29 @@ class ClavigerBot(discord.Client):
             self.database,
         )
 
+        self.guild_admin_configuration_repository = GuildAdminConfigurationRepository(
+            self.database,
+        )
+
+        self.admin_structure_discovery_service = AdminStructureDiscoveryService()
+
+        self.admin_configuration_reconciliation_service = (
+            AdminConfigurationReconciliationService()
+        )
+
+        self.admin_structure_provisioning_service = AdminStructureProvisioningService()
+
+        self.admin_configuration_coordinator_service = (
+            AdminConfigurationCoordinatorService(
+                repository=self.guild_admin_configuration_repository,
+                discovery_service=self.admin_structure_discovery_service,
+                reconciliation_service=(
+                    self.admin_configuration_reconciliation_service
+                ),
+                provisioning_service=(self.admin_structure_provisioning_service),
+            )
+        )
+
         self.member_interest_questionnaire_service = MemberInterestQuestionnaireService(
             repository=self.interest_catalog_repository,
         )
@@ -197,7 +235,7 @@ class ClavigerBot(discord.Client):
         )
 
         self.member_workflow_coordinator_service = MemberWorkflowCoordinatorService(
-            questionnaire_service=self.member_interest_questionnaire_service,
+            questionnaire_service=(self.member_interest_questionnaire_service),
             planner_service=self.member_role_planner_service,
             executor_service=self.member_role_executor_service,
         )
@@ -220,7 +258,7 @@ class ClavigerBot(discord.Client):
         )
 
         self.noctis_workflow_coordinator_service = NoctisWorkflowCoordinatorService(
-            questionnaire_service=self.adult_access_questionnaire_service,
+            questionnaire_service=(self.adult_access_questionnaire_service),
             planner_service=self.noctis_role_planner_service,
             executor_service=self.noctis_role_executor_service,
         )
@@ -451,6 +489,9 @@ class ClavigerBot(discord.Client):
                 self.database_status_service,
                 self.database_ownership_service,
                 self.report_service,
+                admin_configuration_coordinator_service=(
+                    self.admin_configuration_coordinator_service
+                ),
                 command_name=identity.admin_command_name,
                 application_name=identity.application_name,
                 application_id=identity.application_id,

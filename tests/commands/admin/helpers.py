@@ -14,6 +14,9 @@ from claviger.policies.default_policy import (
 )
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
+from claviger.services.admin_configuration_coordinator_service import (
+    AdminConfigurationCoordinatorService,
+)
 from claviger.services.catalog_next_coordinator_service import (
     CatalogNextCoordinatorService,
 )
@@ -98,6 +101,9 @@ def create_test_group(
     catalog_sync_coordinator_service: CatalogSyncCoordinatorService | None = None,
     catalog_next_coordinator_service: CatalogNextCoordinatorService | None = None,
     database_ownership_service: DatabaseOwnershipService | None = None,
+    admin_configuration_coordinator_service: (
+        AdminConfigurationCoordinatorService | None
+    ) = None,
     *,
     command_name: str = "claviger",
     application_name: str = "Claviger",
@@ -181,6 +187,12 @@ def create_test_group(
 
         database_ownership_service.bind = AsyncMock()
         database_ownership_service.validate = AsyncMock()
+    if admin_configuration_coordinator_service is None:
+        admin_configuration_coordinator_service = Mock(
+            spec=AdminConfigurationCoordinatorService,
+        )
+
+        admin_configuration_coordinator_service.configure = AsyncMock()
 
     role_classifier = RoleClassifier()
 
@@ -193,6 +205,7 @@ def create_test_group(
         catalog_sync_coordinator_service=catalog_sync_coordinator_service,
         catalog_next_coordinator_service=catalog_next_coordinator_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
+        admin_configuration_coordinator_service=admin_configuration_coordinator_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
         database_ownership_service=database_ownership_service,
@@ -516,4 +529,43 @@ def get_catalog_next_command(
         policy_resolver,
         database_status_service,
         report_service,
+    )
+
+
+def get_config_server_command(
+    role_discovery_service: RoleDiscoveryService,
+    *,
+    database_state: DatabaseState = DatabaseState.READY,
+    database_ownership_bound: bool = True,
+):
+    """Create and retrieve the dynamic /{bot} config-server command."""
+
+    coordinator = Mock(
+        spec=AdminConfigurationCoordinatorService,
+    )
+
+    coordinator.configure = AsyncMock()
+
+    (
+        group,
+        _,
+        _,
+        _,
+        _,
+    ) = create_test_group(
+        role_discovery_service,
+        admin_configuration_coordinator_service=coordinator,
+        database_state=database_state,
+        database_ownership_bound=database_ownership_bound,
+    )
+
+    command = group.get_command(
+        "config-server",
+    )
+
+    assert command is not None
+
+    return (
+        command,
+        coordinator,
     )
