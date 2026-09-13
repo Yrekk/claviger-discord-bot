@@ -3,6 +3,12 @@ import unicodedata
 
 import discord
 
+from claviger.models.discord_application_identity_model import (
+    DiscordApplicationIdentity,
+)
+from claviger.models.discord_guild_identity_model import (
+    DiscordGuildIdentity,
+)
 from claviger.models.discord_runtime_identity_model import (
     DiscordRuntimeIdentity,
 )
@@ -49,42 +55,93 @@ def normalize_application_command_name(
 
     if len(command_name) > 32:
         raise InvalidApplicationCommandNameError(
-            "Discord application name produces a command name longer than 32 characters."
+            "Discord application name produces a command name longer "
+            "than 32 characters."
         )
 
     return command_name
 
 
 class DiscordIdentityService:
-    """Resolve Discord application and guild-specific bot identity."""
+    """Resolve application-wide and guild-specific Discord identities."""
 
-    async def resolve(
-        self,
+    @staticmethod
+    def _require_authenticated_user(
         client: discord.Client,
-        guild_id: int,
-    ) -> DiscordRuntimeIdentity:
-        """Resolve the authenticated application and its guild display identity."""
+    ) -> discord.ClientUser:
+        """Return the authenticated bot user or fail closed."""
 
         if client.user is None:
             raise RuntimeError("Discord bot identity is unavailable.")
 
+        return client.user
+
+    async def resolve_application(
+        self,
+        client: discord.Client,
+    ) -> DiscordApplicationIdentity:
+        """Resolve identity that belongs to the Discord application itself."""
+
+        bot_user = self._require_authenticated_user(
+            client,
+        )
+
         application = await client.application_info()
+
+        return DiscordApplicationIdentity(
+            application_id=application.id,
+            application_name=application.name,
+            bot_user_id=bot_user.id,
+            admin_command_name=normalize_application_command_name(
+                application.name,
+            ),
+        )
+
+    async def resolve_guild(
+        self,
+        client: discord.Client,
+        guild_id: int,
+    ) -> DiscordGuildIdentity:
+        """Resolve identity that can vary between Discord guilds."""
+
+        bot_user = self._require_authenticated_user(
+            client,
+        )
 
         guild = await client.fetch_guild(
             guild_id,
         )
 
         bot_member = await guild.fetch_member(
-            client.user.id,
+            bot_user.id,
+        )
+
+        return DiscordGuildIdentity(
+            guild_id=guild_id,
+            bot_display_name=bot_member.display_name,
+        )
+
+    async def resolve(
+        self,
+        client: discord.Client,
+        guild_id: int,
+    ) -> DiscordRuntimeIdentity:
+        """Resolve the legacy combined identity for the current runtime."""
+
+        application_identity = await self.resolve_application(
+            client,
+        )
+
+        guild_identity = await self.resolve_guild(
+            client,
+            guild_id,
         )
 
         return DiscordRuntimeIdentity(
-            application_id=application.id,
-            application_name=application.name,
-            bot_user_id=client.user.id,
-            guild_id=guild_id,
-            bot_display_name=bot_member.display_name,
-            admin_command_name=normalize_application_command_name(
-                application.name,
-            ),
+            application_id=application_identity.application_id,
+            application_name=application_identity.application_name,
+            bot_user_id=application_identity.bot_user_id,
+            guild_id=guild_identity.guild_id,
+            bot_display_name=guild_identity.bot_display_name,
+            admin_command_name=application_identity.admin_command_name,
         )
