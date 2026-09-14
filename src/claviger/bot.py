@@ -2,6 +2,7 @@
 import hashlib
 import json
 import logging
+from asyncio import Lock
 from time import perf_counter
 
 # Third-party
@@ -204,19 +205,23 @@ class ClavigerBot(discord.Client):
         self.started_from_restart = startup_restart_request is not None
         self._ready_announced = False
 
-        # Discord identity state
+        # Discord identity and application runtime state
         self.discord_identity_service = DiscordIdentityService()
 
         self.application_identity: DiscordApplicationIdentity | None = None
+        self.database_status: DatabaseStatus | None = None
+        self.database_operational: bool | None = None
+
+        # Temporary compatibility:
+        # Legacy single-guild identity/readiness fields remain available while the
+        # runtime transitions to event-driven multi-guild configuration.
         self.guild_identity: DiscordGuildIdentity | None = None
         self.guild_readiness: GuildConfigurationReadiness | None = None
 
-        # Temporary compatibility:
-        # Legacy single-guild identity/readiness fields are still populated by the
-        # current startup path. The per-guild registry is introduced separately so
-        # the upcoming lifecycle migration does not mix structural and behavioral
-        # changes in the same step.
+        # Guild runtime state is authoritative per guild. Locks prevent overlapping
+        # gateway events from configuring and synchronizing the same guild twice.
         self.guild_runtime_states: dict[int, GuildRuntimeState] = {}
+        self._guild_configuration_locks: dict[int, Lock] = {}
 
         # Generic Discord services
         self.role_manager = RoleManager()
@@ -696,6 +701,143 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
+    def _get_guild_configuration_lock(
+        self,
+        guild_id: int,
+    ) -> Lock:
+        """Return the synchronization lock dedicated to one Discord guild.
+
+        Args:
+            guild_id:
+                Discord guild snowflake whose runtime configuration must be
+                serialized.
+
+        Returns:
+            Lock:
+                Stable asynchronous lock shared by every configuration attempt for
+                this guild.
+
+        Notes:
+            Discord lifecycle events may overlap. Keeping one lock per guild
+            prevents duplicate readiness inspection, command-tree mutation and
+            Discord synchronization for the same guild.
+        """
+
+        lock = self._guild_configuration_locks.get(
+            guild_id,
+        )
+
+        if lock is None:
+            lock = Lock()
+            self._guild_configuration_locks[guild_id] = lock
+
+        return lock
+
+    async def _configure_runtime_guild(
+        self,
+        guild_id: int,
+        *,
+        force: bool = False,
+    ) -> GuildRuntimeState:
+        """Ensure one guild has a current runtime configuration.
+
+        Args:
+            guild_id:
+                Discord guild snowflake to configure.
+
+            force:
+                When True, rebuild the guild runtime even when a registered state
+                already exists. The existing command-tree signature is preserved
+                for synchronization comparison.
+
+        Returns:
+            GuildRuntimeState:
+                Current successfully configured state for the guild.
+
+        Raises:
+            RuntimeError:
+                If application-wide startup state is not available yet.
+
+            Database errors:
+                Propagated from guild readiness inspection.
+
+            Discord errors:
+                Propagated from identity resolution or command synchronization.
+
+        Side Effects:
+            May resolve Discord guild identity, inspect persisted readiness,
+            rebuild the guild command tree, synchronize commands and replace the
+            guild's runtime registry entry.
+
+        Notes:
+            The per-guild lock is necessary because ``on_ready``,
+            ``on_guild_join`` and ``on_guild_available`` are not guaranteed to run
+            in a lifecycle that prevents overlapping work.
+        """
+
+        application_identity = self.application_identity
+        database_status = self.database_status
+        database_operational = self.database_operational
+
+        if (
+            application_identity is None
+            or database_status is None
+            or database_operational is None
+        ):
+            raise RuntimeError(
+                "Application runtime state is unavailable for guild configuration."
+            )
+
+        lock = self._get_guild_configuration_lock(
+            guild_id,
+        )
+
+        async with lock:
+            current_state = self.guild_runtime_states.get(
+                guild_id,
+            )
+
+            if current_state is not None and not force:
+                return current_state
+
+            previous_command_tree_signature = (
+                current_state.command_tree_signature
+                if current_state is not None
+                else None
+            )
+
+            # Temporary compatibility:
+            # The restart model still carries one legacy command-tree signature.
+            # Until restart state becomes fully per-guild, apply it only to the
+            # configured legacy startup guild.
+            if (
+                previous_command_tree_signature is None
+                and guild_id == self.guild_id
+                and self.startup_restart_request is not None
+            ):
+                previous_command_tree_signature = (
+                    self.startup_restart_request.command_tree_signature
+                )
+
+            runtime_state = await self._configure_guild(
+                application_identity,
+                guild_id,
+                database_status=database_status,
+                database_operational=database_operational,
+                previous_command_tree_signature=previous_command_tree_signature,
+            )
+
+            # Temporary compatibility:
+            # Existing single-guild consumers still read these fields. Only the
+            # legacy startup guild mirrors its state here; every guild remains
+            # authoritative in guild_runtime_states.
+            if guild_id == self.guild_id:
+                self.guild_identity = runtime_state.identity
+                self.guild_readiness = runtime_state.readiness
+                self.command_tree_signature = runtime_state.command_tree_signature
+
+            return runtime_state
+
     async def _configure_guild(
         self,
         application_identity: DiscordApplicationIdentity,
@@ -943,34 +1085,21 @@ class ClavigerBot(discord.Client):
             database_status,
         )
 
+        # Application-wide state is validated once during startup and then reused by
+        # event-driven guild configuration.
+        self.application_identity = application_identity
+        self.database_status = database_status
+        self.database_operational = database_operational
+
         logger.debug(
             "Timing startup — validation base / ownership : %.3f s",
             perf_counter() - step_started,
         )
 
-        previous_command_tree_signature = None
-
-        if self.startup_restart_request is not None:
-            previous_command_tree_signature = (
-                self.startup_restart_request.command_tree_signature
-            )
-
-        guild_runtime_state = await self._configure_guild(
-            application_identity,
+        await self._configure_runtime_guild(
             self.guild_id,
-            database_status=database_status,
-            database_operational=database_operational,
-            previous_command_tree_signature=previous_command_tree_signature,
+            force=True,
         )
-
-        # Temporary compatibility:
-        # The application and single-guild fields remain populated for existing
-        # runtime consumers. They will disappear once every accessible guild is
-        # configured through the per-guild registry.
-        self.application_identity = application_identity
-        self.guild_identity = guild_runtime_state.identity
-        self.guild_readiness = guild_runtime_state.readiness
-        self.command_tree_signature = guild_runtime_state.command_tree_signature
 
         logger.debug(
             "Timing startup — setup_hook total : %.3f s",
@@ -978,17 +1107,21 @@ class ClavigerBot(discord.Client):
         )
 
     async def on_ready(self) -> None:
-        """Announce a successfully connected runtime.
+        """Configure cached guilds and announce a connected runtime.
 
         Returns:
             None:
-                The method returns early until both application and guild
-                identities are available. Startup logging and restart feedback
-                are emitted only once per runtime instance.
+                The method returns early until authenticated and application-wide
+                runtime state are available.
 
         Side Effects:
-            May edit the original Discord restart response after a successful
-            internal restart.
+            Ensures every currently available cached guild has runtime state,
+            possibly synchronizes guild command trees and may complete restart
+            feedback.
+
+        Notes:
+            discord.py may dispatch ``on_ready`` more than once. Existing guild
+            runtime states are therefore reused rather than rebuilt automatically.
         """
 
         if self.user is None:
@@ -997,13 +1130,32 @@ class ClavigerBot(discord.Client):
         if self.application_identity is None:
             return
 
-        if self.guild_identity is None:
+        if self.database_status is None:
             return
 
+        if self.database_operational is None:
+            return
+
+        # setup_hook still configures the legacy guild during this migration step.
+        # on_ready fills in every other guild now present in Discord's cache.
+        for guild in self.guilds:
+            if guild.unavailable:
+                continue
+
+            try:
+                await self._configure_runtime_guild(
+                    guild.id,
+                )
+
+            except Exception:
+                logger.exception(
+                    "Impossible de configurer le serveur Discord %s.",
+                    guild.id,
+                )
+
         logger.info(
-            "%s connecté en tant que %s (%s)",
+            "%s connectée à Discord (%s)",
             self.application_identity.application_name,
-            self.guild_identity.bot_display_name,
             self.user.id,
         )
 
@@ -1033,3 +1185,124 @@ class ClavigerBot(discord.Client):
             logger.info("Démarrage terminé. Application opérationnelle.")
 
         self._ready_announced = True
+
+    async def on_guild_join(
+        self,
+        guild: discord.Guild,
+    ) -> None:
+        """Configure a guild joined while the application is already running.
+
+        Args:
+            guild:
+                Discord guild newly joined by the authenticated application.
+
+        Returns:
+            None:
+                Configuration failure is logged and kept isolated from other
+                guilds.
+        """
+
+        try:
+            await self._configure_runtime_guild(
+                guild.id,
+            )
+
+        except Exception:
+            logger.exception(
+                "Impossible de configurer le nouveau serveur Discord %s.",
+                guild.id,
+            )
+
+    async def on_guild_available(
+        self,
+        guild: discord.Guild,
+    ) -> None:
+        """Reconfigure a guild that becomes available again.
+
+        Args:
+            guild:
+                Previously unavailable Discord guild that is accessible again.
+
+        Returns:
+            None:
+                Configuration failure is logged and kept isolated from other
+                guilds.
+        """
+
+        try:
+            await self._configure_runtime_guild(
+                guild.id,
+                force=True,
+            )
+
+        except Exception:
+            logger.exception(
+                "Impossible de reconfigurer le serveur Discord %s redevenu disponible.",
+                guild.id,
+            )
+
+    async def on_guild_unavailable(
+        self,
+        guild: discord.Guild,
+    ) -> None:
+        """Invalidate runtime state while a guild is unavailable.
+
+        Args:
+            guild:
+                Discord guild temporarily marked unavailable.
+
+        Returns:
+            None:
+                The guild is removed from the authoritative runtime registry.
+        """
+
+        lock = self._get_guild_configuration_lock(
+            guild.id,
+        )
+
+        async with lock:
+            self.guild_runtime_states.pop(
+                guild.id,
+                None,
+            )
+
+        logger.warning(
+            "Serveur Discord %s indisponible : état runtime invalidé.",
+            guild.id,
+        )
+
+    async def on_guild_remove(
+        self,
+        guild: discord.Guild,
+    ) -> None:
+        """Forget runtime and local command state for a removed guild.
+
+        Args:
+            guild:
+                Discord guild removed from the authenticated application.
+
+        Returns:
+            None:
+                Runtime state and locally registered guild commands are discarded.
+        """
+
+        lock = self._get_guild_configuration_lock(
+            guild.id,
+        )
+
+        async with lock:
+            self.guild_runtime_states.pop(
+                guild.id,
+                None,
+            )
+
+            self.tree.clear_commands(
+                guild=discord.Object(
+                    id=guild.id,
+                ),
+            )
+
+        logger.info(
+            "Serveur Discord %s retiré du runtime.",
+            guild.id,
+        )
