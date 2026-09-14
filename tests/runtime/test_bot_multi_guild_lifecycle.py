@@ -22,6 +22,13 @@ from claviger.models.discord_application_identity_model import (
 from claviger.models.discord_guild_identity_model import (
     DiscordGuildIdentity,
 )
+from claviger.models.guild_admin_configuration_model import (
+    GuildAdminConfiguration,
+)
+from claviger.models.guild_configuration_readiness_model import (
+    GuildConfigurationReadiness,
+    GuildConfigurationReadinessState,
+)
 from claviger.models.guild_runtime_state_model import GuildRuntimeState
 from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
@@ -30,7 +37,7 @@ def _patch_bot_configuration(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Provide deterministic legacy runtime configuration for lifecycle tests."""
+    """Provide deterministic environment-backed configuration for lifecycle tests."""
 
     monkeypatch.setattr(
         bot_module,
@@ -78,6 +85,38 @@ def _ready_database_status() -> DatabaseStatus:
     )
 
 
+def _ready_guild_readiness(
+    guild_id: int,
+) -> GuildConfigurationReadiness:
+    """Create complete ADMIN readiness unique to one guild."""
+
+    configuration = GuildAdminConfiguration(
+        guild_id=guild_id,
+        category_id=(guild_id * 10) + 1,
+        command_channel_id=(guild_id * 10) + 2,
+        activity_forum_id=(guild_id * 10) + 3,
+        error_forum_id=(guild_id * 10) + 4,
+    )
+
+    return GuildConfigurationReadiness(
+        guild_id=guild_id,
+        state=GuildConfigurationReadinessState.READY,
+        configuration=configuration,
+    )
+
+
+def _missing_guild_readiness(
+    guild_id: int,
+) -> GuildConfigurationReadiness:
+    """Create readiness for a guild with no persisted ADMIN configuration."""
+
+    return GuildConfigurationReadiness(
+        guild_id=guild_id,
+        state=GuildConfigurationReadinessState.ADMIN_CONFIGURATION_MISSING,
+        configuration=None,
+    )
+
+
 def _guild_runtime_state(
     guild_id: int,
     signature: str,
@@ -92,6 +131,22 @@ def _guild_runtime_state(
         readiness=None,
         command_tree_signature=signature,
     )
+
+
+def _guild_command_names(
+    bot: ClavigerBot,
+    guild_id: int,
+) -> set[str]:
+    """Return local application-command names registered for one guild."""
+
+    return {
+        command.name
+        for command in bot.tree.get_commands(
+            guild=bot_module.discord.Object(
+                id=guild_id,
+            ),
+        )
+    }
 
 
 @pytest.mark.asyncio
@@ -309,7 +364,10 @@ async def test_on_ready_configures_every_available_cached_guild(
 
     await bot.on_ready()
 
-    configured_guild_ids = [call.args[0] for call in configure.await_args_list]
+    configured_guild_ids = [
+        call.args[0]
+        for call in configure.await_args_list
+    ]
 
     assert configured_guild_ids == [
         123,
@@ -353,10 +411,14 @@ async def test_guild_events_configure_join_and_force_available(
 
     assert configure.await_count == 2
 
-    assert configure.await_args_list[0].args == (999,)
+    assert configure.await_args_list[0].args == (
+        999,
+    )
     assert configure.await_args_list[0].kwargs == {}
 
-    assert configure.await_args_list[1].args == (999,)
+    assert configure.await_args_list[1].args == (
+        999,
+    )
     assert configure.await_args_list[1].kwargs == {
         "force": True,
     }
@@ -416,3 +478,246 @@ async def test_unavailable_and_removed_guilds_lose_runtime_state(
     removed_guild = clear_commands.call_args.kwargs["guild"]
 
     assert removed_guild.id == 888
+
+
+@pytest.mark.asyncio
+async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Keep ready, unconfigured and newly joined guilds fully isolated."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+
+    bot._connection.user = SimpleNamespace(
+        id=456,
+    )
+
+    bot.application_identity = _application_identity()
+    bot.database_status = _ready_database_status()
+    bot.database_operational = True
+
+    guild_identities = {
+        123: DiscordGuildIdentity(
+            guild_id=123,
+            bot_display_name="Experimentum Guild A",
+        ),
+        999: DiscordGuildIdentity(
+            guild_id=999,
+            bot_display_name="Experimentum Guild B",
+        ),
+        555: DiscordGuildIdentity(
+            guild_id=555,
+            bot_display_name="Experimentum Guild C",
+        ),
+    }
+
+    readiness_by_guild = {
+        123: _ready_guild_readiness(
+            123,
+        ),
+        999: _missing_guild_readiness(
+            999,
+        ),
+        555: _missing_guild_readiness(
+            555,
+        ),
+    }
+
+    resolve_guild = AsyncMock(
+        side_effect=lambda client, guild_id: guild_identities[guild_id],
+    )
+
+    readiness_inspect = AsyncMock(
+        side_effect=lambda guild_id: readiness_by_guild[guild_id],
+    )
+
+    sync = AsyncMock(
+        return_value=[],
+    )
+
+    monkeypatch.setattr(
+        bot.discord_identity_service,
+        "resolve_guild",
+        resolve_guild,
+    )
+
+    monkeypatch.setattr(
+        bot.guild_configuration_readiness_service,
+        "inspect",
+        readiness_inspect,
+    )
+
+    monkeypatch.setattr(
+        bot.tree,
+        "sync",
+        sync,
+    )
+
+    bot._connection._guilds = {
+        123: SimpleNamespace(
+            id=123,
+            unavailable=False,
+        ),
+        999: SimpleNamespace(
+            id=999,
+            unavailable=False,
+        ),
+    }
+
+    # Guild A is ready while Guild B has never completed ADMIN configuration.
+    await bot.on_ready()
+
+    assert set(bot.guild_runtime_states) == {
+        123,
+        999,
+    }
+
+    guild_a_initial_state = bot.guild_runtime_states[123]
+    guild_b_initial_state = bot.guild_runtime_states[999]
+
+    assert guild_a_initial_state.identity == guild_identities[123]
+    assert guild_a_initial_state.readiness == readiness_by_guild[123]
+    assert guild_a_initial_state.readiness is not None
+    assert guild_a_initial_state.readiness.is_ready is True
+
+    assert guild_b_initial_state.identity == guild_identities[999]
+    assert guild_b_initial_state.readiness == readiness_by_guild[999]
+    assert guild_b_initial_state.readiness is not None
+    assert guild_b_initial_state.readiness.is_ready is False
+
+    assert _guild_command_names(
+        bot,
+        123,
+    ) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    assert _guild_command_names(
+        bot,
+        999,
+    ) == {
+        "say",
+        "experimentum",
+    }
+
+    guild_a_configuration = guild_a_initial_state.readiness.configuration
+
+    assert guild_a_configuration is not None
+    assert guild_a_configuration.guild_id == 123
+    assert guild_a_configuration.command_channel_id == 1232
+    assert guild_a_configuration.error_forum_id == 1234
+
+    # Guild B completes configuration. Rebuilding B must not mutate Guild A.
+    readiness_by_guild[999] = _ready_guild_readiness(
+        999,
+    )
+
+    await bot._configure_runtime_guild(
+        999,
+        force=True,
+    )
+
+    guild_a_after_b_configuration = bot.guild_runtime_states[123]
+    guild_b_ready_state = bot.guild_runtime_states[999]
+
+    assert guild_a_after_b_configuration is guild_a_initial_state
+    assert guild_b_ready_state is not guild_b_initial_state
+
+    assert guild_b_ready_state.readiness == readiness_by_guild[999]
+    assert guild_b_ready_state.readiness is not None
+    assert guild_b_ready_state.readiness.is_ready is True
+
+    guild_b_configuration = guild_b_ready_state.readiness.configuration
+
+    assert guild_b_configuration is not None
+    assert guild_b_configuration.guild_id == 999
+    assert guild_b_configuration.command_channel_id == 9992
+    assert guild_b_configuration.error_forum_id == 9994
+
+    assert guild_a_configuration.command_channel_id == 1232
+    assert guild_a_configuration.error_forum_id == 1234
+
+    assert _guild_command_names(
+        bot,
+        123,
+    ) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    assert _guild_command_names(
+        bot,
+        999,
+    ) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    # Guild C joins while the application is already running. It must receive
+    # only its own recovery/configuration tree while A and B remain untouched.
+    await bot.on_guild_join(
+        SimpleNamespace(
+            id=555,
+        ),
+    )
+
+    assert set(bot.guild_runtime_states) == {
+        123,
+        999,
+        555,
+    }
+
+    assert bot.guild_runtime_states[123] is guild_a_initial_state
+    assert bot.guild_runtime_states[999] is guild_b_ready_state
+
+    guild_c_state = bot.guild_runtime_states[555]
+
+    assert guild_c_state.identity == guild_identities[555]
+    assert guild_c_state.readiness == readiness_by_guild[555]
+    assert guild_c_state.readiness is not None
+    assert guild_c_state.readiness.is_ready is False
+
+    assert _guild_command_names(
+        bot,
+        555,
+    ) == {
+        "say",
+        "experimentum",
+    }
+
+    assert _guild_command_names(
+        bot,
+        123,
+    ) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    assert _guild_command_names(
+        bot,
+        999,
+    ) == {
+        "say",
+        "membre",
+        "noctis",
+        "experimentum",
+    }
+
+    assert resolve_guild.await_count == 4
+    assert readiness_inspect.await_count == 4
+    assert sync.await_count == 4

@@ -150,14 +150,16 @@ logger = logging.getLogger(__name__)
 class ClavigerBot(discord.Client):
     """Compose and run the Claviger Discord application.
 
-    The bot owns application-wide services such as the SQLite database and
-    Discord application identity. Guild-specific runtime state is resolved and
-    stored independently for every accessible Discord guild.
+        The bot owns application-wide services such as the SQLite database and
+        Discord application identity. Guild-specific runtime state is resolved and
+        stored independently for every accessible Discord guild.
 
-    Application startup does not depend on one privileged guild. A legacy
-    environment-provided guild ID remains temporarily only for historical policy
-    fallback and bootstrap behavior; it no longer drives Discord lifecycle
-    configuration.
+    Application startup does not depend on one privileged guild.
+
+    One environment-provided guild ID is intentionally retained as Succumbrae's
+    historical emergency-policy and bootstrap anchor. Claviger was originally
+    created for that guild before evolving into a multi-guild application. This
+    historical exception has no Discord runtime or lifecycle significance.
     """
 
     def __init__(
