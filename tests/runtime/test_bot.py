@@ -30,6 +30,7 @@ from claviger.models.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
     GuildConfigurationReadinessState,
 )
+from claviger.models.guild_runtime_state_model import GuildRuntimeState
 from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 # Services
@@ -1308,7 +1309,7 @@ async def test_request_restart_closes_client(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Store restart context and close the current Discord client."""
+    """Store every guild command signature and close the current client."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -1317,7 +1318,23 @@ async def test_request_restart_closes_client(
 
     bot = ClavigerBot()
 
-    bot.command_tree_signature = "tree-signature"
+    bot.guild_runtime_states[123] = GuildRuntimeState(
+        identity=_create_guild_identity(
+            guild_id=123,
+            bot_display_name="Experimentum Server A",
+        ),
+        readiness=None,
+        command_tree_signature="guild-123-tree",
+    )
+
+    bot.guild_runtime_states[999] = GuildRuntimeState(
+        identity=_create_guild_identity(
+            guild_id=999,
+            bot_display_name="Experimentum Server B",
+        ),
+        readiness=None,
+        command_tree_signature="guild-999-tree",
+    )
 
     close = AsyncMock()
 
@@ -1344,7 +1361,16 @@ async def test_request_restart_closes_client(
     assert bot.pending_restart_request == RuntimeRestartRequest(
         application_id=789,
         interaction_token="restart-token",
-        command_tree_signature="tree-signature",
+        guild_command_tree_signatures=(
+            (
+                123,
+                "guild-123-tree",
+            ),
+            (
+                999,
+                "guild-999-tree",
+            ),
+        ),
     )
 
     close.assert_awaited_once_with()
@@ -1413,7 +1439,12 @@ async def test_setup_hook_skips_sync_when_restart_tree_is_unchanged(
     restart_request = RuntimeRestartRequest(
         application_id=789,
         interaction_token="restart-token",
-        command_tree_signature="same-tree",
+        guild_command_tree_signatures=(
+            (
+                123,
+                "same-tree",
+            ),
+        ),
     )
 
     bot = ClavigerBot(
@@ -1487,9 +1518,13 @@ async def test_setup_hook_resyncs_when_restart_tree_changes(
     restart_request = RuntimeRestartRequest(
         application_id=789,
         interaction_token="restart-token",
-        command_tree_signature="old-tree",
+        guild_command_tree_signatures=(
+            (
+                123,
+                "old-tree",
+            ),
+        ),
     )
-
     bot = ClavigerBot(
         startup_restart_request=restart_request,
     )

@@ -23,6 +23,7 @@ from claviger.models.discord_guild_identity_model import (
     DiscordGuildIdentity,
 )
 from claviger.models.guild_runtime_state_model import GuildRuntimeState
+from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 
 def _patch_bot_configuration(
@@ -190,6 +191,74 @@ async def test_configure_runtime_guild_force_rebuild_uses_previous_signature(
         database_status=database_status,
         database_operational=True,
         previous_command_tree_signature="existing-tree",
+    )
+
+
+@pytest.mark.asyncio
+async def test_configure_runtime_guild_uses_matching_restart_signature(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Restore the previous signature belonging to the configured guild."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    restart_request = RuntimeRestartRequest(
+        application_id=789,
+        interaction_token="restart-token",
+        guild_command_tree_signatures=(
+            (
+                123,
+                "guild-123-tree",
+            ),
+            (
+                999,
+                "guild-999-tree",
+            ),
+        ),
+    )
+
+    bot = ClavigerBot(
+        startup_restart_request=restart_request,
+    )
+
+    application_identity = _application_identity()
+    database_status = _ready_database_status()
+
+    bot.application_identity = application_identity
+    bot.database_status = database_status
+    bot.database_operational = True
+
+    replacement_state = _guild_runtime_state(
+        999,
+        "rebuilt-guild-999-tree",
+    )
+
+    configure = AsyncMock(
+        return_value=replacement_state,
+    )
+
+    monkeypatch.setattr(
+        bot,
+        "_configure_guild",
+        configure,
+    )
+
+    result = await bot._configure_runtime_guild(
+        999,
+    )
+
+    assert result is replacement_state
+
+    configure.assert_awaited_once_with(
+        application_identity,
+        999,
+        database_status=database_status,
+        database_operational=True,
+        previous_command_tree_signature="guild-999-tree",
     )
 
 

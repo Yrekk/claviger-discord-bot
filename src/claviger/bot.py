@@ -522,8 +522,8 @@ class ClavigerBot(discord.Client):
 
         Args:
             restart_request:
-                Discord interaction context required to resume feedback after
-                the new runtime instance starts.
+                Discord interaction context required to resume feedback after the
+                new runtime instance starts.
 
         Returns:
             None:
@@ -531,17 +531,33 @@ class ClavigerBot(discord.Client):
                 client is closed.
 
         Side Effects:
-            Marks the runtime as restarting and closes the Discord client.
+            Captures command-tree signatures for every configured guild, marks the
+            runtime as restarting and closes the Discord client.
         """
 
         logger.info("Redémarrage demandé depuis Discord.")
 
         self.restart_requested = True
 
+        guild_command_tree_signatures = tuple(
+            sorted(
+                (
+                    guild_id,
+                    runtime_state.command_tree_signature,
+                )
+                for guild_id, runtime_state in self.guild_runtime_states.items()
+            )
+        )
+
         self.pending_restart_request = RuntimeRestartRequest(
             application_id=restart_request.application_id,
             interaction_token=restart_request.interaction_token,
-            command_tree_signature=self.command_tree_signature,
+            guild_command_tree_signatures=guild_command_tree_signatures,
+        )
+
+        logger.info(
+            "État restart capturé pour %s serveur(s).",
+            len(guild_command_tree_signatures),
         )
 
         logger.info("Fermeture de l'instance courante pour redémarrage...")
@@ -770,9 +786,11 @@ class ClavigerBot(discord.Client):
             guild's runtime registry entry.
 
         Notes:
-            The per-guild lock is necessary because ``on_ready``,
-            ``on_guild_join`` and ``on_guild_available`` are not guaranteed to run
-            in a lifecycle that prevents overlapping work.
+            The per-guild lock prevents overlapping Discord lifecycle events from
+            configuring the same guild concurrently.
+
+            During an internal restart, each guild independently reuses its own
+            previous command-tree signature when available.
         """
 
         application_identity = self.application_identity
@@ -806,17 +824,14 @@ class ClavigerBot(discord.Client):
                 else None
             )
 
-            # Temporary compatibility:
-            # The restart model still carries one legacy command-tree signature.
-            # Until restart state becomes fully per-guild, apply it only to the
-            # configured legacy startup guild.
             if (
                 previous_command_tree_signature is None
-                and guild_id == self.guild_id
                 and self.startup_restart_request is not None
             ):
                 previous_command_tree_signature = (
-                    self.startup_restart_request.command_tree_signature
+                    self.startup_restart_request.command_tree_signature_for(
+                        guild_id,
+                    )
                 )
 
             runtime_state = await self._configure_guild(
@@ -829,8 +844,8 @@ class ClavigerBot(discord.Client):
 
             # Temporary compatibility:
             # Existing single-guild consumers still read these fields. Only the
-            # legacy startup guild mirrors its state here; every guild remains
-            # authoritative in guild_runtime_states.
+            # legacy startup guild mirrors its state here. The next runtime
+            # migration removes these fields entirely.
             if guild_id == self.guild_id:
                 self.guild_identity = runtime_state.identity
                 self.guild_readiness = runtime_state.readiness
