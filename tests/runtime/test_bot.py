@@ -346,6 +346,7 @@ def test_claviger_bot_composition(
     assert bot.application_identity is None
     assert bot.guild_identity is None
     assert bot.guild_readiness is None
+    assert bot.guild_runtime_states == {}
     assert bot.restart_requested is False
 
     assert bot.role_manager is not None

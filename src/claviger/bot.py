@@ -42,6 +42,7 @@ from claviger.models.discord_guild_identity_model import (
 from claviger.models.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
 )
+from claviger.models.guild_runtime_state_model import GuildRuntimeState
 from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 # Policies
@@ -209,6 +210,13 @@ class ClavigerBot(discord.Client):
         self.application_identity: DiscordApplicationIdentity | None = None
         self.guild_identity: DiscordGuildIdentity | None = None
         self.guild_readiness: GuildConfigurationReadiness | None = None
+
+        # Temporary compatibility:
+        # Legacy single-guild identity/readiness fields are still populated by the
+        # current startup path. The per-guild registry is introduced separately so
+        # the upcoming lifecycle migration does not mix structural and behavioral
+        # changes in the same step.
+        self.guild_runtime_states: dict[int, GuildRuntimeState] = {}
 
         # Generic Discord services
         self.role_manager = RoleManager()
