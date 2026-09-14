@@ -696,14 +696,191 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
+    async def _configure_guild(
+        self,
+        application_identity: DiscordApplicationIdentity,
+        guild_id: int,
+        *,
+        database_status: DatabaseStatus,
+        database_operational: bool,
+        previous_command_tree_signature: str | None = None,
+    ) -> GuildRuntimeState:
+        """Configure and synchronize runtime state for one Discord guild.
+
+        Args:
+            application_identity:
+                Application-wide Discord identity shared by every guild handled by
+                this runtime.
+
+            guild_id:
+                Discord guild snowflake to configure.
+
+            database_status:
+                Current application database lifecycle status.
+
+            database_operational:
+                True when the shared application database is READY and owned by the
+                authenticated Discord application.
+
+            previous_command_tree_signature:
+                Optional command-tree signature previously synchronized for this
+                guild. When it matches the rebuilt tree, Discord synchronization is
+                skipped.
+
+        Returns:
+            GuildRuntimeState:
+                Successfully configured guild runtime state, including identity,
+                persisted readiness and command-tree signature.
+
+        Raises:
+            Database errors:
+                Propagated when an operational database cannot provide guild
+                readiness.
+
+            Discord errors:
+                Propagated when guild identity resolution or command
+                synchronization fails.
+
+        Side Effects:
+            Rebuilds this guild's local application-command tree, may synchronize
+            commands with Discord and replaces this guild's runtime registry entry.
+
+        Notes:
+            A guild is stored in ``guild_runtime_states`` only after its runtime
+            configuration has completed successfully. A failed reconfiguration
+            therefore cannot leave a newly built state marked as operational.
+        """
+
+        configuration_started = perf_counter()
+
+        # Fail closed during reconfiguration. An existing snapshot must not remain
+        # authoritative while a new configuration attempt is still in progress.
+        self.guild_runtime_states.pop(
+            guild_id,
+            None,
+        )
+
+        step_started = perf_counter()
+
+        guild_identity = await self.discord_identity_service.resolve_guild(
+            self,
+            guild_id,
+        )
+
+        logger.debug(
+            "Timing serveur %s — résolution identité : %.3f s",
+            guild_identity.guild_id,
+            perf_counter() - step_started,
+        )
+
+        # Guild readiness is meaningful only when the shared application database
+        # is operational. Otherwise the guild remains in application maintenance
+        # mode rather than being misclassified as unconfigured.
+        guild_readiness: GuildConfigurationReadiness | None = None
+
+        if database_operational:
+            step_started = perf_counter()
+
+            guild_readiness = await self.guild_configuration_readiness_service.inspect(
+                guild_identity.guild_id,
+            )
+
+            logger.debug(
+                "Timing serveur %s — readiness : %.3f s",
+                guild_identity.guild_id,
+                perf_counter() - step_started,
+            )
+
+            logger.info(
+                "État configuration serveur %s : %s",
+                guild_identity.guild_id,
+                guild_readiness.state.value,
+            )
+
+        guild_ready = guild_readiness.is_ready if guild_readiness is not None else False
+
+        step_started = perf_counter()
+
+        self._register_guild_commands(
+            application_identity,
+            guild_identity,
+            database_status=database_status,
+            database_operational=database_operational,
+            guild_ready=guild_ready,
+        )
+
+        logger.debug(
+            "Timing serveur %s — construction arbre local : %.3f s",
+            guild_identity.guild_id,
+            perf_counter() - step_started,
+        )
+
+        guild = discord.Object(
+            id=guild_identity.guild_id,
+        )
+
+        current_signature = self._build_command_tree_signature(
+            guild,
+        )
+
+        tree_is_unchanged = (
+            previous_command_tree_signature is not None
+            and previous_command_tree_signature == current_signature
+        )
+
+        step_started = perf_counter()
+
+        if tree_is_unchanged:
+            logger.info(
+                "Synchronisation Discord ignorée pour serveur %s : "
+                "arbre de commandes inchangé.",
+                guild_identity.guild_id,
+            )
+
+        else:
+            synced = await self.tree.sync(
+                guild=guild,
+            )
+
+            logger.info(
+                "Commandes synchronisées pour serveur %s : %s",
+                guild_identity.guild_id,
+                len(synced),
+            )
+
+        logger.debug(
+            "Timing serveur %s — synchronisation Discord : %.3f s%s",
+            guild_identity.guild_id,
+            perf_counter() - step_started,
+            " (ignorée)" if tree_is_unchanged else "",
+        )
+
+        runtime_state = GuildRuntimeState(
+            identity=guild_identity,
+            readiness=guild_readiness,
+            command_tree_signature=current_signature,
+        )
+
+        # Only a fully completed configuration attempt becomes authoritative for
+        # subsequent runtime operations.
+        self.guild_runtime_states[guild_identity.guild_id] = runtime_state
+
+        logger.debug(
+            "Timing serveur %s — configuration totale : %.3f s",
+            guild_identity.guild_id,
+            perf_counter() - configuration_started,
+        )
+
+        return runtime_state
+
     async def setup_hook(self) -> None:
-        """Prepare command registration before Discord marks the bot ready.
+        """Prepare application state and the legacy startup guild.
 
         Returns:
             None:
-                Application identity, database state, current guild identity
-                and guild readiness are resolved before the local command tree
-                is synchronized.
+                Application identity and database state are resolved once before
+                the current legacy guild is delegated to the guild configuration
+                routine.
 
         Raises:
             RuntimeError:
@@ -714,13 +891,18 @@ class ClavigerBot(discord.Client):
                 If the SQLite database belongs to another Discord application.
 
             Database errors:
-                Propagated when a database reported as operational cannot be
-                queried for guild readiness.
+                Propagated when application or guild runtime state cannot be
+                resolved safely.
+
+            Discord errors:
+                Propagated when guild configuration or command synchronization
+                fails.
 
         Notes:
-            This method still resolves one configured guild. The command
-            registration primitive itself is already guild-independent; the
-            following runtime migration will iterate over all accessible guilds.
+            This remains a temporary single-guild startup path. Guild-specific
+            work is now delegated to ``_configure_guild`` so the next migration
+            can invoke the same routine for every accessible guild without
+            duplicating runtime behavior.
         """
 
         setup_started = perf_counter()
@@ -730,7 +912,8 @@ class ClavigerBot(discord.Client):
         else:
             logger.info("Démarrage de l'application en cours...")
 
-        # Validate token identity before performing any other startup work.
+        # Application-level safety checks must complete before any guild-specific
+        # runtime state is inspected or mutated.
         step_started = perf_counter()
 
         self._validate_authenticated_bot_identity()
@@ -740,7 +923,6 @@ class ClavigerBot(discord.Client):
             perf_counter() - step_started,
         )
 
-        # Resolve application identity independently from guild context.
         step_started = perf_counter()
 
         application_identity = await self.discord_identity_service.resolve_application(
@@ -752,8 +934,6 @@ class ClavigerBot(discord.Client):
             perf_counter() - step_started,
         )
 
-        # Validate the shared application database before any guild-specific
-        # persistence is queried.
         step_started = perf_counter()
 
         database_status = await self.database_status_service.check()
@@ -768,113 +948,29 @@ class ClavigerBot(discord.Client):
             perf_counter() - step_started,
         )
 
-        # Resolve guild identity only after application-level safety checks.
-        # A database ownership mismatch therefore fails before touching any
-        # guild-specific runtime state.
-        step_started = perf_counter()
-
-        guild_identity = await self.discord_identity_service.resolve_guild(
-            self,
-            self.guild_id,
-        )
-
-        logger.debug(
-            "Timing startup — résolution identité serveur : %.3f s",
-            perf_counter() - step_started,
-        )
-
-        # Guild readiness is meaningful only when the application database is
-        # operational. A missing/unbound database must remain an application
-        # maintenance problem instead of becoming a guild configuration error.
-        guild_readiness: GuildConfigurationReadiness | None = None
-
-        if database_operational:
-            step_started = perf_counter()
-
-            guild_readiness = await self.guild_configuration_readiness_service.inspect(
-                guild_identity.guild_id,
-            )
-
-            logger.debug(
-                "Timing startup — readiness serveur : %.3f s",
-                perf_counter() - step_started,
-            )
-
-            logger.info(
-                "État configuration serveur %s : %s",
-                guild_identity.guild_id,
-                guild_readiness.state.value,
-            )
-
-        guild_ready = guild_readiness.is_ready if guild_readiness is not None else False
-
-        # Store only successfully resolved startup state.
-        self.application_identity = application_identity
-        self.guild_identity = guild_identity
-        self.guild_readiness = guild_readiness
-
-        # Build the command surface appropriate to this guild's state.
-        step_started = perf_counter()
-
-        self._register_guild_commands(
-            application_identity,
-            guild_identity,
-            database_status=database_status,
-            database_operational=database_operational,
-            guild_ready=guild_ready,
-        )
-
-        logger.debug(
-            "Timing startup — construction arbre local : %.3f s",
-            perf_counter() - step_started,
-        )
-
-        guild = discord.Object(
-            id=guild_identity.guild_id,
-        )
-
-        current_signature = self._build_command_tree_signature(
-            guild,
-        )
-
-        previous_signature = None
+        previous_command_tree_signature = None
 
         if self.startup_restart_request is not None:
-            previous_signature = self.startup_restart_request.command_tree_signature
+            previous_command_tree_signature = (
+                self.startup_restart_request.command_tree_signature
+            )
 
-        tree_is_unchanged = (
-            self.started_from_restart
-            and previous_signature is not None
-            and previous_signature == current_signature
+        guild_runtime_state = await self._configure_guild(
+            application_identity,
+            self.guild_id,
+            database_status=database_status,
+            database_operational=database_operational,
+            previous_command_tree_signature=previous_command_tree_signature,
         )
 
-        # Discord command synchronization is expensive and rate-limited enough
-        # to justify skipping it when an internal restart rebuilt the exact
-        # same command tree.
-        step_started = perf_counter()
-
-        if tree_is_unchanged:
-            logger.info(
-                "Synchronisation Discord ignorée : arbre de commandes inchangé."
-            )
-
-        else:
-            synced = await self.tree.sync(
-                guild=guild,
-            )
-
-            logger.info(
-                "Commandes synchronisées : %s",
-                len(synced),
-            )
-
-        logger.debug(
-            "Timing startup — synchronisation Discord : %.3f s%s",
-            perf_counter() - step_started,
-            " (ignorée)" if tree_is_unchanged else "",
-        )
-
-        self.command_tree_signature = current_signature
+        # Temporary compatibility:
+        # The application and single-guild fields remain populated for existing
+        # runtime consumers. They will disappear once every accessible guild is
+        # configured through the per-guild registry.
+        self.application_identity = application_identity
+        self.guild_identity = guild_runtime_state.identity
+        self.guild_readiness = guild_runtime_state.readiness
+        self.command_tree_signature = guild_runtime_state.command_tree_signature
 
         logger.debug(
             "Timing startup — setup_hook total : %.3f s",

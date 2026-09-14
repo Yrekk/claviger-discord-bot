@@ -469,6 +469,94 @@ def test_register_guild_commands_targets_supplied_guild_identity(
 
 
 @pytest.mark.asyncio
+async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Configure one supplied guild independently from legacy runtime state."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+
+    application_identity = _create_application_identity()
+
+    guild_identity = _create_guild_identity(
+        guild_id=999,
+        bot_display_name="Experimentum Server B",
+    )
+
+    resolve_application, resolve_guild = _patch_identity_resolution(
+        monkeypatch,
+        bot,
+        application_identity=application_identity,
+        guild_identity=guild_identity,
+    )
+
+    readiness = _create_ready_guild_readiness(
+        guild_id=999,
+    )
+
+    readiness_inspect = _patch_readiness_inspection(
+        monkeypatch,
+        bot,
+        readiness=readiness,
+    )
+
+    sync = AsyncMock(
+        return_value=[],
+    )
+
+    monkeypatch.setattr(
+        bot.tree,
+        "sync",
+        sync,
+    )
+
+    runtime_state = await bot._configure_guild(
+        application_identity,
+        999,
+        database_status=_ready_database_status(),
+        database_operational=True,
+    )
+
+    resolve_application.assert_not_awaited()
+
+    resolve_guild.assert_awaited_once_with(
+        bot,
+        999,
+    )
+
+    readiness_inspect.assert_awaited_once_with(
+        999,
+    )
+
+    sync.assert_awaited_once()
+
+    synced_guild = sync.await_args.kwargs["guild"]
+
+    assert synced_guild.id == 999
+
+    assert runtime_state.identity == guild_identity
+    assert runtime_state.readiness == readiness
+    assert runtime_state.command_tree_signature
+
+    assert bot.guild_runtime_states == {
+        999: runtime_state,
+    }
+
+    # Guild configuration must not mutate temporary single-guild compatibility
+    # fields. setup_hook remains responsible for those until migration ends.
+    assert bot.application_identity is None
+    assert bot.guild_identity is None
+    assert bot.guild_readiness is None
+    assert bot.command_tree_signature is None
+
+
+@pytest.mark.asyncio
 async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
     monkeypatch,
     tmp_path,
