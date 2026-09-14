@@ -57,12 +57,6 @@ def _patch_bot_configuration(
         lambda: tmp_path / "claviger.db",
     )
 
-    monkeypatch.setattr(
-        bot_module,
-        "get_error_report_forum_id",
-        lambda: None,
-    )
-
 
 def _application_identity() -> DiscordApplicationIdentity:
     """Create deterministic application identity for lifecycle tests."""
@@ -364,10 +358,7 @@ async def test_on_ready_configures_every_available_cached_guild(
 
     await bot.on_ready()
 
-    configured_guild_ids = [
-        call.args[0]
-        for call in configure.await_args_list
-    ]
+    configured_guild_ids = [call.args[0] for call in configure.await_args_list]
 
     assert configured_guild_ids == [
         123,
@@ -411,14 +402,10 @@ async def test_guild_events_configure_join_and_force_available(
 
     assert configure.await_count == 2
 
-    assert configure.await_args_list[0].args == (
-        999,
-    )
+    assert configure.await_args_list[0].args == (999,)
     assert configure.await_args_list[0].kwargs == {}
 
-    assert configure.await_args_list[1].args == (
-        999,
-    )
+    assert configure.await_args_list[1].args == (999,)
     assert configure.await_args_list[1].kwargs == {
         "force": True,
     }

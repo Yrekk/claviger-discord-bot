@@ -81,12 +81,6 @@ def _patch_bot_configuration(
         lambda: tmp_path / "claviger.db",
     )
 
-    monkeypatch.setattr(
-        bot_module,
-        "get_error_report_forum_id",
-        lambda: None,
-    )
-
 
 def _create_application_identity(
     *,
@@ -1605,10 +1599,7 @@ async def test_restart_guild_configuration_skips_sync_when_tree_is_unchanged(
 
     sync.assert_not_awaited()
 
-    assert (
-        bot.guild_runtime_states[123].command_tree_signature
-        == "same-tree"
-    )
+    assert bot.guild_runtime_states[123].command_tree_signature == "same-tree"
 
 
 @pytest.mark.asyncio
@@ -1693,7 +1684,4 @@ async def test_restart_guild_configuration_resyncs_when_tree_changes(
 
     sync.assert_awaited_once()
 
-    assert (
-        bot.guild_runtime_states[123].command_tree_signature
-        == "new-tree"
-    )
+    assert bot.guild_runtime_states[123].command_tree_signature == "new-tree"

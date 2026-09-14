@@ -21,7 +21,6 @@ from claviger.config import (
     get_database_path,
     get_discord_bot_user_id,
     get_discord_guild_id,
-    get_error_report_forum_id,
 )
 
 # Database
@@ -375,23 +374,17 @@ class ClavigerBot(discord.Client):
         )
 
         # Reporting
+        #
+        # Python logging remains application-wide and is deliberately registered
+        # first so a Discord/DB routing failure cannot remove the local diagnostic
+        # trace of an event.
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
+            DiscordForumReporter(
+                client=self,
+                repository=self.guild_admin_configuration_repository,
+            ),
         ]
-
-        # Temporary compatibility:
-        # Discord reporting still accepts one environment-provided forum ID.
-        # Per-guild DB-backed routing will replace this after multi-guild
-        # runtime registration is complete.
-        admin_report_forum_id = get_error_report_forum_id()
-
-        if admin_report_forum_id is not None:
-            reporters.append(
-                DiscordForumReporter(
-                    client=self,
-                    forum_channel_id=admin_report_forum_id,
-                )
-            )
 
         self.report_service = ReportService(
             reporters=reporters,
