@@ -181,12 +181,27 @@ def create_test_group(
             spec=DatabaseOwnershipService,
         )
 
-        database_ownership_service.get_owner_application_id = AsyncMock(
-            return_value=(application_id if database_ownership_bound else None),
+        initial_owner_application_id = (
+            application_id if database_ownership_bound else None
         )
 
-        database_ownership_service.bind = AsyncMock()
-        database_ownership_service.validate = AsyncMock()
+        database_ownership_service.get_owner_application_id = AsyncMock(
+            return_value=initial_owner_application_id,
+        )
+
+    async def bind_application(
+        bound_application_id: int,
+    ) -> None:
+        """Simulate the ownership state persisted by the real service."""
+
+        database_ownership_service.get_owner_application_id.return_value = (
+            bound_application_id
+        )
+
+    database_ownership_service.bind = AsyncMock(
+        side_effect=bind_application,
+    )
+    database_ownership_service.validate = AsyncMock()
     if admin_configuration_coordinator_service is None:
         admin_configuration_coordinator_service = Mock(
             spec=AdminConfigurationCoordinatorService,

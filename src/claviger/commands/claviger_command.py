@@ -110,6 +110,9 @@ def create_claviger_group(
         database_status_service,
         database_ownership_service,
         report_service,
+        admin_configuration_coordinator_service=(
+            admin_configuration_coordinator_service
+        ),
         application_id=application_id,
         admin_command_name=command_name,
     )

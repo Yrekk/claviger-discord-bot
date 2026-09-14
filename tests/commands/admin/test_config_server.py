@@ -10,6 +10,10 @@ from claviger.models.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
+from claviger.models.admin_structure_discovery_model import (
+    AdminCategoryCandidate,
+    AdminChannelCandidate,
+)
 from claviger.models.admin_structure_provisioning_model import (
     AdminStructureProvisioningResult,
 )
@@ -17,6 +21,10 @@ from claviger.models.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
 from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.ui.admin_configuration_view import (
+    AdminCategorySelectionView,
+    AdminRoutingSelectionView,
+)
 
 from .helpers import (
     create_interaction,
@@ -48,9 +56,61 @@ def _configuration() -> GuildAdminConfiguration:
     )
 
 
+def _channel(
+    *,
+    channel_id: int,
+    name: str,
+    channel_type: str,
+) -> AdminChannelCandidate:
+    """Create one usable private ADMIN channel candidate."""
+
+    return AdminChannelCandidate(
+        channel_id=channel_id,
+        channel_name=name,
+        channel_type=channel_type,
+        everyone_can_view=False,
+        bot_can_view=True,
+        bot_can_send=True,
+    )
+
+
+def _category(
+    *,
+    category_id: int = 100,
+    name: str = "Claviger Admin",
+) -> AdminCategoryCandidate:
+    """Create one structurally ready ADMIN category candidate."""
+
+    return AdminCategoryCandidate(
+        category_id=category_id,
+        category_name=name,
+        everyone_can_view=False,
+        bot_can_view=True,
+        has_public_child=False,
+        channels=(
+            _channel(
+                channel_id=200,
+                name="admin-commands",
+                channel_type="text",
+            ),
+            _channel(
+                channel_id=201,
+                name="report-activity",
+                channel_type="forum",
+            ),
+            _channel(
+                channel_id=202,
+                name="report-error",
+                channel_type="forum",
+            ),
+        ),
+    )
+
+
 def _coordination_result(
     decision: AdminConfigurationReconciliationDecision,
     *,
+    category: AdminCategoryCandidate | None = None,
     configuration_after: GuildAdminConfiguration | None = None,
     configuration_updated: bool = False,
     changed: bool = False,
@@ -59,13 +119,13 @@ def _coordination_result(
 
     reconciliation = AdminConfigurationReconciliationResult(
         decision=decision,
-        category=None,
+        category=category,
     )
 
     provisioning = AdminStructureProvisioningResult(
         guild_id=123,
         decision=decision,
-        category_id=100,
+        category_id=(category.category_id if category is not None else 100),
         created_category=changed,
         configuration=configuration_after,
     )
@@ -207,7 +267,7 @@ async def test_config_server_create_runs_current_guild_configuration() -> None:
     message = interaction.followup.send.await_args.args[0]
 
     assert "créée avec succès" in message
-    assert "routage" in message
+    assert "/claviger restart" in message
 
 
 @pytest.mark.asyncio
@@ -236,16 +296,20 @@ async def test_config_server_keep_reports_valid_configuration() -> None:
 
 
 @pytest.mark.asyncio
-async def test_config_server_import_does_not_guess_semantic_routing() -> None:
-    """Require explicit activity/error selection for an existing ADMIN structure."""
+async def test_config_server_import_opens_explicit_routing_view() -> None:
+    """Require explicit semantic routing for an existing ADMIN structure."""
 
     command, coordinator = get_config_server_command(
         _role_discovery_service(),
     )
 
+    category = _category()
+
     coordinator.configure.return_value = _coordination_result(
         AdminConfigurationReconciliationDecision.IMPORT,
+        category=category,
     )
+    coordinator.prepare_category.return_value = category
 
     interaction = create_interaction()
 
@@ -253,23 +317,44 @@ async def test_config_server_import_does_not_guess_semantic_routing() -> None:
         interaction,
     )
 
+    coordinator.prepare_category.assert_awaited_once_with(
+        interaction.guild,
+        category.category_id,
+    )
+
+    kwargs = interaction.followup.send.await_args.kwargs
+
+    assert isinstance(
+        kwargs["view"],
+        AdminRoutingSelectionView,
+    )
+
     message = interaction.followup.send.await_args.args[0]
 
-    assert "structure ADMIN compatible" in message
-    assert "sélectionnés explicitement" in message
+    assert "ne déduit jamais" in message
 
 
 @pytest.mark.asyncio
-async def test_config_server_needs_choice_never_mutates_implicitly() -> None:
-    """Explain ambiguous discovery without pretending a structure was selected."""
+async def test_config_server_needs_choice_opens_category_selection() -> None:
+    """Expose explicit category selection when discovery is ambiguous."""
 
     command, coordinator = get_config_server_command(
         _role_discovery_service(),
+    )
+
+    first = _category()
+    second = _category(
+        category_id=999,
+        name="Existing Admin",
     )
 
     coordinator.configure.return_value = _coordination_result(
         AdminConfigurationReconciliationDecision.NEEDS_CHOICE,
     )
+    coordinator.discover_candidates.return_value = (
+        first,
+        second,
+    )
 
     interaction = create_interaction()
 
@@ -277,10 +362,16 @@ async def test_config_server_needs_choice_never_mutates_implicitly() -> None:
         interaction,
     )
 
+    kwargs = interaction.followup.send.await_args.kwargs
+
+    assert isinstance(
+        kwargs["view"],
+        AdminCategorySelectionView,
+    )
+
     message = interaction.followup.send.await_args.args[0]
 
-    assert "choix explicite" in message
-    assert "Aucun changement" in message
+    assert "Choisis explicitement" in message
 
 
 @pytest.mark.asyncio
@@ -303,7 +394,7 @@ async def test_config_server_reports_unexpected_failure() -> None:
 
     interaction.followup.send.assert_awaited_once_with(
         (
-            "Échec de la configuration du serveur. "
+            "❌ Échec de la configuration du serveur. "
             "Aucune déduction automatique supplémentaire n'a été faite."
         ),
         ephemeral=True,

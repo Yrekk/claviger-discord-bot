@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from discord import app_commands
 
@@ -9,9 +11,15 @@ from claviger.database.status import (
 )
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.services.admin_configuration_coordinator_service import (
+    AdminConfigurationCoordinatorService,
+)
 from claviger.services.database_ownership_service import (
     DatabaseOwnershipService,
 )
+from claviger.ui.admin_configuration_view import AdminConfigurationStartView
+
+logger = logging.getLogger(__name__)
 
 
 def _format_database_status(
@@ -58,12 +66,78 @@ def _format_database_status(
     )
 
 
+async def _send_database_ready_guidance(
+    interaction: discord.Interaction,
+    *,
+    coordinator: AdminConfigurationCoordinatorService,
+    admin_command_name: str,
+    success_message: str,
+) -> None:
+    """Guide one guild from DB readiness to ADMIN readiness without extra restart."""
+
+    if interaction.guild is None:
+        raise RuntimeError("Database readiness guidance requires a guild interaction.")
+
+    try:
+        configuration = await coordinator.get_persisted_configuration(
+            interaction.guild.id,
+        )
+
+    except Exception:
+        logger.exception(
+            "Unable to inspect ADMIN configuration after database maintenance "
+            "for guild %s.",
+            interaction.guild.id,
+        )
+
+        await interaction.followup.send(
+            (
+                f"{success_message}\n\n"
+                "⚠️ La configuration ADMIN de ce serveur n'a pas pu être "
+                "vérifiée automatiquement. "
+                f"Utilise `/{admin_command_name} restart`, puis "
+                f"`/{admin_command_name} config-server`."
+            ),
+            ephemeral=True,
+        )
+        return
+
+    if configuration is None or not configuration.is_complete:
+        await interaction.followup.send(
+            (
+                f"{success_message}\n\n"
+                "⚙️ **La configuration ADMIN de ce serveur doit maintenant "
+                "être terminée.**\n"
+                "Configure les destinations administratives avant de redémarrer. "
+                "Cela évite un redémarrage intermédiaire inutile."
+            ),
+            ephemeral=True,
+            view=AdminConfigurationStartView(
+                coordinator=coordinator,
+                actor_id=interaction.user.id,
+                guild_id=interaction.guild.id,
+                admin_command_name=admin_command_name,
+            ),
+        )
+        return
+
+    await interaction.followup.send(
+        (
+            f"{success_message} "
+            f"Utilise `/{admin_command_name} restart` pour activer "
+            "les commandes dépendantes de la base."
+        ),
+        ephemeral=True,
+    )
+
+
 def create_database_group(
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
     database_ownership_service: DatabaseOwnershipService,
     report_service: ReportService,
     *,
+    admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
     application_id: int,
     admin_command_name: str,
 ) -> app_commands.Group:
@@ -103,6 +177,11 @@ def create_database_group(
             status = await database_status_service.check()
 
         except Exception as error:
+            await interaction.followup.send(
+                "Impossible de déterminer l'état de la base de données.",
+                ephemeral=True,
+            )
+
             await report_service.emit(
                 ReportEvent(
                     event_type="database.status.failed",
@@ -117,11 +196,6 @@ def create_database_group(
                     actor_id=interaction.user.id,
                     actor_label=interaction.user.display_name,
                 )
-            )
-
-            await interaction.followup.send(
-                "Impossible de déterminer l'état de la base de données.",
-                ephemeral=True,
             )
             return
 
@@ -208,6 +282,11 @@ def create_database_group(
                 )
 
         except Exception as error:
+            await interaction.followup.send(
+                "Échec de l'initialisation de la base de données.",
+                ephemeral=True,
+            )
+
             await report_service.emit(
                 ReportEvent(
                     event_type="database.initialize.failed",
@@ -221,12 +300,17 @@ def create_database_group(
                     actor_label=interaction.user.display_name,
                 )
             )
-
-            await interaction.followup.send(
-                "Échec de l'initialisation de la base de données.",
-                ephemeral=True,
-            )
             return
+
+        await _send_database_ready_guidance(
+            interaction,
+            coordinator=admin_configuration_coordinator_service,
+            admin_command_name=admin_command_name,
+            success_message=(
+                "Base de données initialisée et liée à cette application. "
+                f"Version du schéma : `{final_status.current_version}`."
+            ),
+        )
 
         await report_service.emit(
             ReportEvent(
@@ -245,16 +329,6 @@ def create_database_group(
                 actor_id=interaction.user.id,
                 actor_label=interaction.user.display_name,
             )
-        )
-
-        await interaction.followup.send(
-            (
-                "Base de données initialisée et liée à cette application. "
-                f"Version du schéma : `{final_status.current_version}`. "
-                f"Utilise `/{admin_command_name} restart` pour activer "
-                "les commandes dépendantes de la base."
-            ),
-            ephemeral=True,
         )
 
     @database_group.command(
@@ -340,6 +414,11 @@ def create_database_group(
                 )
 
         except Exception as error:
+            await interaction.followup.send(
+                "Échec de la migration de la base de données.",
+                ephemeral=True,
+            )
+
             await report_service.emit(
                 ReportEvent(
                     event_type="database.migrate.failed",
@@ -353,12 +432,17 @@ def create_database_group(
                     actor_label=interaction.user.display_name,
                 )
             )
-
-            await interaction.followup.send(
-                "Échec de la migration de la base de données.",
-                ephemeral=True,
-            )
             return
+
+        await _send_database_ready_guidance(
+            interaction,
+            coordinator=admin_configuration_coordinator_service,
+            admin_command_name=admin_command_name,
+            success_message=(
+                "Base de données migrée et liée à cette application : "
+                f"`{previous_version}` → `{final_status.current_version}`."
+            ),
+        )
 
         await report_service.emit(
             ReportEvent(
@@ -376,16 +460,6 @@ def create_database_group(
                 actor_id=interaction.user.id,
                 actor_label=interaction.user.display_name,
             )
-        )
-
-        await interaction.followup.send(
-            (
-                "Base de données migrée et liée à cette application : "
-                f"`{previous_version}` → `{final_status.current_version}`. "
-                f"Utilise `/{admin_command_name} restart` pour activer "
-                "les commandes dépendantes de la base."
-            ),
-            ephemeral=True,
         )
 
     @database_group.command(
@@ -440,6 +514,11 @@ def create_database_group(
                 )
 
         except Exception as error:
+            await interaction.followup.send(
+                "Échec de la liaison de la base de données.",
+                ephemeral=True,
+            )
+
             await report_service.emit(
                 ReportEvent(
                     event_type="database.bind.failed",
@@ -456,12 +535,14 @@ def create_database_group(
                     actor_label=interaction.user.display_name,
                 )
             )
-
-            await interaction.followup.send(
-                "Échec de la liaison de la base de données.",
-                ephemeral=True,
-            )
             return
+
+        await _send_database_ready_guidance(
+            interaction,
+            coordinator=admin_configuration_coordinator_service,
+            admin_command_name=admin_command_name,
+            success_message="Base de données liée à cette application Discord.",
+        )
 
         await report_service.emit(
             ReportEvent(
@@ -478,15 +559,6 @@ def create_database_group(
                 actor_id=interaction.user.id,
                 actor_label=interaction.user.display_name,
             )
-        )
-
-        await interaction.followup.send(
-            (
-                "Base de données liée à cette application Discord. "
-                f"Utilise `/{admin_command_name} restart` pour activer "
-                "les commandes dépendantes de la base."
-            ),
-            ephemeral=True,
         )
 
     return database_group
