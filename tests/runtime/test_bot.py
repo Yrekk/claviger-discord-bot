@@ -367,15 +367,19 @@ def test_claviger_bot_composition(
 
     bot = ClavigerBot()
 
-    assert bot.guild_id == 123
     assert bot.expected_bot_user_id == 456
+    assert not hasattr(bot, "guild_id")
+    assert not hasattr(bot, "guild_identity")
+    assert not hasattr(bot, "guild_readiness")
+    assert not hasattr(bot, "command_tree_signature")
 
     assert bot.discord_identity_service is not None
     assert bot.application_identity is None
-    assert bot.guild_identity is None
-    assert bot.guild_readiness is None
     assert bot.guild_runtime_states == {}
     assert bot.restart_requested is False
+
+    assert bot.policy_resolver.fallback_guild_id == 123
+    assert bot.guild_policy_bootstrap_service.fallback_guild_id == 123
 
     assert bot.role_manager is not None
     assert bot.role_discovery_service is not None
@@ -576,12 +580,12 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
         999: runtime_state,
     }
 
-    # Low-level guild configuration must not mutate temporary compatibility
-    # mirrors. The runtime wrapper remains responsible for those until cleanup.
+    # Low-level guild configuration remains independent from application
+    # startup state and stores guild-specific data only in the runtime registry.
     assert bot.application_identity is None
-    assert bot.guild_identity is None
-    assert bot.guild_readiness is None
-    assert bot.command_tree_signature is None
+    assert not hasattr(bot, "guild_identity")
+    assert not hasattr(bot, "guild_readiness")
+    assert not hasattr(bot, "command_tree_signature")
 
 
 @pytest.mark.asyncio
@@ -839,8 +843,10 @@ async def test_setup_hook_uses_configuration_commands_for_new_guild(
         123,
     )
 
-    assert bot.guild_readiness == readiness
-    assert bot.guild_readiness.is_ready is False
+    runtime_state = bot.guild_runtime_states[123]
+
+    assert runtime_state.readiness == readiness
+    assert runtime_state.readiness.is_ready is False
 
     commands = {
         command.name: command
@@ -946,8 +952,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
     sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
-    assert bot.guild_identity is None
-    assert bot.guild_readiness is None
+    assert bot.guild_runtime_states == {}
 
     _cache_available_guild(
         bot,
@@ -963,8 +968,10 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
 
     readiness_inspect.assert_not_awaited()
 
-    assert bot.guild_identity == guild_identity
-    assert bot.guild_readiness is None
+    runtime_state = bot.guild_runtime_states[123]
+
+    assert runtime_state.identity == guild_identity
+    assert runtime_state.readiness is None
 
     commands = {
         command.name: command
@@ -1089,8 +1096,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
     sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
-    assert bot.guild_identity is None
-    assert bot.guild_readiness is None
+    assert bot.guild_runtime_states == {}
 
     _cache_available_guild(
         bot,
@@ -1106,8 +1112,10 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
 
     readiness_inspect.assert_not_awaited()
 
-    assert bot.guild_identity == guild_identity
-    assert bot.guild_readiness is None
+    runtime_state = bot.guild_runtime_states[123]
+
+    assert runtime_state.identity == guild_identity
+    assert runtime_state.readiness is None
 
     commands = {
         command.name: command
@@ -1247,8 +1255,7 @@ async def test_setup_hook_rejects_database_owned_by_another_application(
     sync.assert_not_awaited()
 
     assert bot.application_identity is None
-    assert bot.guild_identity is None
-    assert bot.guild_readiness is None
+    assert bot.guild_runtime_states == {}
 
     commands = bot.tree.get_commands(
         guild=bot_module.discord.Object(
@@ -1598,7 +1605,10 @@ async def test_restart_guild_configuration_skips_sync_when_tree_is_unchanged(
 
     sync.assert_not_awaited()
 
-    assert bot.command_tree_signature == "same-tree"
+    assert (
+        bot.guild_runtime_states[123].command_tree_signature
+        == "same-tree"
+    )
 
 
 @pytest.mark.asyncio
@@ -1683,4 +1693,7 @@ async def test_restart_guild_configuration_resyncs_when_tree_changes(
 
     sync.assert_awaited_once()
 
-    assert bot.command_tree_signature == "new-tree"
+    assert (
+        bot.guild_runtime_states[123].command_tree_signature
+        == "new-tree"
+    )

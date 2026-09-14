@@ -191,18 +191,11 @@ class ClavigerBot(discord.Client):
         )
 
         # Runtime configuration
-        #
-        # Temporary compatibility:
-        # DISCORD_GUILD_ID no longer selects a startup guild. It remains available
-        # only because legacy policy fallback and bootstrap behavior still depend on
-        # one historical guild identifier.
-        self.guild_id = get_discord_guild_id()
         self.expected_bot_user_id = get_discord_bot_user_id()
 
         # Restart state
         self.restart_requested = False
         self.pending_restart_request: RuntimeRestartRequest | None = None
-        self.command_tree_signature: str | None = None
 
         self.startup_restart_request = startup_restart_request
         self.started_from_restart = startup_restart_request is not None
@@ -214,12 +207,6 @@ class ClavigerBot(discord.Client):
         self.application_identity: DiscordApplicationIdentity | None = None
         self.database_status: DatabaseStatus | None = None
         self.database_operational: bool | None = None
-
-        # Temporary compatibility:
-        # Legacy single-guild identity/readiness fields remain available while the
-        # runtime transitions to event-driven multi-guild configuration.
-        self.guild_identity: DiscordGuildIdentity | None = None
-        self.guild_readiness: GuildConfigurationReadiness | None = None
 
         # Guild runtime state is authoritative per guild. Locks prevent overlapping
         # gateway events from configuring and synchronizing the same guild twice.
@@ -347,16 +334,20 @@ class ClavigerBot(discord.Client):
 
         # Guild policy
         #
-        # The fallback guild is temporary single-guild compatibility. It must
-        # disappear before the runtime can be considered fully multi-guild.
+        # Temporary compatibility:
+        # DISCORD_GUILD_ID now exists only to preserve Succumbrae's historical
+        # emergency policy and bootstrap behavior. It has no Discord runtime or
+        # lifecycle significance.
+        policy_fallback_guild_id = get_discord_guild_id()
+
         self.policy_resolver = PolicyResolver(
             repository=self.guild_policy_repository,
-            fallback_guild_id=self.guild_id,
+            fallback_guild_id=policy_fallback_guild_id,
         )
 
         self.guild_policy_bootstrap_service = GuildPolicyBootstrapService(
             repository=self.guild_policy_repository,
-            fallback_guild_id=self.guild_id,
+            fallback_guild_id=policy_fallback_guild_id,
             bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
         )
 
@@ -837,24 +828,13 @@ class ClavigerBot(discord.Client):
                     )
                 )
 
-            runtime_state = await self._configure_guild(
-                application_identity,
-                guild_id,
-                database_status=database_status,
-                database_operational=database_operational,
-                previous_command_tree_signature=previous_command_tree_signature,
-            )
-
-            # Temporary compatibility:
-            # Existing single-guild consumers still read these fields. Only the
-            # legacy startup guild mirrors its state here. The next runtime
-            # migration removes these fields entirely.
-            if guild_id == self.guild_id:
-                self.guild_identity = runtime_state.identity
-                self.guild_readiness = runtime_state.readiness
-                self.command_tree_signature = runtime_state.command_tree_signature
-
-            return runtime_state
+        return await self._configure_guild(
+            application_identity,
+            guild_id,
+            database_status=database_status,
+            database_operational=database_operational,
+            previous_command_tree_signature=previous_command_tree_signature,
+        )
 
     async def _configure_guild(
         self,
