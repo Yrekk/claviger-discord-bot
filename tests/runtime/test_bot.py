@@ -327,6 +327,33 @@ def _patch_readiness_inspection(
     return inspect
 
 
+def _cache_available_guild(
+    bot: ClavigerBot,
+    *,
+    guild_id: int = 123,
+) -> None:
+    """Expose one available guild through the mocked Discord gateway cache.
+
+    Args:
+        bot:
+            Claviger runtime whose Discord guild cache must be prepared.
+
+        guild_id:
+            Discord guild snowflake exposed as currently available.
+
+    Returns:
+        None:
+            The mocked discord.py connection cache is updated in place.
+    """
+
+    bot._connection._guilds = {
+        guild_id: SimpleNamespace(
+            id=guild_id,
+            unavailable=False,
+        ),
+    }
+
+
 def test_claviger_bot_composition(
     monkeypatch,
     tmp_path,
@@ -549,8 +576,8 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
         999: runtime_state,
     }
 
-    # Guild configuration must not mutate temporary single-guild compatibility
-    # fields. setup_hook remains responsible for those until migration ends.
+    # Low-level guild configuration must not mutate temporary compatibility
+    # mirrors. The runtime wrapper remains responsible for those until cleanup.
     assert bot.application_identity is None
     assert bot.guild_identity is None
     assert bot.guild_readiness is None
@@ -558,11 +585,11 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
+async def test_setup_hook_prepares_application_before_ready_configures_guild(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Expose normal commands for an owned DB and a ready guild."""
+    """Keep setup application-only before ready configures cached guilds."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -586,8 +613,10 @@ async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
         guild_identity=guild_identity,
     )
 
+    database_status = _ready_database_status()
+
     status_check = AsyncMock(
-        return_value=_ready_database_status(),
+        return_value=database_status,
     )
 
     monkeypatch.setattr(
@@ -628,24 +657,49 @@ async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
         bot,
     )
 
-    resolve_guild.assert_awaited_once_with(
-        bot,
-        123,
-    )
-
     status_check.assert_awaited_once()
 
     validate.assert_awaited_once_with(
         789,
     )
 
+    resolve_guild.assert_not_awaited()
+    readiness_inspect.assert_not_awaited()
+    sync.assert_not_awaited()
+
+    assert bot.application_identity == application_identity
+    assert bot.database_status == database_status
+    assert bot.database_operational is True
+    assert bot.guild_runtime_states == {}
+
+    commands_before_ready = bot.tree.get_commands(
+        guild=bot_module.discord.Object(
+            id=123,
+        ),
+    )
+
+    assert commands_before_ready == []
+
+    _cache_available_guild(
+        bot,
+        guild_id=123,
+    )
+
+    await bot.on_ready()
+
+    resolve_guild.assert_awaited_once_with(
+        bot,
+        123,
+    )
+
     readiness_inspect.assert_awaited_once_with(
         123,
     )
 
-    assert bot.application_identity == application_identity
-    assert bot.guild_identity == guild_identity
-    assert bot.guild_readiness == readiness
+    assert 123 in bot.guild_runtime_states
+
+    assert bot.guild_runtime_states[123].identity == guild_identity
+    assert bot.guild_runtime_states[123].readiness == readiness
 
     commands = {
         command.name: command
@@ -697,9 +751,9 @@ async def test_setup_hook_resolves_identity_registers_commands_and_syncs(
 
     sync.assert_awaited_once()
 
-    guild = sync.await_args.kwargs["guild"]
+    synced_guild = sync.await_args.kwargs["guild"]
 
-    assert guild.id == 123
+    assert synced_guild.id == 123
 
 
 @pytest.mark.asyncio
@@ -770,6 +824,16 @@ async def test_setup_hook_uses_configuration_commands_for_new_guild(
     validate.assert_awaited_once_with(
         789,
     )
+
+    readiness_inspect.assert_not_awaited()
+    sync.assert_not_awaited()
+
+    _cache_available_guild(
+        bot,
+        guild_id=123,
+    )
+
+    await bot.on_ready()
 
     readiness_inspect.assert_awaited_once_with(
         123,
@@ -876,15 +940,29 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
         bot,
     )
 
+    resolve_guild.assert_not_awaited()
+    validate.assert_not_awaited()
+    readiness_inspect.assert_not_awaited()
+    sync.assert_not_awaited()
+
+    assert bot.application_identity == application_identity
+    assert bot.guild_identity is None
+    assert bot.guild_readiness is None
+
+    _cache_available_guild(
+        bot,
+        guild_id=123,
+    )
+
+    await bot.on_ready()
+
     resolve_guild.assert_awaited_once_with(
         bot,
         123,
     )
 
-    validate.assert_not_awaited()
     readiness_inspect.assert_not_awaited()
 
-    assert bot.application_identity == application_identity
     assert bot.guild_identity == guild_identity
     assert bot.guild_readiness is None
 
@@ -999,10 +1077,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
         bot,
     )
 
-    resolve_guild.assert_awaited_once_with(
-        bot,
-        123,
-    )
+    resolve_guild.assert_not_awaited()
 
     status_check.assert_awaited_once()
 
@@ -1011,8 +1086,26 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
     )
 
     readiness_inspect.assert_not_awaited()
+    sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
+    assert bot.guild_identity is None
+    assert bot.guild_readiness is None
+
+    _cache_available_guild(
+        bot,
+        guild_id=123,
+    )
+
+    await bot.on_ready()
+
+    resolve_guild.assert_awaited_once_with(
+        bot,
+        123,
+    )
+
+    readiness_inspect.assert_not_awaited()
+
     assert bot.guild_identity == guild_identity
     assert bot.guild_readiness is None
 
@@ -1424,7 +1517,7 @@ async def test_complete_restart_feedback_edits_original_response(
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_skips_sync_when_restart_tree_is_unchanged(
+async def test_restart_guild_configuration_skips_sync_when_tree_is_unchanged(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -1499,11 +1592,17 @@ async def test_setup_hook_skips_sync_when_restart_tree_is_unchanged(
 
     sync.assert_not_awaited()
 
+    await bot._configure_runtime_guild(
+        123,
+    )
+
+    sync.assert_not_awaited()
+
     assert bot.command_tree_signature == "same-tree"
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_resyncs_when_restart_tree_changes(
+async def test_restart_guild_configuration_resyncs_when_tree_changes(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -1525,6 +1624,7 @@ async def test_setup_hook_resyncs_when_restart_tree_changes(
             ),
         ),
     )
+
     bot = ClavigerBot(
         startup_restart_request=restart_request,
     )
@@ -1574,6 +1674,12 @@ async def test_setup_hook_resyncs_when_restart_tree_changes(
     )
 
     await bot.setup_hook()
+
+    sync.assert_not_awaited()
+
+    await bot._configure_runtime_guild(
+        123,
+    )
 
     sync.assert_awaited_once()
 

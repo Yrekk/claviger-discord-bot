@@ -151,12 +151,13 @@ class ClavigerBot(discord.Client):
     """Compose and run the Claviger Discord application.
 
     The bot owns application-wide services such as the SQLite database and
-    Discord application identity, while guild-specific state is resolved
-    separately.
+    Discord application identity. Guild-specific runtime state is resolved and
+    stored independently for every accessible Discord guild.
 
-    The current runtime still starts from one configured guild ID. The command
-    registration API is already guild-independent so that the next migration
-    step can register the same application against multiple guilds.
+    Application startup does not depend on one privileged guild. A legacy
+    environment-provided guild ID remains temporarily only for historical policy
+    fallback and bootstrap behavior; it no longer drives Discord lifecycle
+    configuration.
     """
 
     def __init__(
@@ -189,10 +190,12 @@ class ClavigerBot(discord.Client):
             self,
         )
 
-        # Legacy runtime configuration
+        # Runtime configuration
         #
-        # These values still anchor the current single-guild startup path.
-        # They will disappear when setup_hook becomes fully multi-guild.
+        # Temporary compatibility:
+        # DISCORD_GUILD_ID no longer selects a startup guild. It remains available
+        # only because legacy policy fallback and bootstrap behavior still depend on
+        # one historical guild identifier.
         self.guild_id = get_discord_guild_id()
         self.expected_bot_user_id = get_discord_bot_user_id()
 
@@ -1031,13 +1034,12 @@ class ClavigerBot(discord.Client):
         return runtime_state
 
     async def setup_hook(self) -> None:
-        """Prepare application state and the legacy startup guild.
+        """Prepare application-wide runtime state before Discord gateway events.
 
         Returns:
             None:
-                Application identity and database state are resolved once before
-                the current legacy guild is delegated to the guild configuration
-                routine.
+                Application identity, database lifecycle state and ownership state
+                are resolved and stored for later guild configuration.
 
         Raises:
             RuntimeError:
@@ -1048,18 +1050,20 @@ class ClavigerBot(discord.Client):
                 If the SQLite database belongs to another Discord application.
 
             Database errors:
-                Propagated when application or guild runtime state cannot be
-                resolved safely.
+                Propagated when application database state or ownership cannot be
+                inspected safely.
 
             Discord errors:
-                Propagated when guild configuration or command synchronization
-                fails.
+                Propagated when application identity resolution fails.
 
         Notes:
-            This remains a temporary single-guild startup path. Guild-specific
-            work is now delegated to ``_configure_guild`` so the next migration
-            can invoke the same routine for every accessible guild without
-            duplicating runtime behavior.
+            No guild identity, guild readiness, command registration or Discord
+            command synchronization occurs here.
+
+            discord.py invokes ``setup_hook`` before gateway-backed guild state is
+            available. Guild configuration therefore begins only from lifecycle
+            events such as ``on_ready``, ``on_guild_join`` and
+            ``on_guild_available``.
         """
 
         setup_started = perf_counter()
@@ -1070,7 +1074,7 @@ class ClavigerBot(discord.Client):
             logger.info("Démarrage de l'application en cours...")
 
         # Application-level safety checks must complete before any guild-specific
-        # runtime state is inspected or mutated.
+        # runtime event is allowed to configure commands.
         step_started = perf_counter()
 
         self._validate_authenticated_bot_identity()
@@ -1100,8 +1104,8 @@ class ClavigerBot(discord.Client):
             database_status,
         )
 
-        # Application-wide state is validated once during startup and then reused by
-        # event-driven guild configuration.
+        # Application-wide state is validated once during startup and then reused
+        # independently by every event-driven guild configuration.
         self.application_identity = application_identity
         self.database_status = database_status
         self.database_operational = database_operational
@@ -1109,11 +1113,6 @@ class ClavigerBot(discord.Client):
         logger.debug(
             "Timing startup — validation base / ownership : %.3f s",
             perf_counter() - step_started,
-        )
-
-        await self._configure_runtime_guild(
-            self.guild_id,
-            force=True,
         )
 
         logger.debug(
@@ -1151,8 +1150,8 @@ class ClavigerBot(discord.Client):
         if self.database_operational is None:
             return
 
-        # setup_hook still configures the legacy guild during this migration step.
-        # on_ready fills in every other guild now present in Discord's cache.
+        # setup_hook deliberately performs no guild work. Gateway-backed lifecycle
+        # events are the first authoritative source for accessible guilds.
         for guild in self.guilds:
             if guild.unavailable:
                 continue
