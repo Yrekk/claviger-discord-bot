@@ -283,8 +283,18 @@ Exemples :
 /experimentum config-server
 /claviger config-server
 ```
-
 `config-server` n'est volontairement jamais une commande racine globale.
+
+Lorsqu'une guild est READY, les commandes administratives normales sont
+restreintes au `command_channel_id` persisté dans sa configuration ADMIN.
+
+Les commandes de récupération restent volontairement utilisables hors de ce
+salon afin d'éviter tout verrouillage administratif :
+
+```text
+/{bot} database ...
+/{bot} restart
+/{bot} config-server
 
 ---
 

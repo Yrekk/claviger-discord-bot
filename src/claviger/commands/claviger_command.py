@@ -1,5 +1,6 @@
 from discord import app_commands
 
+from claviger.commands.admin_command_group import GuildAdminCommandGroup
 from claviger.commands.catalog_command import create_catalog_group
 from claviger.commands.config_server_command import (
     create_config_server_command,
@@ -96,13 +97,15 @@ def create_claviger_group(
     database_state: DatabaseState,
     database_ownership_bound: bool,
     restart_callback: RestartCallback,
+    admin_command_channel_id: int | None = None,
     maintenance_only: bool = False,
 ) -> app_commands.Group:
     """Create the application's administrative command group."""
 
-    admin_group = app_commands.Group(
+    admin_group = GuildAdminCommandGroup(
         name=command_name,
         description=f"Commandes d'administration de {application_name}.",
+        command_channel_id=admin_command_channel_id,
     )
 
     database_group = create_database_group(

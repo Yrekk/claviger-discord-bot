@@ -597,6 +597,7 @@ class ClavigerBot(discord.Client):
         database_status: DatabaseStatus,
         database_operational: bool,
         guild_ready: bool,
+        admin_command_channel_id: int | None,
     ) -> None:
         """Build the local Discord command tree for one guild.
 
@@ -619,6 +620,10 @@ class ClavigerBot(discord.Client):
             guild_ready:
                 True when this guild has a complete persisted ADMIN
                 configuration.
+
+            admin_command_channel_id:
+                Persisted Discord channel used for normal administrative
+                commands. Recovery commands remain available independently.
 
         Returns:
             None:
@@ -677,9 +682,9 @@ class ClavigerBot(discord.Client):
                 guild=guild,
             )
 
-        # The ADMIN root always exists. When the application or guild is not
-        # operational, create_claviger_group exposes only recovery/configuration
-        # commands such as database, restart and config-server.
+        # The ADMIN root always exists. Recovery commands remain available
+        # outside the configured ADMIN command channel. Normal administrative
+        # commands are restricted by GuildAdminCommandGroup.
         self.tree.add_command(
             create_claviger_group(
                 self.role_discovery_service,
@@ -701,6 +706,7 @@ class ClavigerBot(discord.Client):
                 database_state=database_status.state,
                 database_ownership_bound=database_operational,
                 restart_callback=self.request_restart,
+                admin_command_channel_id=admin_command_channel_id,
                 maintenance_only=not normal_runtime_enabled,
             ),
             guild=guild,
@@ -934,6 +940,15 @@ class ClavigerBot(discord.Client):
 
         guild_ready = guild_readiness.is_ready if guild_readiness is not None else False
 
+        admin_command_channel_id = (
+            guild_readiness.configuration.command_channel_id
+            if (
+                guild_readiness is not None
+                and guild_readiness.configuration is not None
+            )
+            else None
+        )
+
         step_started = perf_counter()
 
         self._register_guild_commands(
@@ -942,6 +957,7 @@ class ClavigerBot(discord.Client):
             database_status=database_status,
             database_operational=database_operational,
             guild_ready=guild_ready,
+            admin_command_channel_id=admin_command_channel_id,
         )
 
         logger.debug(
