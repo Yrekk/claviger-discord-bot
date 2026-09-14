@@ -135,6 +135,7 @@ def create_claviger_group(
         admin_command_name=command_name,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,
+        report_service=report_service,
     )
 
     admin_group.add_command(

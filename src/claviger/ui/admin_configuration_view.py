@@ -9,6 +9,11 @@ from claviger.models.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
 )
+from claviger.models.guild_admin_configuration_model import (
+    GuildAdminConfiguration,
+)
+from claviger.reporting.event import ReportEvent, ReportSeverity
+from claviger.reporting.service import ReportService
 from claviger.services.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
@@ -16,6 +21,11 @@ from claviger.services.admin_configuration_coordinator_service import (
 logger = logging.getLogger(__name__)
 
 MAX_SELECT_OPTIONS = 25
+
+
+# ---------------------------------------------------------------------------
+# Shared interaction validation and option builders
+# ---------------------------------------------------------------------------
 
 
 async def _reject_foreign_actor(
@@ -26,6 +36,9 @@ async def _reject_foreign_actor(
 ) -> bool:
     """Reject a component interaction that does not belong to the workflow owner."""
 
+    # UI components are bound to both the user who opened the workflow and the
+    # guild where it was created. This prevents another member from reusing an
+    # interaction component that was not created for them.
     if interaction.user.id != actor_id:
         await interaction.response.send_message(
             "Ce contrôle appartient à un autre utilisateur.",
@@ -56,6 +69,8 @@ def _build_channel_options(
             "Discord select menus support at most 25 ADMIN channel choices."
         )
 
+    # Human-readable names are shown to the administrator while Discord IDs
+    # remain the stable values carried by the component interaction.
     return [
         discord.SelectOption(
             label=channel.channel_name,
@@ -89,6 +104,11 @@ def _build_category_options(
     ]
 
 
+# ---------------------------------------------------------------------------
+# Select components
+# ---------------------------------------------------------------------------
+
+
 class _RoutingSelect(discord.ui.Select):
     """Store one explicit routing choice on its parent view."""
 
@@ -108,6 +128,9 @@ class _RoutingSelect(discord.ui.Select):
             row=row,
         )
 
+        # The same select implementation is reused for command, activity and
+        # error routing. The target attribute identifies which pending choice
+        # on the parent view receives the selected Discord channel ID.
         self.target_attribute = target_attribute
 
     async def callback(
@@ -131,6 +154,8 @@ class _RoutingSelect(discord.ui.Select):
         ):
             return
 
+        # Selection remains in memory until the administrator presses the final
+        # confirmation button. No database mutation occurs between UI stages.
         setattr(
             view,
             self.target_attribute,
@@ -188,6 +213,9 @@ class _CategorySelect(discord.ui.Select):
         await interaction.response.defer()
 
         try:
+            # Preparing the category may safely complete/provision structural
+            # requirements, but semantic routing is still selected explicitly
+            # by the administrator in the next view.
             category = await view.coordinator.prepare_category(
                 interaction.guild,
                 category_id,
@@ -198,6 +226,7 @@ class _CategorySelect(discord.ui.Select):
                 category=category,
                 actor_id=view.actor_id,
                 admin_command_name=view.admin_command_name,
+                report_service=view.report_service,
             ).bind_guild(
                 view.guild_id,
             )
@@ -220,13 +249,19 @@ class _CategorySelect(discord.ui.Select):
 
         await interaction.edit_original_response(
             content=(
-                f"**Catégorie ADMIN sélectionnée :** `{category.category_name}`\n\n"
+                f"**Catégorie ADMIN sélectionnée :** "
+                f"`{category.category_name}`\n\n"
                 "Choisis explicitement le salon de commandes, le forum "
                 "d'activité et le forum d'erreurs. Les noms ne sont jamais "
                 "utilisés pour déduire automatiquement leur fonction."
             ),
             view=routing_view,
         )
+
+
+# ---------------------------------------------------------------------------
+# Explicit routing view
+# ---------------------------------------------------------------------------
 
 
 class AdminRoutingSelectionView(discord.ui.View):
@@ -239,6 +274,7 @@ class AdminRoutingSelectionView(discord.ui.View):
         category: AdminCategoryCandidate,
         actor_id: int,
         admin_command_name: str,
+        report_service: ReportService | None = None,
     ) -> None:
         super().__init__(
             timeout=300,
@@ -249,7 +285,10 @@ class AdminRoutingSelectionView(discord.ui.View):
         self.actor_id = actor_id
         self.guild_id: int | None = None
         self.admin_command_name = admin_command_name
+        self.report_service = report_service
 
+        # These values are intentionally kept only in memory until the final
+        # confirmation button is pressed.
         self.command_channel_id: int | None = None
         self.activity_forum_id: int | None = None
         self.error_forum_id: int | None = None
@@ -326,6 +365,8 @@ class AdminRoutingSelectionView(discord.ui.View):
         if interaction.guild is None:
             return
 
+        # All semantic destinations must be explicitly selected before any
+        # persistence can happen.
         if (
             self.command_channel_id is None
             or self.activity_forum_id is None
@@ -337,6 +378,7 @@ class AdminRoutingSelectionView(discord.ui.View):
             )
             return
 
+        # Activity and incident routing must stay semantically distinct.
         if self.activity_forum_id == self.error_forum_id:
             await interaction.response.send_message(
                 "Le forum d'activité et le forum d'erreurs doivent être différents.",
@@ -370,10 +412,13 @@ class AdminRoutingSelectionView(discord.ui.View):
 
         self.stop()
 
+        # Direct interaction feedback is mandatory and is sent before optional
+        # reporting. Reporting must never be the only confirmation seen by the
+        # administrator who performed the action.
         await interaction.response.edit_message(
             content=(
                 "✅ **Configuration ADMIN enregistrée.**\n\n"
-                f"- Catégorie : `{configuration.category_id}`\n"
+                f"- Catégorie : `{self.category.category_name}`\n"
                 f"- Commandes : <#{configuration.command_channel_id}>\n"
                 f"- Activité : <#{configuration.activity_forum_id}>\n"
                 f"- Erreurs : <#{configuration.error_forum_id}>\n\n"
@@ -382,6 +427,19 @@ class AdminRoutingSelectionView(discord.ui.View):
             ),
             view=None,
         )
+
+        if self.report_service is not None:
+            await _emit_admin_configuration_activated(
+                interaction,
+                report_service=self.report_service,
+                configuration=configuration,
+                category_name=self.category.category_name,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Category selection and post-database entry point
+# ---------------------------------------------------------------------------
 
 
 class AdminCategorySelectionView(discord.ui.View):
@@ -395,6 +453,7 @@ class AdminCategorySelectionView(discord.ui.View):
         actor_id: int,
         guild_id: int,
         admin_command_name: str,
+        report_service: ReportService | None = None,
     ) -> None:
         super().__init__(
             timeout=300,
@@ -404,6 +463,7 @@ class AdminCategorySelectionView(discord.ui.View):
         self.actor_id = actor_id
         self.guild_id = guild_id
         self.admin_command_name = admin_command_name
+        self.report_service = report_service
 
         self.add_item(
             _CategorySelect(
@@ -422,6 +482,7 @@ class AdminConfigurationStartView(discord.ui.View):
         actor_id: int,
         guild_id: int,
         admin_command_name: str,
+        report_service: ReportService | None = None,
     ) -> None:
         super().__init__(
             timeout=300,
@@ -431,6 +492,7 @@ class AdminConfigurationStartView(discord.ui.View):
         self.actor_id = actor_id
         self.guild_id = guild_id
         self.admin_command_name = admin_command_name
+        self.report_service = report_service
 
     @discord.ui.button(
         label="Configurer le serveur",
@@ -454,11 +516,76 @@ class AdminConfigurationStartView(discord.ui.View):
             ephemeral=True,
         )
 
+        # Reuse exactly the same backend as /{bot} config-server so the
+        # post-database path cannot diverge from normal ADMIN configuration.
         await run_admin_configuration(
             interaction,
             coordinator=self.coordinator,
             admin_command_name=self.admin_command_name,
+            report_service=self.report_service,
         )
+
+
+# ---------------------------------------------------------------------------
+# Reporting helpers
+# ---------------------------------------------------------------------------
+
+
+async def _emit_admin_configuration_activated(
+    interaction: discord.Interaction,
+    *,
+    report_service: ReportService,
+    configuration: GuildAdminConfiguration,
+    category_name: str | None = None,
+) -> None:
+    """Emit the first operational event after ADMIN routing becomes usable."""
+
+    guild = interaction.guild
+
+    if guild is None or not configuration.is_complete:
+        return
+
+    category_label = (
+        f"{category_name} ({configuration.category_id})"
+        if category_name is not None
+        else str(configuration.category_id)
+    )
+
+    event = ReportEvent(
+        event_type="admin.configuration.activated",
+        severity=ReportSeverity.INFO,
+        title="Configuration administrative activée",
+        summary="Le routage administratif du serveur est désormais exploitable.",
+        details=(
+            f"Catégorie : {category_label}\n"
+            f"Salon de commandes : <#{configuration.command_channel_id}>\n"
+            f"Forum d'activité : <#{configuration.activity_forum_id}>\n"
+            f"Forum d'erreurs : <#{configuration.error_forum_id}>"
+        ),
+        guild_id=guild.id,
+        guild_label=guild.name,
+        actor_id=interaction.user.id,
+        actor_label=interaction.user.display_name,
+    )
+
+    try:
+        # ReportService already isolates individual reporter failures. This
+        # additional guard preserves the successful UI flow even if the report
+        # service itself unexpectedly raises.
+        await report_service.emit(
+            event,
+        )
+
+    except Exception:
+        logger.exception(
+            "Unable to emit ADMIN activation report for guild %s.",
+            guild.id,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Shared routing prompt and configuration orchestration
+# ---------------------------------------------------------------------------
 
 
 async def _send_routing_prompt(
@@ -468,6 +595,7 @@ async def _send_routing_prompt(
     category_id: int,
     actor_id: int,
     admin_command_name: str,
+    report_service: ReportService | None = None,
 ) -> None:
     """Prepare one category and expose explicit semantic routing choices."""
 
@@ -484,6 +612,7 @@ async def _send_routing_prompt(
         category=category,
         actor_id=actor_id,
         admin_command_name=admin_command_name,
+        report_service=report_service,
     ).bind_guild(
         interaction.guild.id,
     )
@@ -504,6 +633,7 @@ async def run_admin_configuration(
     *,
     coordinator: AdminConfigurationCoordinatorService,
     admin_command_name: str,
+    report_service: ReportService | None = None,
 ) -> None:
     """Run the shared interactive ADMIN configuration flow for one guild."""
 
@@ -520,6 +650,8 @@ async def run_admin_configuration(
         decision = result.reconciliation.decision
 
         if decision == AdminConfigurationReconciliationDecision.KEEP:
+            # KEEP means the routing was already complete before this
+            # interaction. Re-emitting the activation event would create noise.
             await interaction.followup.send(
                 "Configuration du serveur valide. Aucun changement n'était nécessaire.",
                 ephemeral=True,
@@ -536,19 +668,46 @@ async def run_admin_configuration(
                 ),
                 ephemeral=True,
             )
+
+            configuration = result.configuration_after
+
+            # CREATE may produce a complete ADMIN configuration in one pass.
+            # Emit the activation event only if the final routing is usable.
+            if (
+                report_service is not None
+                and configuration is not None
+                and configuration.is_complete
+            ):
+                category = result.reconciliation.category
+
+                await _emit_admin_configuration_activated(
+                    interaction,
+                    report_service=report_service,
+                    configuration=configuration,
+                    category_name=(
+                        category.category_name if category is not None else None
+                    ),
+                )
+
             return
 
         if decision == AdminConfigurationReconciliationDecision.COMPLETE:
             if result.configuration_after is not None:
+                configuration = result.configuration_after
+
+                # Activation is meaningful only when ADMIN routing transitions
+                # from missing/incomplete to complete.
+                became_ready = configuration.is_complete and (
+                    result.configuration_before is None
+                    or not result.configuration_before.is_complete
+                )
+
                 message = (
                     "✅ La structure ADMIN a été réparée ou complétée. "
                     "Le routage persistant est maintenant exploitable."
                 )
 
-                if (
-                    result.configuration_before is None
-                    or not result.configuration_before.is_complete
-                ):
+                if became_ready:
                     message += (
                         "\n\n"
                         f"Utilise `/{admin_command_name} restart` pour activer "
@@ -559,8 +718,23 @@ async def run_admin_configuration(
                     message,
                     ephemeral=True,
                 )
+
+                if report_service is not None and became_ready:
+                    category = result.reconciliation.category
+
+                    await _emit_admin_configuration_activated(
+                        interaction,
+                        report_service=report_service,
+                        configuration=configuration,
+                        category_name=(
+                            category.category_name if category is not None else None
+                        ),
+                    )
+
                 return
 
+            # Structural reconciliation can still require the administrator to
+            # explicitly assign command/activity/error semantics.
             category_id = result.provisioning.category_id
 
             if category_id is None and result.reconciliation.category is not None:
@@ -577,6 +751,7 @@ async def run_admin_configuration(
                 category_id=category_id,
                 actor_id=interaction.user.id,
                 admin_command_name=admin_command_name,
+                report_service=report_service,
             )
             return
 
@@ -586,12 +761,15 @@ async def run_admin_configuration(
             if category is None:
                 raise RuntimeError("IMPORT ADMIN configuration has no category.")
 
+            # Existing compatible structures still require explicit semantic
+            # routing before persistence.
             await _send_routing_prompt(
                 interaction,
                 coordinator=coordinator,
                 category_id=category.category_id,
                 actor_id=interaction.user.id,
                 admin_command_name=admin_command_name,
+                report_service=report_service,
             )
             return
 
@@ -602,9 +780,11 @@ async def run_admin_configuration(
 
             if not categories:
                 raise RuntimeError(
-                    "ADMIN configuration requires a choice but no category is available."
+                    "ADMIN configuration requires a choice "
+                    "but no category is available."
                 )
 
+            # Ambiguous discovery must always be resolved by a human choice.
             await interaction.followup.send(
                 (
                     "Plusieurs structures ADMIN sont possibles, ou la structure "
@@ -618,13 +798,12 @@ async def run_admin_configuration(
                     actor_id=interaction.user.id,
                     guild_id=guild.id,
                     admin_command_name=admin_command_name,
+                    report_service=report_service,
                 ),
             )
             return
 
-        raise RuntimeError(
-            f"Unsupported ADMIN reconciliation decision: {decision!r}."
-        )
+        raise RuntimeError(f"Unsupported ADMIN reconciliation decision: {decision!r}.")
 
     except Exception:
         logger.exception(

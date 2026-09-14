@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 
 from claviger.database.status import DatabaseState
+from claviger.reporting.service import ReportService
 from claviger.services.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
@@ -14,6 +15,7 @@ def create_config_server_command(
     admin_command_name: str,
     database_state: DatabaseState,
     database_ownership_bound: bool,
+    report_service: ReportService | None = None,
 ) -> app_commands.Command:
     """Create the guild ADMIN configuration command."""
 
@@ -71,6 +73,7 @@ def create_config_server_command(
             interaction,
             coordinator=coordinator,
             admin_command_name=admin_command_name,
+            report_service=report_service,
         )
 
     return config_server

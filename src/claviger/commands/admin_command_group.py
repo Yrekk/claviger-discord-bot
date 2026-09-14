@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 
-
 RECOVERY_COMMAND_NAMES = frozenset(
     {
         "database",

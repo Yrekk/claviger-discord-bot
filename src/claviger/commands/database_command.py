@@ -70,6 +70,7 @@ async def _send_database_ready_guidance(
     interaction: discord.Interaction,
     *,
     coordinator: AdminConfigurationCoordinatorService,
+    report_service: ReportService,
     admin_command_name: str,
     success_message: str,
 ) -> None:
@@ -117,6 +118,7 @@ async def _send_database_ready_guidance(
                 actor_id=interaction.user.id,
                 guild_id=interaction.guild.id,
                 admin_command_name=admin_command_name,
+                report_service=report_service,
             ),
         )
         return
@@ -305,6 +307,7 @@ def create_database_group(
         await _send_database_ready_guidance(
             interaction,
             coordinator=admin_configuration_coordinator_service,
+            report_service=report_service,
             admin_command_name=admin_command_name,
             success_message=(
                 "Base de données initialisée et liée à cette application. "
@@ -437,6 +440,7 @@ def create_database_group(
         await _send_database_ready_guidance(
             interaction,
             coordinator=admin_configuration_coordinator_service,
+            report_service=report_service,
             admin_command_name=admin_command_name,
             success_message=(
                 "Base de données migrée et liée à cette application : "
@@ -540,6 +544,7 @@ def create_database_group(
         await _send_database_ready_guidance(
             interaction,
             coordinator=admin_configuration_coordinator_service,
+            report_service=report_service,
             admin_command_name=admin_command_name,
             success_message="Base de données liée à cette application Discord.",
         )

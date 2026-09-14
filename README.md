@@ -267,11 +267,17 @@ Une guild prête peut exposer :
 Une guild non configurée reste volontairement en surface réduite :
 
 ```text
-/say
 /{bot} database ...
 /{bot} restart
 /{bot} config-server
 ```
+
+Le salon ADMIN constitue une restriction de contexte, pas une autorisation :
+les contrôles owner / rôles de confiance restent indépendants.
+
+---
+
+# Configuration ADMIN par serveur
 
 Elle ne reçoit pas automatiquement `/membre`, `/noctis` ou les groupes d'administration complets simplement parce qu'une autre guild utilise déjà la même application.
 
@@ -464,6 +470,10 @@ CRITICAL
 Le logger Python reste application-wide et est enregistré indépendamment du reporter Discord.
 
 Ainsi, une erreur de routage Discord ou de lecture de configuration ne supprime pas la trace locale de l'événement.
+
+Lorsqu'une configuration ADMIN devient exploitable pour la première fois,
+Claviger émet `admin.configuration.activated` comme premier événement `INFO`
+dans le forum d'activité nouvellement configuré.
 
 Le reporting Discord refuse de router un événement sans `guild_id` ou sans destination exploitable.
 
