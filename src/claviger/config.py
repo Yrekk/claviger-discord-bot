@@ -214,38 +214,6 @@ def _get_required_positive_int(
     return value
 
 
-def _get_optional_positive_int(
-    values: Mapping[str, str],
-    name: str,
-    environment: str,
-) -> int | None:
-    """Return one optional positive integer configuration value."""
-
-    raw_value = values.get(
-        name,
-    )
-
-    if raw_value is None or not raw_value.strip():
-        return None
-
-    try:
-        value = int(
-            raw_value,
-        )
-
-    except ValueError as error:
-        raise RuntimeError(
-            f"{name} must be a valid integer for the '{environment}' environment."
-        ) from error
-
-    if value <= 0:
-        raise RuntimeError(
-            f"{name} must be greater than zero for the '{environment}' environment."
-        )
-
-    return value
-
-
 def get_environment_name(
     selector_path: Path = DEFAULT_SELECTOR_PATH,
 ) -> str:
@@ -328,7 +296,7 @@ def get_discord_bot_user_id(
 def get_discord_guild_id(
     selector_path: Path = DEFAULT_SELECTOR_PATH,
 ) -> int:
-    """Return the Discord guild ID for the selected environment."""
+    """Return Succumbrae's historical fallback guild ID."""
 
     environment, values = _load_environment_values(
         selector_path,
@@ -353,70 +321,5 @@ def get_database_path(
     return _get_required_value(
         values,
         "DATABASE_PATH",
-        environment,
-    )
-
-
-def get_error_report_forum_id(
-    selector_path: Path = DEFAULT_SELECTOR_PATH,
-) -> int:
-    """Return the Discord forum receiving runtime error reports."""
-
-    environment, values = _load_environment_values(
-        selector_path,
-    )
-
-    new_value = values.get(
-        "ERROR_REPORT_FORUM_ID",
-    )
-
-    legacy_value = values.get(
-        "ADMIN_REPORT_FORUM_ID",
-    )
-
-    if (
-        (new_value is None or not new_value.strip())
-        and legacy_value is not None
-        and legacy_value.strip()
-    ):
-        raise RuntimeError(
-            "ADMIN_REPORT_FORUM_ID is obsolete. Rename it to ERROR_REPORT_FORUM_ID."
-        )
-
-    return _get_required_positive_int(
-        values,
-        "ERROR_REPORT_FORUM_ID",
-        environment,
-    )
-
-
-def get_activity_report_forum_id(
-    selector_path: Path = DEFAULT_SELECTOR_PATH,
-) -> int | None:
-    """Return the optional Discord forum receiving activity reports."""
-
-    environment, values = _load_environment_values(
-        selector_path,
-    )
-
-    return _get_optional_positive_int(
-        values,
-        "ACTIVITY_REPORT_FORUM_ID",
-        environment,
-    )
-
-
-def get_admin_commands_channel_id(
-    selector_path: Path = DEFAULT_SELECTOR_PATH,
-) -> int | None:
-    """Return the optional Discord channel dedicated to admin commands."""
-
-    environment, values = _load_environment_values(
-        selector_path,
-    )
-
-    return _get_optional_positive_int(
-        values,
-        "ADMIN_COMMANDS_CHANNEL_ID",
         environment,
     )

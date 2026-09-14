@@ -13,9 +13,6 @@ def _write_environment_file(
     bot_user_id: str = "456",
     guild_id: str = "123",
     database_path: str = "data/test.db",
-    error_report_forum_id: str = "456",
-    activity_report_forum_id: str = "789",
-    admin_commands_channel_id: str = "987",
 ) -> None:
     """Write one complete test environment configuration."""
 
@@ -27,9 +24,6 @@ def _write_environment_file(
                 f"DISCORD_BOT_USER_ID={bot_user_id}",
                 f"DISCORD_GUILD_ID={guild_id}",
                 f"DATABASE_PATH={database_path}",
-                f"ERROR_REPORT_FORUM_ID={error_report_forum_id}",
-                f"ACTIVITY_REPORT_FORUM_ID={activity_report_forum_id}",
-                f"ADMIN_COMMANDS_CHANNEL_ID={admin_commands_channel_id}",
                 "",
             )
         ),
@@ -78,9 +72,6 @@ def test_local_selector_loads_development_environment(
     assert config.get_discord_bot_user_id(selector_path) == 456
     assert config.get_discord_guild_id(selector_path) == 123
     assert config.get_database_path(selector_path) == "data/test.db"
-    assert config.get_error_report_forum_id(selector_path) == 456
-    assert config.get_activity_report_forum_id(selector_path) == 789
-    assert config.get_admin_commands_channel_id(selector_path) == 987
 
 
 def test_local_selector_rejects_additional_configuration(
@@ -229,18 +220,6 @@ def test_runtime_environment_can_be_supplied_without_files(
         "DATABASE_PATH",
         "/data/claviger.db",
     )
-    monkeypatch.setenv(
-        "ERROR_REPORT_FORUM_ID",
-        "654",
-    )
-    monkeypatch.setenv(
-        "ACTIVITY_REPORT_FORUM_ID",
-        "987",
-    )
-    monkeypatch.setenv(
-        "ADMIN_COMMANDS_CHANNEL_ID",
-        "111",
-    )
 
     selector_path = tmp_path / ".env"
 
@@ -249,7 +228,6 @@ def test_runtime_environment_can_be_supplied_without_files(
     assert config.get_discord_bot_user_id(selector_path) == 654
     assert config.get_discord_guild_id(selector_path) == 321
     assert config.get_database_path(selector_path) == "/data/claviger.db"
-    assert config.get_error_report_forum_id(selector_path) == 654
 
 
 def test_missing_discord_token_is_rejected(
@@ -324,7 +302,7 @@ def test_invalid_discord_guild_id_is_rejected(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    """Reject malformed Discord identifiers before bot startup."""
+    """Reject malformed historical fallback guild identifiers before startup."""
 
     monkeypatch.delenv(
         "CLAVIGER_ENV",
@@ -352,78 +330,6 @@ def test_invalid_discord_guild_id_is_rejected(
         config.get_discord_guild_id(
             selector_path,
         )
-
-
-def test_legacy_admin_report_variable_is_rejected(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    """Explain the V1.1 error forum configuration rename explicitly."""
-
-    monkeypatch.delenv(
-        "CLAVIGER_ENV",
-        raising=False,
-    )
-
-    selector_path = tmp_path / ".env"
-    development_path = tmp_path / ".env.development"
-
-    _write_selector(
-        selector_path,
-        "development",
-    )
-
-    development_path.write_text(
-        "\n".join(
-            (
-                "CLAVIGER_ENV=development",
-                "DISCORD_TOKEN=test-token",
-                "DISCORD_GUILD_ID=123",
-                "DATABASE_PATH=data/test.db",
-                "ADMIN_REPORT_FORUM_ID=456",
-                "",
-            )
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        RuntimeError,
-        match="ADMIN_REPORT_FORUM_ID is obsolete",
-    ):
-        config.get_error_report_forum_id(
-            selector_path,
-        )
-
-
-def test_optional_future_channel_ids_can_be_absent(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    """Allow activity and admin channel configuration before those features ship."""
-
-    monkeypatch.delenv(
-        "CLAVIGER_ENV",
-        raising=False,
-    )
-
-    selector_path = tmp_path / ".env"
-    development_path = tmp_path / ".env.development"
-
-    _write_selector(
-        selector_path,
-        "development",
-    )
-
-    _write_environment_file(
-        development_path,
-        "development",
-        activity_report_forum_id="",
-        admin_commands_channel_id="",
-    )
-
-    assert config.get_activity_report_forum_id(selector_path) is None
-    assert config.get_admin_commands_channel_id(selector_path) is None
 
 
 def test_invalid_discord_bot_user_id_is_rejected(
