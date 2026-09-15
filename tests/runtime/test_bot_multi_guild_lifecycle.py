@@ -578,13 +578,14 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
     assert guild_b_initial_state.readiness is not None
     assert guild_b_initial_state.readiness.is_ready is False
 
+    # Specialized runtime commands no longer exist. Until generic commands are
+    # rebuilt from persisted workflow definitions, both command trees expose
+    # only the shared command and the dynamic administrative group.
     assert _guild_command_names(
         bot,
         123,
     ) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
@@ -638,8 +639,6 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
         123,
     ) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
@@ -648,8 +647,6 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
         999,
     ) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
@@ -690,8 +687,6 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
         123,
     ) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
@@ -700,8 +695,6 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
         999,
     ) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
