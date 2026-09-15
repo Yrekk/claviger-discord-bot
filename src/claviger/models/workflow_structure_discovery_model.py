@@ -24,27 +24,30 @@ class WorkflowTextChannelCandidate:
     # None means that the channel currently lives outside any category.
     category_id: int | None
 
-    # Effective permissions describe what @everyone and the authenticated bot
-    # can actually do in the channel after Discord resolves inheritance and
-    # overwrites.
+    # Effective permissions remain observational. They describe current Discord
+    # behavior but are not used as the structural workflow marker.
     everyone_can_view: bool
     everyone_can_send: bool
 
     bot_can_view: bool
     bot_can_send: bool
 
-    # Structural workflow discovery also needs to distinguish an explicit
-    # application-role permission from an effective permission inherited from
-    # another source.
+    # Structural workflow discovery uses the explicit @everyone send_messages
+    # overwrite as its deterministic marker:
     #
     # True:
-    #     The application's Discord role explicitly allows sending messages.
+    #     @everyone explicitly may send messages in this channel.
     #
     # False:
-    #     The application's Discord role explicitly denies sending messages.
+    #     @everyone explicitly may not send messages in this channel.
     #
     # None:
-    #     No explicit send_messages overwrite exists for that role.
+    #     No explicit channel-level marker exists. Inherited behavior is not
+    #     enough to classify the channel as part of a workflow structure.
+    everyone_send_override: bool | None = None
+
+    # The application-role overwrite remains available as observational data
+    # for later diagnostics or reconciliation. It is not a discovery criterion.
     application_role_send_override: bool | None = None
 
 
@@ -60,15 +63,16 @@ class WorkflowRoleCandidate:
 class WorkflowStructureCandidate:
     """Describe one Discord category matching the workflow structural contract.
 
-    A structure candidate is intentionally semantic-free. Discovery knows only
-    that the category contains both kinds of channels required by the workflow
-    contract:
+    A structure candidate is intentionally semantic-free. Discovery recognizes
+    only explicit @everyone channel-level send markers inside one category:
 
-    - one or more protected channels where @everyone cannot send messages and
-      the application role explicitly can;
-    - one or more interactive channels where @everyone can communicate.
+    - one or more protected channels with send_messages explicitly denied;
+    - one or more interactive channels with send_messages explicitly allowed.
 
-    The service does not decide which protected channel is the rules/management
+    Visibility, role names, channel names, application permissions and inherited
+    permissions do not participate in recognition.
+
+    The service does not decide which protected channel is the management
     channel or which interactive channel is the execution channel when several
     possibilities exist. That choice belongs to the human configuration flow.
     """

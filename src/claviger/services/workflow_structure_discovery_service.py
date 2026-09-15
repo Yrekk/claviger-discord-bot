@@ -32,9 +32,6 @@ class WorkflowStructureDiscoveryService:
                 "The application could not resolve its own member in the guild."
             )
 
-        # Role hierarchy already has one authoritative implementation.
-        # Reusing it also gives workflow discovery the application's Discord role
-        # without relying on any role name.
         hierarchy = await self.role_discovery_service.get_hierarchy(
             guild,
         )
@@ -97,9 +94,6 @@ class WorkflowStructureDiscoveryService:
             text_channels=text_channels,
         )
 
-        # Creation permissions remain capabilities rather than discovery
-        # decisions. Existing resources can still be proposed even when the
-        # application is currently unable to create new ones.
         guild_permissions = bot_member.guild_permissions
 
         return WorkflowStructureDiscoveryResult(
@@ -151,7 +145,7 @@ class WorkflowStructureDiscoveryService:
         bot_member: discord.Member,
         application_role: discord.Role,
     ) -> WorkflowTextChannelCandidate:
-        """Build one immutable text-channel snapshot and explicit role overwrite."""
+        """Build one immutable text-channel snapshot and explicit overwrites."""
 
         everyone_permissions = channel.permissions_for(
             guild.default_role,
@@ -159,6 +153,10 @@ class WorkflowStructureDiscoveryService:
 
         bot_permissions = channel.permissions_for(
             bot_member,
+        )
+
+        everyone_overwrite = channel.overwrites_for(
+            guild.default_role,
         )
 
         application_role_overwrite = channel.overwrites_for(
@@ -181,7 +179,10 @@ class WorkflowStructureDiscoveryService:
             bot_can_send=bool(
                 bot_permissions.send_messages,
             ),
-            application_role_send_override=(application_role_overwrite.send_messages),
+            everyone_send_override=everyone_overwrite.send_messages,
+            application_role_send_override=(
+                application_role_overwrite.send_messages
+            ),
         )
 
     @staticmethod
@@ -190,16 +191,15 @@ class WorkflowStructureDiscoveryService:
         categories: tuple[WorkflowCategoryCandidate, ...],
         text_channels: tuple[WorkflowTextChannelCandidate, ...],
     ) -> tuple[WorkflowStructureCandidate, ...]:
-        """Recognize workflow structures from permissions without name inference.
+        """Recognize workflow structures from explicit @everyone send markers.
 
-        A category is a workflow candidate when it contains:
+        A category is a workflow candidate when it contains both:
 
-        - at least one protected channel where @everyone cannot send messages
-          and the application's role explicitly can;
-        - at least one interactive channel where @everyone can send messages.
+        - at least one channel where @everyone has an explicit send deny;
+        - at least one other channel where @everyone has an explicit send allow.
 
-        Several protected or interactive channels do not invalidate the
-        candidate. They simply require a later explicit human selection.
+        Visibility, inherited permissions, bot permissions and names are ignored.
+        Several protected or interactive channels remain explicit human choices.
         """
 
         candidates: list[WorkflowStructureCandidate] = []
@@ -214,15 +214,13 @@ class WorkflowStructureDiscoveryService:
             protected_channels = tuple(
                 channel
                 for channel in category_channels
-                if (
-                    not channel.everyone_can_send
-                    and channel.application_role_send_override is True
-                    and channel.bot_can_send
-                )
+                if channel.everyone_send_override is False
             )
 
             interactive_channels = tuple(
-                channel for channel in category_channels if channel.everyone_can_send
+                channel
+                for channel in category_channels
+                if channel.everyone_send_override is True
             )
 
             if not protected_channels or not interactive_channels:
