@@ -1,7 +1,6 @@
 from discord import app_commands
 
 from claviger.commands.admin_command_group import GuildAdminCommandGroup
-from claviger.commands.catalog_command import create_catalog_group
 from claviger.commands.config_command import create_config_group
 from claviger.commands.config_server_command import (
     create_config_server_command,
@@ -19,16 +18,9 @@ from claviger.database.status import (
     DatabaseState,
     DatabaseStatusService,
 )
-from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
 from claviger.services.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
-)
-from claviger.services.catalog_next_coordinator_service import (
-    CatalogNextCoordinatorService,
-)
-from claviger.services.catalog_sync_coordinator_service import (
-    CatalogSyncCoordinatorService,
 )
 from claviger.services.database_ownership_service import (
     DatabaseOwnershipService,
@@ -37,7 +29,6 @@ from claviger.services.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
-from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
@@ -87,10 +78,6 @@ def _configure_database_command_availability(
 
 def create_claviger_group(
     role_discovery_service: RoleDiscoveryService,
-    policy_resolver: PolicyResolver,
-    role_classifier: RoleClassifier,
-    catalog_sync_coordinator_service: CatalogSyncCoordinatorService,
-    catalog_next_coordinator_service: CatalogNextCoordinatorService,
     guild_policy_bootstrap_service: GuildPolicyBootstrapService,
     database_schema: DatabaseSchema,
     database_status_service: DatabaseStatusService,
@@ -193,24 +180,11 @@ def create_claviger_group(
 
     roles_group = create_roles_group(
         role_discovery_service,
-        policy_resolver,
-        role_classifier,
-        report_service,
-    )
-
-    catalog_group = create_catalog_group(
-        catalog_sync_coordinator_service,
-        catalog_next_coordinator_service,
-        policy_resolver,
-        database_status_service,
         report_service,
     )
 
     admin_group.add_command(
         roles_group,
-    )
-    admin_group.add_command(
-        catalog_group,
     )
     admin_group.add_command(
         report_group,
