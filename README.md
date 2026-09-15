@@ -270,6 +270,7 @@ Une guild non configurée reste volontairement en surface réduite :
 /{bot} database ...
 /{bot} restart
 /{bot} config-server
+/{bot} config scan
 ```
 
 Le salon ADMIN constitue une restriction de contexte, pas une autorisation :
@@ -289,46 +290,56 @@ Exemples :
 /experimentum config-server
 /claviger config-server
 ```
+
 `config-server` n'est volontairement jamais une commande racine globale.
 
-Lorsqu'une guild est READY, les commandes administratives normales sont
-restreintes au `command_channel_id` persisté dans sa configuration ADMIN.
+Lorsqu'une guild est READY, les commandes administratives normales sont restreintes au `command_channel_id` persisté dans sa configuration ADMIN.
 
-Les commandes de récupération restent volontairement utilisables hors de ce
-salon afin d'éviter tout verrouillage administratif :
+Les commandes de récupération restent volontairement utilisables hors de ce salon afin d'éviter tout verrouillage administratif :
 
 ```text
 /{bot} database ...
 /{bot} restart
 /{bot} config-server
+/{bot} config scan
+```
 
-`/config scan`
+---
 
-Cette tranche ajoute un diagnostic read-only :
+## Diagnostic de configuration
+
+La commande read-only :
 
 ```text
 /{application-root} config scan
 ```
 
-Il expose :
+permet d'inspecter l'état de configuration de la guild et de l'application sans effectuer de mutation Discord ou SQLite.
 
-- état/version SQLite ;
-- ownership ;
-- ADMIN persisté + validation réelle Discord ;
-- état READY / INCOMPLETE / DRIFT ;
-- source de la policy + nombre d'overrides ;
-- valeurs de la policy actuelle, explicitement marquées comme compatibilité ;
-- compteurs génériques de workflows, catalogues et contextes activés.
+Elle expose notamment :
 
-Point important : `config scan` est une commande de recovery.
+- l'état et la version de la base SQLite ;
+- l'ownership applicatif ;
+- la configuration ADMIN persistée et sa validation contre l'état Discord réel ;
+- l'état ADMIN `READY`, `INCOMPLETE` ou `DRIFT` ;
+- la source de la policy et le nombre d'overrides persistés ;
+- les valeurs de policy historiques encore utilisées pour compatibilité ;
+- le nombre de workflows, catalogues et contextes activés.
 
-- ADMIN sain → elle n'est utilisable que dans le salon ADMIN.
-- ADMIN absent/cassé → elle reste disponible ailleurs pour diagnostiquer avant réparation.
+`config scan` possède un comportement particulier de recovery :
 
-Aucune mutation Discord ou SQLite n'est effectuée.
+```text
+ADMIN sain
+→ commande autorisée uniquement dans le salon ADMIN configuré
+
+ADMIN absent / incomplet / en drift
+→ commande utilisable hors du salon ADMIN
+→ diagnostic possible avant réparation
+```
+
+La commande ne répare rien et ne persiste rien. Elle observe uniquement l'état courant.
 
 ---
-
 
 Chaque guild peut posséder une structure ADMIN persistée en SQLite.
 
@@ -885,7 +896,7 @@ Il ne donne pas au bot un accès au socket Docker ni à l'hôte.
 
 # Tests
 
-Claviger dispose de plus de **460 tests automatisés**.
+Claviger dispose de plus de **560 tests automatisés**.
 
 Ils couvrent notamment :
 
@@ -1004,7 +1015,8 @@ La consolidation V1.1 a déjà introduit plusieurs changements structurants.
 - reconciliation ;
 - provisioning ;
 - persistence SQLite ;
-- `/{bot} config-server`.
+- `/{bot} config-server` ;
+- diagnostic read-only `/{bot} config scan`.
 
 ### Readiness par guild
 
