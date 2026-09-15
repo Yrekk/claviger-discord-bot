@@ -352,7 +352,7 @@ def test_claviger_bot_composition(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Build complete runtime composition without connecting to Discord."""
+    """Build generic runtime composition without specialized workflows."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -375,12 +375,9 @@ def test_claviger_bot_composition(
     assert bot.policy_resolver.fallback_guild_id == 123
     assert bot.guild_policy_bootstrap_service.fallback_guild_id == 123
 
-    assert bot.role_manager is not None
     assert bot.role_discovery_service is not None
     assert bot.authorization_service is not None
     assert bot.say_service is not None
-    assert bot.role_classifier is not None
-    assert bot.adult_access_classifier is not None
 
     assert bot.database is not None
     assert bot.database_schema is not None
@@ -399,28 +396,39 @@ def test_claviger_bot_composition(
     assert bot.admin_structure_provisioning_service is not None
     assert bot.admin_configuration_coordinator_service is not None
 
+    assert bot.workflow_configuration_repository is not None
+    assert bot.workflow_configuration_validation_service is not None
+    assert bot.workflow_structure_discovery_service is not None
+    assert bot.workflow_configuration_reconciliation_service is not None
+    assert bot.workflow_structure_provisioning_service is not None
+    assert bot.workflow_configuration_coordinator_service is not None
+
+    assert bot.guild_configuration_inspection_service is not None
     assert bot.report_service is not None
 
-    assert bot.interest_catalog_repository is not None
-    assert bot.access_catalog_repository is not None
+    legacy_attributes = (
+        "role_manager",
+        "role_classifier",
+        "adult_access_classifier",
+        "interest_catalog_repository",
+        "access_catalog_repository",
+        "catalog_registry",
+        "catalog_sync_planner",
+        "catalog_sync_coordinator_service",
+        "catalog_next_coordinator_service",
+        "member_interest_questionnaire_service",
+        "member_role_planner_service",
+        "member_role_executor_service",
+        "member_workflow_coordinator_service",
+        "adult_access_workflow_service",
+        "adult_access_questionnaire_service",
+        "noctis_role_planner_service",
+        "noctis_role_executor_service",
+        "noctis_workflow_coordinator_service",
+    )
 
-    assert bot.catalog_registry is not None
-    assert bot.role_channel_discovery_service is not None
-    assert bot.catalog_sync_planner is not None
-    assert bot.catalog_sync_coordinator_service is not None
-    assert bot.catalog_next_coordinator_service is not None
-
-    assert bot.member_interest_questionnaire_service is not None
-    assert bot.member_role_planner_service is not None
-    assert bot.member_role_executor_service is not None
-    assert bot.member_workflow_coordinator_service is not None
-
-    assert bot.adult_access_workflow_service is not None
-    assert bot.adult_access_workflow_service.classifier is bot.adult_access_classifier
-    assert bot.adult_access_questionnaire_service is not None
-    assert bot.noctis_role_planner_service is not None
-    assert bot.noctis_role_executor_service is not None
-    assert bot.noctis_workflow_coordinator_service is not None
+    for attribute_name in legacy_attributes:
+        assert not hasattr(bot, attribute_name)
 
     commands = bot.tree.get_commands(
         guild=bot_module.discord.Object(
@@ -710,10 +718,10 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         )
     }
 
+    # Specialized runtime commands are gone. Generic workflow commands will be
+    # registered from persisted workflow definitions in the next runtime slice.
     assert set(commands) == {
         "say",
-        "membre",
-        "noctis",
         "experimentum",
     }
 
@@ -741,7 +749,6 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
 
     assert {command.name for command in admin_group.commands} == {
         "roles",
-        "catalog",
         "report",
         "database",
         "guild",
