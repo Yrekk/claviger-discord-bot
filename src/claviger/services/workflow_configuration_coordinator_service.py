@@ -3,6 +3,9 @@ import discord
 from claviger.models.workflow_configuration_model import (
     WorkflowConfigurationDraft,
 )
+from claviger.models.workflow_structure_discovery_model import (
+    WorkflowStructureDiscoveryResult,
+)
 from claviger.models.workflow_structure_provisioning_model import (
     WorkflowStructureProvisioningResult,
 )
@@ -55,6 +58,26 @@ class WorkflowConfigurationCoordinatorService:
         self.discovery_service = discovery_service
         self.reconciliation_service = reconciliation_service
         self.provisioning_service = provisioning_service
+
+    async def discover_resources(
+        self,
+        guild: discord.Guild,
+    ) -> WorkflowStructureDiscoveryResult:
+        """Expose the current read-only Discord workflow resource snapshot."""
+
+        return await self.discovery_service.discover(
+            guild,
+        )
+
+    async def get_ai_preference_role_id(
+        self,
+        guild_id: int,
+    ) -> int | None:
+        """Return the guild-wide AI preference role already persisted, if any."""
+
+        return await self.repository.get_ai_preference_role_id(
+            guild_id,
+        )
 
     async def configure(
         self,
