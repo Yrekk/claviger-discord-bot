@@ -15,6 +15,7 @@ RECOVERY_COMMAND_NAMES = frozenset(
         "database",
         "restart",
         "config-server",
+        "config",
     }
 )
 
@@ -55,9 +56,6 @@ class GuildAdminCommandGroup(app_commands.Group):
             override=override,
         )
 
-        # discord.py calls only the immediate parent group's interaction_check
-        # for nested commands. Descendant checks deliberately bridge that gap so
-        # every /{bot} <group> <command> path still reaches this central guard.
         if isinstance(
             command,
             app_commands.Group,
@@ -169,9 +167,6 @@ class GuildAdminCommandGroup(app_commands.Group):
             )
 
         except Exception:
-            # Routing inspection is a safety boundary. An unexpected DB or
-            # Discord read failure must never leave normal ADMIN commands open.
-            # Recovery commands stay reachable so the owner can diagnose/repair.
             logger.exception(
                 "Unable to inspect ADMIN routing for guild %s.",
                 guild.id,
@@ -187,7 +182,8 @@ class GuildAdminCommandGroup(app_commands.Group):
         root_child = interaction.command
 
         while (
-            root_child is not None and getattr(root_child, "parent", None) is not self
+            root_child is not None
+            and getattr(root_child, "parent", None) is not self
         ):
             root_child = getattr(
                 root_child,

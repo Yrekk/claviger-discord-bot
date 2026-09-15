@@ -302,6 +302,31 @@ salon afin d'éviter tout verrouillage administratif :
 /{bot} restart
 /{bot} config-server
 
+`/config scan`
+
+Cette tranche ajoute un diagnostic read-only :
+
+```text
+/{application-root} config scan
+```
+
+Il expose :
+
+- état/version SQLite ;
+- ownership ;
+- ADMIN persisté + validation réelle Discord ;
+- état READY / INCOMPLETE / DRIFT ;
+- source de la policy + nombre d'overrides ;
+- valeurs de la policy actuelle, explicitement marquées comme compatibilité ;
+- compteurs génériques de workflows, catalogues et contextes activés.
+
+Point important : `config scan` est une commande de recovery.
+
+- ADMIN sain → elle n'est utilisable que dans le salon ADMIN.
+- ADMIN absent/cassé → elle reste disponible ailleurs pour diagnostiquer avant réparation.
+
+Aucune mutation Discord ou SQLite n'est effectuée.
+
 ---
 
 

@@ -1,6 +1,5 @@
 import traceback
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 import discord
 from discord import app_commands

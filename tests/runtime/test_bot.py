@@ -492,6 +492,7 @@ def test_register_guild_commands_targets_supplied_guild_identity(
         "database",
         "restart",
         "config-server",
+        "config",
     }
 
 
@@ -746,6 +747,7 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         "guild",
         "restart",
         "config-server",
+        "config",
     }
 
     sync.assert_awaited_once()
@@ -863,6 +865,7 @@ async def test_setup_hook_uses_configuration_commands_for_new_guild(
         "database",
         "restart",
         "config-server",
+        "config",
     }
 
     database_group = admin_group.get_command(
@@ -988,6 +991,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
         "database",
         "restart",
         "config-server",
+        "config",
     }
 
     database_group = admin_group.get_command(
@@ -1132,6 +1136,7 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
         "database",
         "restart",
         "config-server",
+        "config",
     }
 
     database_group = admin_group.get_command(

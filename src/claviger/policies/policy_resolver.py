@@ -1,4 +1,8 @@
 from claviger.database.connection import DatabaseUnavailableError
+from claviger.models.guild_policy_inspection_model import (
+    GuildPolicyInspection,
+    GuildPolicySource,
+)
 from claviger.policies.default_policy import (
     SAFE_DEFAULT_POLICY,
     SUCCUMBRAE_FALLBACK_POLICY,
@@ -29,22 +33,48 @@ class PolicyResolver:
     ) -> GuildPolicy:
         """Return the effective policy for a guild."""
 
+        inspection = await self.inspect(
+            guild_id,
+        )
+
+        return inspection.effective
+
+    async def inspect(
+        self,
+        guild_id: int,
+    ) -> GuildPolicyInspection:
+        """Return the effective policy together with its persistence source."""
+
         try:
             overrides = await self.repository.get(
                 guild_id,
             )
 
         except DatabaseUnavailableError:
-            return self._resolve_database_fallback(
-                guild_id,
+            if guild_id == self.fallback_guild_id:
+                return GuildPolicyInspection(
+                    effective=SUCCUMBRAE_FALLBACK_POLICY,
+                    source=GuildPolicySource.HISTORICAL_FALLBACK,
+                )
+
+            return GuildPolicyInspection(
+                effective=SAFE_DEFAULT_POLICY,
+                source=GuildPolicySource.SAFE_DATABASE_FALLBACK,
             )
 
         if overrides is None:
-            return SAFE_DEFAULT_POLICY
+            return GuildPolicyInspection(
+                effective=SAFE_DEFAULT_POLICY,
+                source=GuildPolicySource.SAFE_DEFAULT,
+            )
 
-        return self._apply_overrides(
-            SAFE_DEFAULT_POLICY,
-            overrides,
+        return GuildPolicyInspection(
+            effective=self._apply_overrides(
+                SAFE_DEFAULT_POLICY,
+                overrides,
+            ),
+            source=GuildPolicySource.SQLITE_OVERRIDES,
+            overrides=overrides,
         )
 
     def _resolve_database_fallback(

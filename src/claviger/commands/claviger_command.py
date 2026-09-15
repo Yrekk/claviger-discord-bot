@@ -2,6 +2,7 @@ from discord import app_commands
 
 from claviger.commands.admin_command_group import GuildAdminCommandGroup
 from claviger.commands.catalog_command import create_catalog_group
+from claviger.commands.config_command import create_config_group
 from claviger.commands.config_server_command import (
     create_config_server_command,
 )
@@ -31,6 +32,9 @@ from claviger.services.catalog_sync_coordinator_service import (
 )
 from claviger.services.database_ownership_service import (
     DatabaseOwnershipService,
+)
+from claviger.services.guild_configuration_inspection_service import (
+    GuildConfigurationInspectionService,
 )
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_classifier import RoleClassifier
@@ -95,6 +99,9 @@ def create_claviger_group(
     *,
     admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
     workflow_configuration_coordinator_service: WorkflowConfigurationCoordinatorService,
+    guild_configuration_inspection_service: (
+        GuildConfigurationInspectionService | None
+    ) = None,
     command_name: str,
     application_name: str,
     application_id: int,
@@ -106,8 +113,6 @@ def create_claviger_group(
 ) -> app_commands.Group:
     """Create the application's administrative command group."""
 
-    # ADMIN routing is inspected live only when the shared application database
-    # is already usable. Before that point the root stays in recovery mode.
     routing_inspector = (
         admin_configuration_coordinator_service.inspect
         if database_state == DatabaseState.READY and database_ownership_bound
@@ -154,14 +159,24 @@ def create_claviger_group(
     admin_group.add_command(
         database_group,
     )
-
     admin_group.add_command(
         restart_command,
     )
-
     admin_group.add_command(
         config_server_command,
     )
+
+    if guild_configuration_inspection_service is not None:
+        config_group = create_config_group(
+            guild_configuration_inspection_service,
+            report_service,
+            application_name=application_name,
+            application_id=application_id,
+        )
+
+        admin_group.add_command(
+            config_group,
+        )
 
     if maintenance_only:
         return admin_group
@@ -194,15 +209,12 @@ def create_claviger_group(
     admin_group.add_command(
         roles_group,
     )
-
     admin_group.add_command(
         catalog_group,
     )
-
     admin_group.add_command(
         report_group,
     )
-
     admin_group.add_command(
         guild_group,
     )

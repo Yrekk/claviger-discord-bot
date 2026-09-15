@@ -50,6 +50,7 @@ from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 from claviger.policies.policy_resolver import PolicyResolver
 
 # Reporting
+from claviger.reporting.command_tree import ClavigerCommandTree
 from claviger.reporting.discord_forum import DiscordForumReporter
 from claviger.reporting.python_logger import PythonLoggingReporter
 from claviger.reporting.reporter import Reporter
@@ -64,6 +65,9 @@ from claviger.repositories.database_ownership_repository import (
 )
 from claviger.repositories.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
+)
+from claviger.repositories.guild_configuration_metrics_repository import (
+    GuildConfigurationMetricsRepository,
 )
 from claviger.repositories.guild_policy_repository import (
     GuildPolicyRepository,
@@ -111,6 +115,9 @@ from claviger.services.database_ownership_service import (
     DatabaseOwnershipUnboundError,
 )
 from claviger.services.discord_identity_service import DiscordIdentityService
+from claviger.services.guild_configuration_inspection_service import (
+    GuildConfigurationInspectionService,
+)
 from claviger.services.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
@@ -205,7 +212,7 @@ class ClavigerBot(discord.Client):
             intents=intents,
         )
 
-        self.tree = app_commands.CommandTree(
+        self.tree = ClavigerCommandTree(
             self,
         )
 
@@ -267,9 +274,13 @@ class ClavigerBot(discord.Client):
         self.guild_policy_repository = GuildPolicyRepository(
             self.database,
         )
-
         self.guild_admin_configuration_repository = GuildAdminConfigurationRepository(
             self.database,
+        )
+        self.guild_configuration_metrics_repository = (
+            GuildConfigurationMetricsRepository(
+                self.database,
+            )
         )
 
         # Catalog repositories
@@ -406,6 +417,18 @@ class ClavigerBot(discord.Client):
             repository=self.guild_policy_repository,
             fallback_guild_id=policy_fallback_guild_id,
             bootstrap_policy=SUCCUMBRAE_FALLBACK_POLICY,
+        )
+
+        self.guild_configuration_inspection_service = (
+            GuildConfigurationInspectionService(
+                database_status_service=self.database_status_service,
+                database_ownership_service=self.database_ownership_service,
+                admin_configuration_coordinator_service=(
+                    self.admin_configuration_coordinator_service
+                ),
+                policy_resolver=self.policy_resolver,
+                metrics_repository=self.guild_configuration_metrics_repository,
+            )
         )
 
         # Catalog synchronization
@@ -758,6 +781,9 @@ class ClavigerBot(discord.Client):
                 ),
                 workflow_configuration_coordinator_service=(
                     self.workflow_configuration_coordinator_service
+                ),
+                guild_configuration_inspection_service=(
+                    self.guild_configuration_inspection_service
                 ),
                 command_name=application_identity.admin_command_name,
                 application_name=application_identity.application_name,
@@ -1168,6 +1194,17 @@ class ClavigerBot(discord.Client):
         logger.debug(
             "Timing startup — setup_hook total : %.3f s",
             perf_counter() - setup_started,
+        )
+
+    async def on_app_command_completion(
+        self,
+        interaction: discord.Interaction,
+        command: app_commands.Command | app_commands.ContextMenu,
+    ) -> None:
+        """Record one application command that completed without an uncaught error."""
+
+        await self.tree.record_completion(
+            interaction,
         )
 
     async def on_ready(self) -> None:
