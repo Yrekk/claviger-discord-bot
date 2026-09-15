@@ -634,8 +634,9 @@ async def run_admin_configuration(
     coordinator: AdminConfigurationCoordinatorService,
     admin_command_name: str,
     report_service: ReportService | None = None,
-) -> None:
-    """Run the shared interactive ADMIN configuration flow for one guild."""
+    continue_configuration: bool = False,
+) -> bool:
+    """Run ADMIN configuration and report whether persistent routing is ready."""
 
     guild = interaction.guild
 
@@ -650,29 +651,48 @@ async def run_admin_configuration(
         decision = result.reconciliation.decision
 
         if decision == AdminConfigurationReconciliationDecision.KEEP:
-            # KEEP means the routing was already complete before this
-            # interaction. Re-emitting the activation event would create noise.
+            # KEEP means ADMIN was already complete before this interaction.
+            # Re-emitting the activation event would create reporting noise.
             await interaction.followup.send(
-                "Configuration du serveur valide. Aucun changement n'était nécessaire.",
-                ephemeral=True,
-            )
-            return
-
-        if decision == AdminConfigurationReconciliationDecision.CREATE:
-            await interaction.followup.send(
-                (
-                    "✅ Configuration du serveur créée avec succès. "
-                    "La structure ADMIN privée et son routage ont été enregistrés.\n\n"
-                    f"Utilise `/{admin_command_name} restart` pour activer "
-                    "la surface complète de commandes."
-                ),
+                ("Configuration ADMIN valide. Aucun changement n'était nécessaire."),
                 ephemeral=True,
             )
 
             configuration = result.configuration_after
 
+            return bool(configuration is not None and configuration.is_complete)
+
+        if decision == AdminConfigurationReconciliationDecision.CREATE:
+            configuration = result.configuration_after
+
+            message = (
+                "✅ Configuration ADMIN créée avec succès. "
+                "La structure privée et son routage ont été enregistrés."
+            )
+
+            if (
+                continue_configuration
+                and configuration is not None
+                and configuration.is_complete
+            ):
+                message += (
+                    "\n\nLa configuration des workflows peut maintenant commencer."
+                )
+
+            else:
+                message += (
+                    "\n\n"
+                    f"Utilise `/{admin_command_name} restart` pour activer "
+                    "la surface complète de commandes."
+                )
+
+            await interaction.followup.send(
+                message,
+                ephemeral=True,
+            )
+
             # CREATE may produce a complete ADMIN configuration in one pass.
-            # Emit the activation event only if the final routing is usable.
+            # Emit the activation event only if final routing is usable.
             if (
                 report_service is not None
                 and configuration is not None
@@ -689,7 +709,7 @@ async def run_admin_configuration(
                     ),
                 )
 
-            return
+            return bool(configuration is not None and configuration.is_complete)
 
         if decision == AdminConfigurationReconciliationDecision.COMPLETE:
             if result.configuration_after is not None:
@@ -708,11 +728,18 @@ async def run_admin_configuration(
                 )
 
                 if became_ready:
-                    message += (
-                        "\n\n"
-                        f"Utilise `/{admin_command_name} restart` pour activer "
-                        "la surface complète de commandes."
-                    )
+                    if continue_configuration:
+                        message += (
+                            "\n\nLa configuration des workflows "
+                            "peut maintenant commencer."
+                        )
+
+                    else:
+                        message += (
+                            "\n\n"
+                            f"Utilise `/{admin_command_name} restart` pour activer "
+                            "la surface complète de commandes."
+                        )
 
                 await interaction.followup.send(
                     message,
@@ -731,7 +758,7 @@ async def run_admin_configuration(
                         ),
                     )
 
-                return
+                return configuration.is_complete
 
             # Structural reconciliation can still require the administrator to
             # explicitly assign command/activity/error semantics.
@@ -753,7 +780,8 @@ async def run_admin_configuration(
                 admin_command_name=admin_command_name,
                 report_service=report_service,
             )
-            return
+
+            return False
 
         if decision == AdminConfigurationReconciliationDecision.IMPORT:
             category = result.reconciliation.category
@@ -771,7 +799,8 @@ async def run_admin_configuration(
                 admin_command_name=admin_command_name,
                 report_service=report_service,
             )
-            return
+
+            return False
 
         if decision == AdminConfigurationReconciliationDecision.NEEDS_CHOICE:
             categories = await coordinator.discover_candidates(
@@ -801,7 +830,8 @@ async def run_admin_configuration(
                     report_service=report_service,
                 ),
             )
-            return
+
+            return False
 
         raise RuntimeError(f"Unsupported ADMIN reconciliation decision: {decision!r}.")
 
@@ -818,3 +848,5 @@ async def run_admin_configuration(
             ),
             ephemeral=True,
         )
+
+        return False

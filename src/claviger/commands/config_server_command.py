@@ -6,26 +6,39 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.ui.admin_configuration_view import run_admin_configuration
+from claviger.services.workflow_configuration_coordinator_service import (
+    WorkflowConfigurationCoordinatorService,
+)
+from claviger.ui.admin_configuration_view import (
+    run_admin_configuration,
+)
+from claviger.ui.workflow_configuration_view import (
+    run_workflow_configuration,
+)
 
 
 def create_config_server_command(
-    coordinator: AdminConfigurationCoordinatorService,
+    admin_coordinator: AdminConfigurationCoordinatorService,
+    workflow_coordinator: WorkflowConfigurationCoordinatorService,
     *,
     admin_command_name: str,
     database_state: DatabaseState,
     database_ownership_bound: bool,
     report_service: ReportService | None = None,
 ) -> app_commands.Command:
-    """Create the guild ADMIN configuration command."""
+    """Create the complete guild configuration command."""
 
     @app_commands.command(
         name="config-server",
-        description="Configure la structure d'administration du serveur.",
+        description="Configure l'administration et les workflows du serveur.",
     )
     async def config_server(
         interaction: discord.Interaction,
     ) -> None:
+        """Run server configuration from ADMIN readiness into workflow setup."""
+
+        # Server configuration is always guild-scoped. DM execution must never
+        # attempt to infer or reuse a Discord guild from another runtime state.
         if interaction.guild is None:
             await interaction.response.send_message(
                 "Cette commande doit être utilisée sur un serveur.",
@@ -33,6 +46,8 @@ def create_config_server_command(
             )
             return
 
+        # Structural configuration can create channels, categories and roles.
+        # Only the Discord guild owner may initiate that workflow.
         if interaction.user.id != interaction.guild.owner_id:
             await interaction.response.send_message(
                 "Cette commande est réservée au propriétaire du serveur.",
@@ -40,6 +55,8 @@ def create_config_server_command(
             )
             return
 
+        # Guild configuration is meaningful only after the shared application
+        # database has reached the current schema version.
         if database_state != DatabaseState.READY:
             await interaction.response.send_message(
                 (
@@ -52,6 +69,8 @@ def create_config_server_command(
             )
             return
 
+        # A READY schema still remains unusable until ownership has explicitly
+        # been bound to the authenticated Discord application.
         if not database_ownership_bound:
             await interaction.response.send_message(
                 (
@@ -69,11 +88,29 @@ def create_config_server_command(
             ephemeral=True,
         )
 
-        await run_admin_configuration(
+        # ADMIN remains the operational prerequisite because reporting,
+        # command routing and later diagnostics depend on its destinations.
+        admin_ready = await run_admin_configuration(
             interaction,
-            coordinator=coordinator,
+            coordinator=admin_coordinator,
             admin_command_name=admin_command_name,
             report_service=report_service,
+            continue_configuration=True,
+        )
+
+        if not admin_ready:
+            # IMPORT, NEEDS_CHOICE and incomplete COMPLETE paths already expose
+            # their own interactive ADMIN continuation. Workflows must not start
+            # until that routing has actually been persisted.
+            return
+
+        # From this point the ADMIN backend is persistently ready. The Discord
+        # frontend may now collect workflow choices over the shared backend
+        # contract introduced by the workflow configuration pipeline.
+        await run_workflow_configuration(
+            interaction,
+            coordinator=workflow_coordinator,
+            admin_command_name=admin_command_name,
         )
 
     return config_server

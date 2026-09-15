@@ -9,6 +9,9 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.models.workflow_structure_discovery_model import (
+    WorkflowStructureDiscoveryResult,
+)
 from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
@@ -32,6 +35,9 @@ from claviger.services.guild_policy_bootstrap import (
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import (
     RoleDiscoveryService,
+)
+from claviger.services.workflow_configuration_coordinator_service import (
+    WorkflowConfigurationCoordinatorService,
 )
 
 
@@ -103,6 +109,9 @@ def create_test_group(
     database_ownership_service: DatabaseOwnershipService | None = None,
     admin_configuration_coordinator_service: (
         AdminConfigurationCoordinatorService | None
+    ) = None,
+    workflow_configuration_coordinator_service: (
+        WorkflowConfigurationCoordinatorService | None
     ) = None,
     *,
     command_name: str = "claviger",
@@ -209,6 +218,28 @@ def create_test_group(
 
         admin_configuration_coordinator_service.configure = AsyncMock()
 
+    if workflow_configuration_coordinator_service is None:
+        workflow_configuration_coordinator_service = Mock(
+            spec=WorkflowConfigurationCoordinatorService,
+        )
+
+        workflow_configuration_coordinator_service.discover_resources = AsyncMock(
+            return_value=WorkflowStructureDiscoveryResult(
+                categories=(),
+                text_channels=(),
+                manageable_roles=(),
+                can_create_channels=True,
+                can_create_roles=True,
+            )
+        )
+
+        workflow_configuration_coordinator_service.get_ai_preference_role_id = (
+            AsyncMock(
+                return_value=None,
+            )
+        )
+
+        workflow_configuration_coordinator_service.configure = AsyncMock()
     role_classifier = RoleClassifier()
 
     restart_callback = AsyncMock()
@@ -221,6 +252,7 @@ def create_test_group(
         catalog_next_coordinator_service=catalog_next_coordinator_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         admin_configuration_coordinator_service=admin_configuration_coordinator_service,
+        workflow_configuration_coordinator_service=workflow_configuration_coordinator_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
         database_ownership_service=database_ownership_service,

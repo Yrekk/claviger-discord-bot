@@ -35,6 +35,9 @@ from claviger.services.database_ownership_service import (
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.workflow_configuration_coordinator_service import (
+    WorkflowConfigurationCoordinatorService,
+)
 
 
 def _configure_database_command_availability(
@@ -91,6 +94,7 @@ def create_claviger_group(
     report_service: ReportService,
     *,
     admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
+    workflow_configuration_coordinator_service: WorkflowConfigurationCoordinatorService,
     command_name: str,
     application_name: str,
     application_id: int,
@@ -132,6 +136,7 @@ def create_claviger_group(
 
     config_server_command = create_config_server_command(
         admin_configuration_coordinator_service,
+        workflow_configuration_coordinator_service,
         admin_command_name=command_name,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,

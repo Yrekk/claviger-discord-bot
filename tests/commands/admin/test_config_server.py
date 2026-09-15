@@ -25,6 +25,9 @@ from claviger.ui.admin_configuration_view import (
     AdminCategorySelectionView,
     AdminRoutingSelectionView,
 )
+from claviger.ui.workflow_configuration_view import (
+    WorkflowConfigurationStartView,
+)
 
 from .helpers import (
     create_interaction,
@@ -237,7 +240,7 @@ async def test_config_server_requires_database_ownership() -> None:
 
 @pytest.mark.asyncio
 async def test_config_server_create_runs_current_guild_configuration() -> None:
-    """Create and persist ADMIN structure through the current interaction guild."""
+    """Create ADMIN routing and continue directly into workflow configuration."""
 
     command, coordinator = get_config_server_command(
         _role_discovery_service(),
@@ -264,15 +267,30 @@ async def test_config_server_create_runs_current_guild_configuration() -> None:
         interaction.guild,
     )
 
-    message = interaction.followup.send.await_args.args[0]
+    calls = interaction.followup.send.await_args_list
 
-    assert "créée avec succès" in message
-    assert "/claviger restart" in message
+    assert len(calls) == 2
+
+    admin_message = calls[0].args[0]
+
+    assert "Configuration ADMIN créée avec succès" in admin_message
+    assert "workflows" in admin_message
+    assert "/claviger restart" not in admin_message
+
+    workflow_message = calls[1].args[0]
+    workflow_kwargs = calls[1].kwargs
+
+    assert "Configuration des workflows" in workflow_message
+
+    assert isinstance(
+        workflow_kwargs["view"],
+        WorkflowConfigurationStartView,
+    )
 
 
 @pytest.mark.asyncio
 async def test_config_server_keep_reports_valid_configuration() -> None:
-    """Report an already converged ADMIN configuration without mutation."""
+    """Continue to workflows when ADMIN was already persistently ready."""
 
     command, coordinator = get_config_server_command(
         _role_discovery_service(),
@@ -289,10 +307,24 @@ async def test_config_server_keep_reports_valid_configuration() -> None:
         interaction,
     )
 
-    message = interaction.followup.send.await_args.args[0]
+    calls = interaction.followup.send.await_args_list
 
-    assert "Configuration du serveur valide" in message
-    assert "Aucun changement" in message
+    assert len(calls) == 2
+
+    admin_message = calls[0].args[0]
+
+    assert "Configuration ADMIN valide" in admin_message
+    assert "Aucun changement" in admin_message
+
+    workflow_message = calls[1].args[0]
+    workflow_kwargs = calls[1].kwargs
+
+    assert "Configuration des workflows" in workflow_message
+
+    assert isinstance(
+        workflow_kwargs["view"],
+        WorkflowConfigurationStartView,
+    )
 
 
 @pytest.mark.asyncio

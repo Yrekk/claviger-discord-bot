@@ -71,6 +71,9 @@ from claviger.repositories.guild_policy_repository import (
 from claviger.repositories.interest_catalog_repository import (
     InterestCatalogRepository,
 )
+from claviger.repositories.workflow_configuration_repository import (
+    WorkflowConfigurationRepository,
+)
 
 # Services
 from claviger.services.admin_configuration_coordinator_service import (
@@ -142,6 +145,21 @@ from claviger.services.role_classifier import RoleClassifier
 from claviger.services.role_discovery import RoleDiscoveryService
 from claviger.services.role_manager_service import RoleManager
 from claviger.services.say_service import SayService
+from claviger.services.workflow_configuration_coordinator_service import (
+    WorkflowConfigurationCoordinatorService,
+)
+from claviger.services.workflow_configuration_reconciliation_service import (
+    WorkflowConfigurationReconciliationService,
+)
+from claviger.services.workflow_configuration_validation_service import (
+    WorkflowConfigurationValidationService,
+)
+from claviger.services.workflow_structure_discovery_service import (
+    WorkflowStructureDiscoveryService,
+)
+from claviger.services.workflow_structure_provisioning_service import (
+    WorkflowStructureProvisioningService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +307,44 @@ class ClavigerBot(discord.Client):
                     self.admin_configuration_reconciliation_service
                 ),
                 provisioning_service=(self.admin_structure_provisioning_service),
+            )
+        )
+        # Generic workflow configuration pipeline
+        #
+        # Discord and future Web frontends share this same coordinator. UI code
+        # only produces WorkflowConfigurationDraft instances; validation,
+        # reconciliation, Discord mutation and persistence stay below this layer.
+        self.workflow_configuration_repository = WorkflowConfigurationRepository(
+            self.database,
+        )
+
+        self.workflow_configuration_validation_service = (
+            WorkflowConfigurationValidationService()
+        )
+
+        self.workflow_structure_discovery_service = WorkflowStructureDiscoveryService(
+            self.role_discovery_service,
+        )
+
+        self.workflow_configuration_reconciliation_service = (
+            WorkflowConfigurationReconciliationService()
+        )
+
+        self.workflow_structure_provisioning_service = (
+            WorkflowStructureProvisioningService(
+                role_discovery_service=self.role_discovery_service,
+            )
+        )
+
+        self.workflow_configuration_coordinator_service = (
+            WorkflowConfigurationCoordinatorService(
+                repository=self.workflow_configuration_repository,
+                validation_service=(self.workflow_configuration_validation_service),
+                discovery_service=(self.workflow_structure_discovery_service),
+                reconciliation_service=(
+                    self.workflow_configuration_reconciliation_service
+                ),
+                provisioning_service=(self.workflow_structure_provisioning_service),
             )
         )
 
@@ -699,6 +755,9 @@ class ClavigerBot(discord.Client):
                 self.report_service,
                 admin_configuration_coordinator_service=(
                     self.admin_configuration_coordinator_service
+                ),
+                workflow_configuration_coordinator_service=(
+                    self.workflow_configuration_coordinator_service
                 ),
                 command_name=application_identity.admin_command_name,
                 application_name=application_identity.application_name,
