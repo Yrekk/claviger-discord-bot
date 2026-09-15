@@ -1,3 +1,5 @@
+import logging
+
 import discord
 
 from claviger.models.workflow_structure_discovery_model import (
@@ -8,6 +10,8 @@ from claviger.models.workflow_structure_discovery_model import (
     WorkflowTextChannelCandidate,
 )
 from claviger.services.role_discovery import RoleDiscoveryService
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowStructureDiscoveryService:
@@ -180,9 +184,7 @@ class WorkflowStructureDiscoveryService:
                 bot_permissions.send_messages,
             ),
             everyone_send_override=everyone_overwrite.send_messages,
-            application_role_send_override=(
-                application_role_overwrite.send_messages
-            ),
+            application_role_send_override=(application_role_overwrite.send_messages),
         )
 
     @staticmethod
@@ -191,16 +193,7 @@ class WorkflowStructureDiscoveryService:
         categories: tuple[WorkflowCategoryCandidate, ...],
         text_channels: tuple[WorkflowTextChannelCandidate, ...],
     ) -> tuple[WorkflowStructureCandidate, ...]:
-        """Recognize workflow structures from explicit @everyone send markers.
-
-        A category is a workflow candidate when it contains both:
-
-        - at least one channel where @everyone has an explicit send deny;
-        - at least one other channel where @everyone has an explicit send allow.
-
-        Visibility, inherited permissions, bot permissions and names are ignored.
-        Several protected or interactive channels remain explicit human choices.
-        """
+        """Recognize workflow structures from explicit @everyone send markers."""
 
         candidates: list[WorkflowStructureCandidate] = []
 
@@ -209,6 +202,21 @@ class WorkflowStructureDiscoveryService:
                 channel
                 for channel in text_channels
                 if channel.category_id == category.category_id
+            )
+
+            logger.warning(
+                "Workflow discovery category=%r id=%s channels=%s",
+                category.category_name,
+                category.category_id,
+                [
+                    (
+                        channel.channel_name,
+                        channel.category_id,
+                        channel.everyone_send_override,
+                        channel.everyone_can_view,
+                    )
+                    for channel in category_channels
+                ],
             )
 
             protected_channels = tuple(
