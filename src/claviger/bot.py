@@ -12,8 +12,6 @@ from discord.http import Route
 
 # Commands
 from claviger.commands.claviger_command import create_claviger_group
-from claviger.commands.member_command import create_member_command
-from claviger.commands.noctis_command import create_noctis_command
 from claviger.commands.say_command import create_say_command
 
 # Config
@@ -57,9 +55,6 @@ from claviger.reporting.reporter import Reporter
 from claviger.reporting.service import ReportService
 
 # Repositories
-from claviger.repositories.access_catalog_repository import (
-    AccessCatalogRepository,
-)
 from claviger.repositories.database_ownership_repository import (
     DatabaseOwnershipRepository,
 )
@@ -69,12 +64,7 @@ from claviger.repositories.guild_admin_configuration_repository import (
 from claviger.repositories.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
-from claviger.repositories.guild_policy_repository import (
-    GuildPolicyRepository,
-)
-from claviger.repositories.interest_catalog_repository import (
-    InterestCatalogRepository,
-)
+from claviger.repositories.guild_policy_repository import GuildPolicyRepository
 from claviger.repositories.workflow_configuration_repository import (
     WorkflowConfigurationRepository,
 )
@@ -92,24 +82,7 @@ from claviger.services.admin_structure_discovery_service import (
 from claviger.services.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
-from claviger.services.adult_access_classifier import (
-    AdultAccessClassifier,
-)
-from claviger.services.adult_access_questionnaire_service import (
-    AdultAccessQuestionnaireService,
-)
-from claviger.services.adult_access_workflow_service import (
-    AdultAccessWorkflowService,
-)
 from claviger.services.authorization import AuthorizationService
-from claviger.services.catalog_next_coordinator_service import (
-    CatalogNextCoordinatorService,
-)
-from claviger.services.catalog_registry_service import CatalogRegistry
-from claviger.services.catalog_sync_coordinator_service import (
-    CatalogSyncCoordinatorService,
-)
-from claviger.services.catalog_sync_planner_service import CatalogSyncPlanner
 from claviger.services.database_ownership_service import (
     DatabaseOwnershipService,
     DatabaseOwnershipUnboundError,
@@ -121,36 +94,8 @@ from claviger.services.guild_configuration_inspection_service import (
 from claviger.services.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
-from claviger.services.guild_policy_bootstrap import (
-    GuildPolicyBootstrapService,
-)
-from claviger.services.member_interest_questionnaire_service import (
-    MemberInterestQuestionnaireService,
-)
-from claviger.services.member_role_executor_service import (
-    MemberRoleExecutorService,
-)
-from claviger.services.member_role_planner_service import (
-    MemberRolePlannerService,
-)
-from claviger.services.member_workflow_coordinator_service import (
-    MemberWorkflowCoordinatorService,
-)
-from claviger.services.noctis_role_executor_service import (
-    NoctisRoleExecutorService,
-)
-from claviger.services.noctis_role_planner_service import (
-    NoctisRolePlannerService,
-)
-from claviger.services.noctis_workflow_coordinator_service import (
-    NoctisWorkflowCoordinatorService,
-)
-from claviger.services.role_channel_discovery_service import (
-    RoleChannelDiscoveryService,
-)
-from claviger.services.role_classifier import RoleClassifier
+from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_discovery import RoleDiscoveryService
-from claviger.services.role_manager_service import RoleManager
 from claviger.services.say_service import SayService
 from claviger.services.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
@@ -172,40 +117,15 @@ logger = logging.getLogger(__name__)
 
 
 class ClavigerBot(discord.Client):
-    """Compose and run the Claviger Discord application.
-
-        The bot owns application-wide services such as the SQLite database and
-        Discord application identity. Guild-specific runtime state is resolved and
-        stored independently for every accessible Discord guild.
-
-    Application startup does not depend on one privileged guild.
-
-    One environment-provided guild ID is intentionally retained as Succumbrae's
-    historical emergency-policy and bootstrap anchor. Claviger was originally
-    created for that guild before evolving into a multi-guild application. This
-    historical exception has no Discord runtime or lifecycle significance.
-    """
+    """Compose and run the Claviger Discord application."""
 
     def __init__(
         self,
         *,
         startup_restart_request: RuntimeRestartRequest | None = None,
     ) -> None:
-        """Compose the Discord client and every application service.
+        """Compose application-wide and generic guild services."""
 
-        Args:
-            startup_restart_request:
-                Optional restart context carried from a previous runtime
-                instance. When present, Claviger may skip Discord command
-                synchronization if the rebuilt tree is unchanged.
-
-        Returns:
-            None:
-                The bot composition is initialized in memory. No Discord or
-                SQLite network/database operation is performed here.
-        """
-
-        # Discord client
         intents = discord.Intents.default()
 
         super().__init__(
@@ -222,30 +142,24 @@ class ClavigerBot(discord.Client):
         # Restart state
         self.restart_requested = False
         self.pending_restart_request: RuntimeRestartRequest | None = None
-
         self.startup_restart_request = startup_restart_request
         self.started_from_restart = startup_restart_request is not None
         self._ready_announced = False
 
         # Discord identity and application runtime state
         self.discord_identity_service = DiscordIdentityService()
-
         self.application_identity: DiscordApplicationIdentity | None = None
         self.database_status: DatabaseStatus | None = None
         self.database_operational: bool | None = None
 
-        # Guild runtime state is authoritative per guild. Locks prevent overlapping
-        # gateway events from configuring and synchronizing the same guild twice.
+        # Guild runtime state is authoritative per guild.
         self.guild_runtime_states: dict[int, GuildRuntimeState] = {}
         self._guild_configuration_locks: dict[int, Lock] = {}
 
         # Generic Discord services
-        self.role_manager = RoleManager()
         self.role_discovery_service = RoleDiscoveryService()
         self.authorization_service = AuthorizationService()
         self.say_service = SayService()
-        self.role_classifier = RoleClassifier()
-        self.adult_access_classifier = AdultAccessClassifier()
 
         # Database infrastructure
         self.database = DatabaseConnection(
@@ -274,40 +188,27 @@ class ClavigerBot(discord.Client):
         self.guild_policy_repository = GuildPolicyRepository(
             self.database,
         )
+
         self.guild_admin_configuration_repository = GuildAdminConfigurationRepository(
             self.database,
         )
+
         self.guild_configuration_metrics_repository = (
             GuildConfigurationMetricsRepository(
                 self.database,
             )
         )
 
-        # Catalog repositories
-        self.interest_catalog_repository = InterestCatalogRepository(
-            self.database,
-        )
-
-        self.access_catalog_repository = AccessCatalogRepository(
-            self.database,
-        )
-
         # Guild readiness
-        #
-        # Application database readiness and guild configuration readiness are
-        # intentionally separate concepts. A valid application database may
-        # serve several guilds whose configuration states differ.
         self.guild_configuration_readiness_service = GuildConfigurationReadinessService(
             self.guild_admin_configuration_repository,
         )
 
         # ADMIN configuration pipeline
         self.admin_structure_discovery_service = AdminStructureDiscoveryService()
-
         self.admin_configuration_reconciliation_service = (
             AdminConfigurationReconciliationService()
         )
-
         self.admin_structure_provisioning_service = AdminStructureProvisioningService()
 
         self.admin_configuration_coordinator_service = (
@@ -317,95 +218,42 @@ class ClavigerBot(discord.Client):
                 reconciliation_service=(
                     self.admin_configuration_reconciliation_service
                 ),
-                provisioning_service=(self.admin_structure_provisioning_service),
+                provisioning_service=self.admin_structure_provisioning_service,
             )
         )
+
         # Generic workflow configuration pipeline
-        #
-        # Discord and future Web frontends share this same coordinator. UI code
-        # only produces WorkflowConfigurationDraft instances; validation,
-        # reconciliation, Discord mutation and persistence stay below this layer.
         self.workflow_configuration_repository = WorkflowConfigurationRepository(
             self.database,
         )
-
         self.workflow_configuration_validation_service = (
             WorkflowConfigurationValidationService()
         )
-
         self.workflow_structure_discovery_service = WorkflowStructureDiscoveryService(
             self.role_discovery_service,
         )
-
         self.workflow_configuration_reconciliation_service = (
             WorkflowConfigurationReconciliationService()
         )
-
         self.workflow_structure_provisioning_service = (
             WorkflowStructureProvisioningService(
                 role_discovery_service=self.role_discovery_service,
             )
         )
-
         self.workflow_configuration_coordinator_service = (
             WorkflowConfigurationCoordinatorService(
                 repository=self.workflow_configuration_repository,
-                validation_service=(self.workflow_configuration_validation_service),
-                discovery_service=(self.workflow_structure_discovery_service),
+                validation_service=self.workflow_configuration_validation_service,
+                discovery_service=self.workflow_structure_discovery_service,
                 reconciliation_service=(
                     self.workflow_configuration_reconciliation_service
                 ),
-                provisioning_service=(self.workflow_structure_provisioning_service),
+                provisioning_service=self.workflow_structure_provisioning_service,
             )
         )
 
-        # Member workflow
-        self.member_interest_questionnaire_service = MemberInterestQuestionnaireService(
-            repository=self.interest_catalog_repository,
-        )
-
-        self.member_role_planner_service = MemberRolePlannerService()
-
-        self.member_role_executor_service = MemberRoleExecutorService(
-            role_manager=self.role_manager,
-        )
-
-        self.member_workflow_coordinator_service = MemberWorkflowCoordinatorService(
-            questionnaire_service=(self.member_interest_questionnaire_service),
-            planner_service=self.member_role_planner_service,
-            executor_service=self.member_role_executor_service,
-        )
-
-        # Adult / Noctis workflow
-        self.adult_access_workflow_service = AdultAccessWorkflowService(
-            classifier=self.adult_access_classifier,
-        )
-
-        self.adult_access_questionnaire_service = AdultAccessQuestionnaireService(
-            repository=self.access_catalog_repository,
-            workflow_service=self.adult_access_workflow_service,
-        )
-
-        self.noctis_role_planner_service = NoctisRolePlannerService(
-            workflow_service=self.adult_access_workflow_service,
-        )
-
-        self.noctis_role_executor_service = NoctisRoleExecutorService(
-            role_manager=self.role_manager,
-        )
-
-        self.noctis_workflow_coordinator_service = NoctisWorkflowCoordinatorService(
-            questionnaire_service=(self.adult_access_questionnaire_service),
-            planner_service=self.noctis_role_planner_service,
-            executor_service=self.noctis_role_executor_service,
-        )
-
-        # Guild policy
-        #
-        # Temporary compatibility:
-        # DISCORD_GUILD_ID now exists only to preserve Succumbrae's historical
-        # emergency policy and bootstrap behavior. It has no Discord runtime or
-        # lifecycle significance.
+        # Temporary policy compatibility remains only for server inspection and
+        # historical bootstrap. It no longer composes specialized workflows.
         policy_fallback_guild_id = get_discord_guild_id()
 
         self.policy_resolver = PolicyResolver(
@@ -431,32 +279,7 @@ class ClavigerBot(discord.Client):
             )
         )
 
-        # Catalog synchronization
-        self.catalog_registry = CatalogRegistry(
-            interest_repository=self.interest_catalog_repository,
-            access_repository=self.access_catalog_repository,
-        )
-
-        self.catalog_next_coordinator_service = CatalogNextCoordinatorService(
-            registry=self.catalog_registry,
-        )
-
-        self.role_channel_discovery_service = RoleChannelDiscoveryService()
-
-        self.catalog_sync_planner = CatalogSyncPlanner()
-
-        self.catalog_sync_coordinator_service = CatalogSyncCoordinatorService(
-            database=self.database,
-            registry=self.catalog_registry,
-            discovery_service=self.role_channel_discovery_service,
-            planner=self.catalog_sync_planner,
-        )
-
         # Reporting
-        #
-        # Python logging remains application-wide and is deliberately registered
-        # first so a Discord/DB routing failure cannot remove the local diagnostic
-        # trace of an event.
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
             DiscordForumReporter(
@@ -470,18 +293,7 @@ class ClavigerBot(discord.Client):
         )
 
     def _validate_authenticated_bot_identity(self) -> None:
-        """Validate that the Discord token belongs to the expected bot.
-
-        Returns:
-            None:
-                Authentication is considered valid when the connected Discord
-                user matches the configured bot user ID.
-
-        Raises:
-            RuntimeError:
-                If Discord has not authenticated a bot user yet, or if the
-                authenticated bot ID differs from the configured expected ID.
-        """
+        """Validate that the Discord token belongs to the expected bot."""
 
         if self.user is None:
             raise RuntimeError(
@@ -490,8 +302,7 @@ class ClavigerBot(discord.Client):
 
         if self.user.id != self.expected_bot_user_id:
             raise RuntimeError(
-                "Authenticated Discord bot identity does not match "
-                "configuration. "
+                "Authenticated Discord bot identity does not match configuration. "
                 f"Expected DISCORD_BOT_USER_ID={self.expected_bot_user_id}, "
                 f"but Discord authenticated user ID {self.user.id}."
             )
@@ -501,28 +312,7 @@ class ClavigerBot(discord.Client):
         application_identity: DiscordApplicationIdentity,
         status: DatabaseStatus,
     ) -> bool:
-        """Check whether database-backed application operations are allowed.
-
-        Args:
-            application_identity:
-                Discord application identity whose application ID must own the
-                SQLite database.
-
-            status:
-                Current non-mutating database lifecycle status.
-
-        Returns:
-            bool:
-                True when the database schema is READY and ownership is bound
-                to the current Discord application. False when the database is
-                not READY or ownership has not yet been bound.
-
-        Raises:
-            DatabaseOwnershipMismatchError:
-                Propagated when the database belongs to another Discord
-                application. This is a fail-closed condition and must prevent
-                command registration.
-        """
+        """Return whether database-backed application operations are allowed."""
 
         if status.state != DatabaseState.READY:
             return False
@@ -541,19 +331,7 @@ class ClavigerBot(discord.Client):
         self,
         guild: discord.Object,
     ) -> str:
-        """Build a deterministic hash of one guild's local command tree.
-
-        Args:
-            guild:
-                Discord guild object whose locally registered application
-                commands must be serialized.
-
-        Returns:
-            str:
-                SHA-256 hexadecimal digest representing the local command tree.
-                Equal signatures mean command synchronization can safely be
-                skipped during an internal restart.
-        """
+        """Build a deterministic hash of one guild's local command tree."""
 
         payloads = [
             command.to_dict(
@@ -586,22 +364,7 @@ class ClavigerBot(discord.Client):
         self,
         restart_request: RuntimeRestartRequest,
     ) -> None:
-        """Request a clean in-process runtime restart.
-
-        Args:
-            restart_request:
-                Discord interaction context required to resume feedback after the
-                new runtime instance starts.
-
-        Returns:
-            None:
-                Restart state is persisted in memory and the current Discord
-                client is closed.
-
-        Side Effects:
-            Captures command-tree signatures for every configured guild, marks the
-            runtime as restarting and closes the Discord client.
-        """
+        """Request a clean in-process runtime restart."""
 
         logger.info("Redémarrage demandé depuis Discord.")
 
@@ -627,22 +390,12 @@ class ClavigerBot(discord.Client):
             "État restart capturé pour %s serveur(s).",
             len(guild_command_tree_signatures),
         )
-
         logger.info("Fermeture de l'instance courante pour redémarrage...")
 
         await self.close()
 
     async def _complete_restart_feedback(self) -> None:
-        """Update the original ephemeral restart interaction after recovery.
-
-        Returns:
-            None:
-                The method silently returns when no startup restart context is
-                available. Otherwise the original Discord response is edited.
-
-        Side Effects:
-            Performs one Discord HTTP request when restart context exists.
-        """
+        """Update the original ephemeral restart interaction after recovery."""
 
         restart_request = self.startup_restart_request
 
@@ -678,45 +431,7 @@ class ClavigerBot(discord.Client):
         guild_ready: bool,
         admin_command_channel_id: int | None,
     ) -> None:
-        """Build the local Discord command tree for one guild.
-
-        Args:
-            application_identity:
-                Application-wide Discord identity. It supplies the dynamic
-                administrative root command name and application ID.
-
-            guild_identity:
-                Guild-specific identity. It supplies the target guild ID and
-                the bot display name used by guild-facing commands.
-
-            database_status:
-                Current application database lifecycle status.
-
-            database_operational:
-                True when the application database is READY and owned by the
-                authenticated Discord application.
-
-            guild_ready:
-                True when this guild has a complete persisted ADMIN
-                configuration.
-
-            admin_command_channel_id:
-                Persisted Discord channel used for normal administrative
-                commands. Recovery commands remain available independently.
-
-        Returns:
-            None:
-                Commands are registered only in the local discord.py command
-                tree. Discord synchronization happens separately.
-
-        Notes:
-            Normal guild workflows require both an operational application
-            database and a ready guild configuration.
-
-            Recovery commands remain available when either condition is false.
-            This allows a newly joined guild to run ``/{bot} config-server``
-            without exposing normal workflows prematurely.
-        """
+        """Build the local Discord command tree for one guild."""
 
         guild = discord.Object(
             id=guild_identity.guild_id,
@@ -728,8 +443,7 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        # /say remains independent from persistent guild workflows and is
-        # available during maintenance/configuration states.
+        # /say is independent from persisted business workflows.
         self.tree.add_command(
             create_say_command(
                 self.authorization_service,
@@ -739,38 +453,12 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        # Business workflows must never be exposed merely because another
-        # guild has already configured the shared application database.
-        if normal_runtime_enabled:
-            self.tree.add_command(
-                create_member_command(
-                    self.policy_resolver,
-                    self.database_status_service,
-                    self.member_workflow_coordinator_service,
-                ),
-                guild=guild,
-            )
-
-            self.tree.add_command(
-                create_noctis_command(
-                    self.noctis_workflow_coordinator_service,
-                    self.policy_resolver,
-                    self.database_status_service,
-                    self.report_service,
-                ),
-                guild=guild,
-            )
-
-        # The ADMIN root always exists. Recovery commands remain available
-        # outside the configured ADMIN command channel. Normal administrative
-        # commands are restricted by GuildAdminCommandGroup.
+        # Specialized /membre and /noctis commands were intentionally removed.
+        # Generic runtime workflow commands will be registered from persisted
+        # guild_workflows once that runtime layer is implemented.
         self.tree.add_command(
             create_claviger_group(
                 self.role_discovery_service,
-                self.policy_resolver,
-                self.role_classifier,
-                self.catalog_sync_coordinator_service,
-                self.catalog_next_coordinator_service,
                 self.guild_policy_bootstrap_service,
                 self.database_schema,
                 self.database_status_service,
@@ -801,23 +489,7 @@ class ClavigerBot(discord.Client):
         self,
         guild_id: int,
     ) -> Lock:
-        """Return the synchronization lock dedicated to one Discord guild.
-
-        Args:
-            guild_id:
-                Discord guild snowflake whose runtime configuration must be
-                serialized.
-
-        Returns:
-            Lock:
-                Stable asynchronous lock shared by every configuration attempt for
-                this guild.
-
-        Notes:
-            Discord lifecycle events may overlap. Keeping one lock per guild
-            prevents duplicate readiness inspection, command-tree mutation and
-            Discord synchronization for the same guild.
-        """
+        """Return the synchronization lock dedicated to one Discord guild."""
 
         lock = self._guild_configuration_locks.get(
             guild_id,
@@ -835,43 +507,7 @@ class ClavigerBot(discord.Client):
         *,
         force: bool = False,
     ) -> GuildRuntimeState:
-        """Ensure one guild has a current runtime configuration.
-
-        Args:
-            guild_id:
-                Discord guild snowflake to configure.
-
-            force:
-                When True, rebuild the guild runtime even when a registered state
-                already exists. The existing command-tree signature is preserved
-                for synchronization comparison.
-
-        Returns:
-            GuildRuntimeState:
-                Current successfully configured state for the guild.
-
-        Raises:
-            RuntimeError:
-                If application-wide startup state is not available yet.
-
-            Database errors:
-                Propagated from guild readiness inspection.
-
-            Discord errors:
-                Propagated from identity resolution or command synchronization.
-
-        Side Effects:
-            May resolve Discord guild identity, inspect persisted readiness,
-            rebuild the guild command tree, synchronize commands and replace the
-            guild's runtime registry entry.
-
-        Notes:
-            The per-guild lock prevents overlapping Discord lifecycle events from
-            configuring the same guild concurrently.
-
-            During an internal restart, each guild independently reuses its own
-            previous command-tree signature when available.
-        """
+        """Ensure one guild has a current runtime configuration."""
 
         application_identity = self.application_identity
         database_status = self.database_status
@@ -931,56 +567,10 @@ class ClavigerBot(discord.Client):
         database_operational: bool,
         previous_command_tree_signature: str | None = None,
     ) -> GuildRuntimeState:
-        """Configure and synchronize runtime state for one Discord guild.
-
-        Args:
-            application_identity:
-                Application-wide Discord identity shared by every guild handled by
-                this runtime.
-
-            guild_id:
-                Discord guild snowflake to configure.
-
-            database_status:
-                Current application database lifecycle status.
-
-            database_operational:
-                True when the shared application database is READY and owned by the
-                authenticated Discord application.
-
-            previous_command_tree_signature:
-                Optional command-tree signature previously synchronized for this
-                guild. When it matches the rebuilt tree, Discord synchronization is
-                skipped.
-
-        Returns:
-            GuildRuntimeState:
-                Successfully configured guild runtime state, including identity,
-                persisted readiness and command-tree signature.
-
-        Raises:
-            Database errors:
-                Propagated when an operational database cannot provide guild
-                readiness.
-
-            Discord errors:
-                Propagated when guild identity resolution or command
-                synchronization fails.
-
-        Side Effects:
-            Rebuilds this guild's local application-command tree, may synchronize
-            commands with Discord and replaces this guild's runtime registry entry.
-
-        Notes:
-            A guild is stored in ``guild_runtime_states`` only after its runtime
-            configuration has completed successfully. A failed reconfiguration
-            therefore cannot leave a newly built state marked as operational.
-        """
+        """Configure and synchronize runtime state for one Discord guild."""
 
         configuration_started = perf_counter()
 
-        # Fail closed during reconfiguration. An existing snapshot must not remain
-        # authoritative while a new configuration attempt is still in progress.
         self.guild_runtime_states.pop(
             guild_id,
             None,
@@ -999,9 +589,6 @@ class ClavigerBot(discord.Client):
             perf_counter() - step_started,
         )
 
-        # Guild readiness is meaningful only when the shared application database
-        # is operational. Otherwise the guild remains in application maintenance
-        # mode rather than being misclassified as unconfigured.
         guild_readiness: GuildConfigurationReadiness | None = None
 
         if database_operational:
@@ -1097,8 +684,6 @@ class ClavigerBot(discord.Client):
             command_tree_signature=current_signature,
         )
 
-        # Only a fully completed configuration attempt becomes authoritative for
-        # subsequent runtime operations.
         self.guild_runtime_states[guild_identity.guild_id] = runtime_state
 
         logger.debug(
@@ -1110,37 +695,7 @@ class ClavigerBot(discord.Client):
         return runtime_state
 
     async def setup_hook(self) -> None:
-        """Prepare application-wide runtime state before Discord gateway events.
-
-        Returns:
-            None:
-                Application identity, database lifecycle state and ownership state
-                are resolved and stored for later guild configuration.
-
-        Raises:
-            RuntimeError:
-                If the authenticated Discord identity does not match runtime
-                configuration.
-
-            DatabaseOwnershipMismatchError:
-                If the SQLite database belongs to another Discord application.
-
-            Database errors:
-                Propagated when application database state or ownership cannot be
-                inspected safely.
-
-            Discord errors:
-                Propagated when application identity resolution fails.
-
-        Notes:
-            No guild identity, guild readiness, command registration or Discord
-            command synchronization occurs here.
-
-            discord.py invokes ``setup_hook`` before gateway-backed guild state is
-            available. Guild configuration therefore begins only from lifecycle
-            events such as ``on_ready``, ``on_guild_join`` and
-            ``on_guild_available``.
-        """
+        """Prepare application-wide runtime state before Discord gateway events."""
 
         setup_started = perf_counter()
 
@@ -1149,8 +704,6 @@ class ClavigerBot(discord.Client):
         else:
             logger.info("Démarrage de l'application en cours...")
 
-        # Application-level safety checks must complete before any guild-specific
-        # runtime event is allowed to configure commands.
         step_started = perf_counter()
 
         self._validate_authenticated_bot_identity()
@@ -1180,8 +733,6 @@ class ClavigerBot(discord.Client):
             database_status,
         )
 
-        # Application-wide state is validated once during startup and then reused
-        # independently by every event-driven guild configuration.
         self.application_identity = application_identity
         self.database_status = database_status
         self.database_operational = database_operational
@@ -1190,7 +741,6 @@ class ClavigerBot(discord.Client):
             "Timing startup — validation base / ownership : %.3f s",
             perf_counter() - step_started,
         )
-
         logger.debug(
             "Timing startup — setup_hook total : %.3f s",
             perf_counter() - setup_started,
@@ -1208,22 +758,7 @@ class ClavigerBot(discord.Client):
         )
 
     async def on_ready(self) -> None:
-        """Configure cached guilds and announce a connected runtime.
-
-        Returns:
-            None:
-                The method returns early until authenticated and application-wide
-                runtime state are available.
-
-        Side Effects:
-            Ensures every currently available cached guild has runtime state,
-            possibly synchronizes guild command trees and may complete restart
-            feedback.
-
-        Notes:
-            discord.py may dispatch ``on_ready`` more than once. Existing guild
-            runtime states are therefore reused rather than rebuilt automatically.
-        """
+        """Configure cached guilds and announce a connected runtime."""
 
         if self.user is None:
             return
@@ -1237,8 +772,6 @@ class ClavigerBot(discord.Client):
         if self.database_operational is None:
             return
 
-        # setup_hook deliberately performs no guild work. Gateway-backed lifecycle
-        # events are the first authoritative source for accessible guilds.
         for guild in self.guilds:
             if guild.unavailable:
                 continue
@@ -1259,7 +792,6 @@ class ClavigerBot(discord.Client):
             self.application_identity.application_name,
             self.user.id,
         )
-
         logger.info(
             "Serveurs accessibles : %s",
             len(self.guilds),
@@ -1291,17 +823,7 @@ class ClavigerBot(discord.Client):
         self,
         guild: discord.Guild,
     ) -> None:
-        """Configure a guild joined while the application is already running.
-
-        Args:
-            guild:
-                Discord guild newly joined by the authenticated application.
-
-        Returns:
-            None:
-                Configuration failure is logged and kept isolated from other
-                guilds.
-        """
+        """Configure a guild joined while the application is already running."""
 
         try:
             await self._configure_runtime_guild(
@@ -1318,17 +840,7 @@ class ClavigerBot(discord.Client):
         self,
         guild: discord.Guild,
     ) -> None:
-        """Reconfigure a guild that becomes available again.
-
-        Args:
-            guild:
-                Previously unavailable Discord guild that is accessible again.
-
-        Returns:
-            None:
-                Configuration failure is logged and kept isolated from other
-                guilds.
-        """
+        """Reconfigure a guild that becomes available again."""
 
         try:
             await self._configure_runtime_guild(
@@ -1346,16 +858,7 @@ class ClavigerBot(discord.Client):
         self,
         guild: discord.Guild,
     ) -> None:
-        """Invalidate runtime state while a guild is unavailable.
-
-        Args:
-            guild:
-                Discord guild temporarily marked unavailable.
-
-        Returns:
-            None:
-                The guild is removed from the authoritative runtime registry.
-        """
+        """Invalidate runtime state while a guild is unavailable."""
 
         lock = self._get_guild_configuration_lock(
             guild.id,
@@ -1376,16 +879,7 @@ class ClavigerBot(discord.Client):
         self,
         guild: discord.Guild,
     ) -> None:
-        """Forget runtime and local command state for a removed guild.
-
-        Args:
-            guild:
-                Discord guild removed from the authenticated application.
-
-        Returns:
-            None:
-                Runtime state and locally registered guild commands are discarded.
-        """
+        """Forget runtime and local command state for a removed guild."""
 
         lock = self._get_guild_configuration_lock(
             guild.id,
