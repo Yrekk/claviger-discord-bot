@@ -32,7 +32,7 @@ L'objectif est de conserver une architecture modulaire, testable et réutilisabl
 |---|---|---|
 | **V1.0** | Déployée | Gestion des rôles, catalogues et questionnaires Discord |
 | **V1.1** | En développement | Runtime multi-guild, configuration par serveur, reporting, généricité et robustesse |
-| **V1.2** | Planifiée | Onboarding des nouveaux membres |
+| **V1.2** | Planifiée | Onboarding des nouveaux membres et fonctionnalités sociales / fun |
 | **V1.3** | Planifiée | Administration Web et outils de modération |
 | **Long terme** | Exploration | IA conversationnelle, tools et comportements agentiques |
 
@@ -304,7 +304,6 @@ salon afin d'éviter tout verrouillage administratif :
 
 ---
 
-# Configuration ADMIN par serveur
 
 Chaque guild peut posséder une structure ADMIN persistée en SQLite.
 
