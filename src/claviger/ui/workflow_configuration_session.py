@@ -6,6 +6,7 @@ from claviger.models.workflow_configuration_model import (
     WorkflowResourceSelection,
 )
 from claviger.models.workflow_structure_discovery_model import (
+    WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
 )
 
@@ -17,6 +18,11 @@ WorkflowUiResource = Literal[
     "ai_preference_role",
 ]
 
+WorkflowCandidateChannelResource = Literal[
+    "management_channel",
+    "execution_channel",
+]
+
 
 @dataclass(slots=True)
 class WorkflowConfigurationSession:
@@ -26,6 +32,10 @@ class WorkflowConfigurationSession:
     actor_id: int
     discovery: WorkflowStructureDiscoveryResult
     persisted_ai_preference_role_id: int | None = None
+
+    # The UI stores only the identity of the structural candidate selected by
+    # the human. Candidate recognition itself belongs exclusively to discovery.
+    selected_structure_category_id: int | None = None
 
     # Metadata is intentionally frontend-local until final confirmation.
     title: str | None = None
@@ -67,6 +77,140 @@ class WorkflowConfigurationSession:
             self,
             resource,
         )
+
+    def select_structure_candidate(
+        self,
+        *,
+        category_id: int,
+    ) -> WorkflowStructureCandidate:
+        """Apply one human-selected structural candidate to the UI session.
+
+        Discovery already decided which categories satisfy the workflow
+        structural contract. This method only records the user's selection.
+
+        Unique protected or interactive channels are selected automatically
+        because no ambiguity remains. Multiple candidates stay unresolved until
+        the user explicitly chooses one through the UI.
+        """
+
+        candidate = next(
+            (
+                candidate
+                for candidate in self.discovery.workflow_candidates
+                if candidate.category.category_id == category_id
+            ),
+            None,
+        )
+
+        if candidate is None:
+            raise ValueError("Selected workflow structure is not present in discovery.")
+
+        self.selected_structure_category_id = category_id
+
+        self.category = WorkflowResourceSelection(
+            mode="existing",
+            resource_id=candidate.category.category_id,
+        )
+
+        self.management_channel = (
+            WorkflowResourceSelection(
+                mode="existing",
+                resource_id=candidate.protected_channels[0].channel_id,
+            )
+            if len(candidate.protected_channels) == 1
+            else None
+        )
+
+        self.execution_channel = (
+            WorkflowResourceSelection(
+                mode="existing",
+                resource_id=candidate.interactive_channels[0].channel_id,
+            )
+            if len(candidate.interactive_channels) == 1
+            else None
+        )
+
+        return candidate
+
+    def select_structure_channel(
+        self,
+        *,
+        resource: WorkflowCandidateChannelResource,
+        channel_id: int,
+    ) -> None:
+        """Record one explicit channel choice inside the selected structure."""
+
+        candidate = self.get_selected_structure_candidate()
+
+        if candidate is None:
+            raise RuntimeError(
+                "A workflow structure must be selected before choosing its channels."
+            )
+
+        if resource == "management_channel":
+            allowed_channels = candidate.protected_channels
+
+        elif resource == "execution_channel":
+            allowed_channels = candidate.interactive_channels
+
+        else:
+            raise ValueError(
+                f"Unsupported workflow structure channel resource: {resource!r}."
+            )
+
+        if not any(channel.channel_id == channel_id for channel in allowed_channels):
+            raise ValueError(
+                "Selected channel does not belong to the chosen workflow structure."
+            )
+
+        self.set_resource(
+            resource,
+            WorkflowResourceSelection(
+                mode="existing",
+                resource_id=channel_id,
+            ),
+        )
+
+    def get_selected_structure_candidate(
+        self,
+    ) -> WorkflowStructureCandidate | None:
+        """Return the structural candidate currently selected by the user."""
+
+        category_id = self.selected_structure_category_id
+
+        if category_id is None:
+            return None
+
+        return next(
+            (
+                candidate
+                for candidate in self.discovery.workflow_candidates
+                if candidate.category.category_id == category_id
+            ),
+            None,
+        )
+
+    def has_complete_selected_structure(
+        self,
+    ) -> bool:
+        """Return whether a detected structure has all required channel choices."""
+
+        return (
+            self.get_selected_structure_candidate() is not None
+            and self.category is not None
+            and self.management_channel is not None
+            and self.execution_channel is not None
+        )
+
+    def clear_selected_structure(
+        self,
+    ) -> None:
+        """Leave structural discovery mode and return to manual configuration."""
+
+        self.selected_structure_category_id = None
+        self.category = None
+        self.management_channel = None
+        self.execution_channel = None
 
     def to_draft(
         self,

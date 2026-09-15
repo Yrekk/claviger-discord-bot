@@ -9,6 +9,7 @@ from claviger.services.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
 from claviger.ui.workflow_configuration_session import (
+    WorkflowCandidateChannelResource,
     WorkflowConfigurationSession,
     WorkflowUiResource,
 )
@@ -67,13 +68,137 @@ def _optional_text(
     return normalized or None
 
 
+def _display_channel_names(
+    channels: tuple,
+) -> str:
+    """Return readable channel names without exposing Discord identities."""
+
+    if not channels:
+        return "aucun"
+
+    return ", ".join(f"`#{channel.channel_name}`" for channel in channels)
+
+
+def _detected_structures_content(
+    session: WorkflowConfigurationSession,
+) -> str:
+    """Render structural candidates already recognized by backend discovery."""
+
+    candidates = session.discovery.workflow_candidates
+
+    if not candidates:
+        return (
+            "**Configuration des workflows**\n\n"
+            "Aucune structure de workflow compatible n'a été détectée.\n\n"
+            "Tu peux créer un nouveau workflow et sélectionner ou créer "
+            "ses ressources manuellement."
+        )
+
+    lines = [
+        "**Structures de workflow détectées**",
+        "",
+        (
+            "L'application a reconnu les structures ci-dessous uniquement "
+            "à partir de leur organisation et de leurs permissions."
+        ),
+        "",
+    ]
+
+    visible_candidates = candidates[:10]
+
+    for candidate in visible_candidates:
+        lines.extend(
+            [
+                f"**{candidate.category.category_name}**",
+                (
+                    "- Salons protégés : "
+                    f"{_display_channel_names(candidate.protected_channels)}"
+                ),
+                (
+                    "- Salons interactifs : "
+                    f"{_display_channel_names(candidate.interactive_channels)}"
+                ),
+                "",
+            ]
+        )
+
+    remaining = len(candidates) - len(visible_candidates)
+
+    if remaining > 0:
+        lines.extend(
+            [
+                f"*{remaining} autre(s) structure(s) compatible(s) détectée(s).*",
+                "",
+            ]
+        )
+
+    lines.append(
+        "Choisis une structure détectée à réutiliser, "
+        "ou crée un nouveau workflow manuellement."
+    )
+
+    return "\n".join(lines)
+
+
+def _selected_structure_content(
+    session: WorkflowConfigurationSession,
+) -> str:
+    """Render the structure selected by the human before metadata collection."""
+
+    candidate = session.get_selected_structure_candidate()
+
+    if candidate is None:
+        raise RuntimeError("No workflow structure is currently selected.")
+
+    return (
+        "**Structure de workflow sélectionnée**\n\n"
+        f"- Catégorie : **{candidate.category.category_name}**\n"
+        "- Salons protégés : "
+        f"{_display_channel_names(candidate.protected_channels)}\n"
+        "- Salons interactifs : "
+        f"{_display_channel_names(candidate.interactive_channels)}"
+    )
+
+
+def _structure_channel_choice_content(
+    session: WorkflowConfigurationSession,
+    *,
+    resource: WorkflowCandidateChannelResource,
+) -> str:
+    """Explain one ambiguous channel choice without making it for the user."""
+
+    candidate = session.get_selected_structure_candidate()
+
+    if candidate is None:
+        raise RuntimeError("No workflow structure is currently selected.")
+
+    base = _selected_structure_content(
+        session,
+    )
+
+    if resource == "management_channel":
+        return (
+            f"{base}\n\n"
+            "**Choix nécessaire — salon de gestion / règles**\n\n"
+            "Plusieurs salons protégés correspondent au pattern. "
+            "Choisis celui qui doit servir de salon de gestion du workflow."
+        )
+
+    return (
+        f"{base}\n\n"
+        "**Choix nécessaire — salon d'exécution**\n\n"
+        "Plusieurs salons interactifs correspondent au pattern. "
+        "Choisis celui dans lequel la commande du workflow doit être utilisée."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Workflow metadata modal
 # ---------------------------------------------------------------------------
 
 
 class WorkflowMetadataModal(discord.ui.Modal):
-    """Collect workflow metadata before selecting Discord resources."""
+    """Collect workflow metadata after structural selection when available."""
 
     def __init__(
         self,
@@ -146,7 +271,7 @@ class WorkflowMetadataModal(discord.ui.Modal):
         self,
         interaction: discord.Interaction,
     ) -> None:
-        """Store metadata locally and continue to structural configuration."""
+        """Store metadata locally and continue to remaining resource choices."""
 
         if await _reject_foreign_actor(
             interaction,
@@ -164,12 +289,551 @@ class WorkflowMetadataModal(discord.ui.Modal):
         )
         self.session.questionnaire_role_prefix = self.role_prefix_input.value.strip()
 
+        if self.session.selected_structure_category_id is not None:
+            if not self.session.has_complete_selected_structure():
+                raise RuntimeError(
+                    "Selected workflow structure is incomplete before metadata."
+                )
+
+            # Category, management channel and execution channel already come
+            # from the backend-recognized structure. Continue directly with the
+            # first resource that discovery cannot infer: the primary role.
+            await _edit_resource_step(
+                interaction,
+                coordinator=self.coordinator,
+                session=self.session,
+                resource="primary_role",
+                admin_command_name=self.admin_command_name,
+            )
+            return
+
+        # Manual workflow creation keeps the historical granular resource flow.
         await _edit_resource_step(
             interaction,
             coordinator=self.coordinator,
             session=self.session,
             resource="category",
             admin_command_name=self.admin_command_name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Detected workflow structure selection
+# ---------------------------------------------------------------------------
+
+
+async def _open_metadata_modal(
+    interaction: discord.Interaction,
+    *,
+    coordinator: WorkflowConfigurationCoordinatorService,
+    session: WorkflowConfigurationSession,
+    admin_command_name: str,
+) -> None:
+    """Open metadata collection after structural choices are complete."""
+
+    if not session.has_complete_selected_structure():
+        raise RuntimeError(
+            "Workflow metadata cannot start from an incomplete detected structure."
+        )
+
+    await interaction.response.send_modal(
+        WorkflowMetadataModal(
+            coordinator=coordinator,
+            session=session,
+            admin_command_name=admin_command_name,
+        )
+    )
+
+
+async def _continue_after_structure_selection(
+    interaction: discord.Interaction,
+    *,
+    coordinator: WorkflowConfigurationCoordinatorService,
+    session: WorkflowConfigurationSession,
+    admin_command_name: str,
+) -> None:
+    """Request only unresolved structural choices before metadata collection."""
+
+    if session.management_channel is None:
+        await interaction.response.edit_message(
+            content=_structure_channel_choice_content(
+                session,
+                resource="management_channel",
+            ),
+            view=WorkflowDetectedStructureChannelView(
+                coordinator=coordinator,
+                session=session,
+                resource="management_channel",
+                admin_command_name=admin_command_name,
+            ),
+        )
+        return
+
+    if session.execution_channel is None:
+        await interaction.response.edit_message(
+            content=_structure_channel_choice_content(
+                session,
+                resource="execution_channel",
+            ),
+            view=WorkflowDetectedStructureChannelView(
+                coordinator=coordinator,
+                session=session,
+                resource="execution_channel",
+                admin_command_name=admin_command_name,
+            ),
+        )
+        return
+
+    await _open_metadata_modal(
+        interaction,
+        coordinator=coordinator,
+        session=session,
+        admin_command_name=admin_command_name,
+    )
+
+
+async def _apply_detected_structure_choice(
+    interaction: discord.Interaction,
+    *,
+    coordinator: WorkflowConfigurationCoordinatorService,
+    session: WorkflowConfigurationSession,
+    category_id: int,
+    admin_command_name: str,
+) -> None:
+    """Apply one category already recognized as a structural workflow candidate."""
+
+    try:
+        session.select_structure_candidate(
+            category_id=category_id,
+        )
+
+    except ValueError:
+        await interaction.response.send_message(
+            (
+                "Cette catégorie ne fait pas partie des structures "
+                "de workflow détectées."
+            ),
+            ephemeral=True,
+        )
+        return
+
+    await _continue_after_structure_selection(
+        interaction,
+        coordinator=coordinator,
+        session=session,
+        admin_command_name=admin_command_name,
+    )
+
+
+class _DetectedStructureSelect(discord.ui.Select):
+    """Select one exact backend-provided workflow structure."""
+
+    def __init__(
+        self,
+        *,
+        session: WorkflowConfigurationSession,
+    ) -> None:
+        options = []
+
+        for candidate in session.discovery.workflow_candidates:
+            description = (
+                f"{len(candidate.protected_channels)} protégé(s) • "
+                f"{len(candidate.interactive_channels)} interactif(s)"
+            )
+
+            options.append(
+                discord.SelectOption(
+                    label=candidate.category.category_name[:100],
+                    value=str(candidate.category.category_id),
+                    description=description[:100],
+                )
+            )
+
+        super().__init__(
+            placeholder="Choisir une structure détectée",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        """Forward an exact discovery candidate to the session."""
+
+        view = self.view
+
+        if not isinstance(
+            view,
+            WorkflowDetectedStructureView,
+        ):
+            raise RuntimeError("Workflow structure selector is detached from its view.")
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=view.session,
+        ):
+            return
+
+        await _apply_detected_structure_choice(
+            interaction,
+            coordinator=view.coordinator,
+            session=view.session,
+            category_id=int(self.values[0]),
+            admin_command_name=view.admin_command_name,
+        )
+
+
+class _DetectedStructureCategorySelect(discord.ui.ChannelSelect):
+    """Fallback category selector when more than 25 structures are discovered."""
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__(
+            placeholder="Choisir une catégorie détectée",
+            min_values=1,
+            max_values=1,
+            channel_types=[
+                discord.ChannelType.category,
+            ],
+        )
+
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        """Validate the native Discord category against backend discovery."""
+
+        view = self.view
+
+        if not isinstance(
+            view,
+            WorkflowDetectedStructureView,
+        ):
+            raise RuntimeError(
+                "Workflow structure category selector is detached from its view."
+            )
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=view.session,
+        ):
+            return
+
+        await _apply_detected_structure_choice(
+            interaction,
+            coordinator=view.coordinator,
+            session=view.session,
+            category_id=self.values[0].id,
+            admin_command_name=view.admin_command_name,
+        )
+
+
+class WorkflowDetectedStructureView(discord.ui.View):
+    """Present structural candidates already recognized by backend discovery."""
+
+    def __init__(
+        self,
+        *,
+        coordinator: WorkflowConfigurationCoordinatorService,
+        session: WorkflowConfigurationSession,
+        admin_command_name: str,
+    ) -> None:
+        super().__init__(
+            timeout=300,
+        )
+
+        self.coordinator = coordinator
+        self.session = session
+        self.admin_command_name = admin_command_name
+
+        if len(session.discovery.workflow_candidates) <= 25:
+            self.add_item(
+                _DetectedStructureSelect(
+                    session=session,
+                )
+            )
+
+        else:
+            # Discord string selects are limited to 25 options. The native
+            # category selector remains scalable; its callback still validates
+            # the chosen ID against backend discovery before accepting it.
+            self.add_item(_DetectedStructureCategorySelect())
+
+    @discord.ui.button(
+        label="Créer un nouveau workflow",
+        style=discord.ButtonStyle.secondary,
+        row=1,
+    )
+    async def create_new(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button,
+    ) -> None:
+        """Leave detected-structure reuse and start the manual creation path."""
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=self.session,
+        ):
+            return
+
+        self.session.clear_selected_structure()
+
+        await interaction.response.send_modal(
+            WorkflowMetadataModal(
+                coordinator=self.coordinator,
+                session=self.session,
+                admin_command_name=self.admin_command_name,
+            )
+        )
+
+
+def _structure_channels_for_resource(
+    session: WorkflowConfigurationSession,
+    *,
+    resource: WorkflowCandidateChannelResource,
+) -> tuple:
+    """Return channels exposed by discovery for one structural UI choice."""
+
+    candidate = session.get_selected_structure_candidate()
+
+    if candidate is None:
+        raise RuntimeError("No workflow structure is currently selected.")
+
+    if resource == "management_channel":
+        return candidate.protected_channels
+
+    return candidate.interactive_channels
+
+
+async def _apply_detected_structure_channel_choice(
+    interaction: discord.Interaction,
+    *,
+    coordinator: WorkflowConfigurationCoordinatorService,
+    session: WorkflowConfigurationSession,
+    resource: WorkflowCandidateChannelResource,
+    channel_id: int,
+    admin_command_name: str,
+) -> None:
+    """Store one human choice among backend-provided structural channels."""
+
+    try:
+        session.select_structure_channel(
+            resource=resource,
+            channel_id=channel_id,
+        )
+
+    except (RuntimeError, ValueError):
+        await interaction.response.send_message(
+            (
+                "Ce salon ne fait pas partie des choix compatibles "
+                "fournis par la structure sélectionnée."
+            ),
+            ephemeral=True,
+        )
+        return
+
+    await _continue_after_structure_selection(
+        interaction,
+        coordinator=coordinator,
+        session=session,
+        admin_command_name=admin_command_name,
+    )
+
+
+class _DetectedStructureChannelSelect(discord.ui.Select):
+    """Select one exact channel from a backend-recognized structure."""
+
+    def __init__(
+        self,
+        *,
+        session: WorkflowConfigurationSession,
+        resource: WorkflowCandidateChannelResource,
+    ) -> None:
+        channels = _structure_channels_for_resource(
+            session,
+            resource=resource,
+        )
+
+        if resource == "management_channel":
+            placeholder = "Choisir le salon de gestion / règles"
+        else:
+            placeholder = "Choisir le salon d'exécution"
+
+        options = [
+            discord.SelectOption(
+                label=f"#{channel.channel_name}"[:100],
+                value=str(channel.channel_id),
+            )
+            for channel in channels
+        ]
+
+        super().__init__(
+            placeholder=placeholder,
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+        self.resource = resource
+
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        """Forward one exact structural channel choice to the session."""
+
+        view = self.view
+
+        if not isinstance(
+            view,
+            WorkflowDetectedStructureChannelView,
+        ):
+            raise RuntimeError(
+                "Workflow structure channel selector is detached from its view."
+            )
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=view.session,
+        ):
+            return
+
+        await _apply_detected_structure_channel_choice(
+            interaction,
+            coordinator=view.coordinator,
+            session=view.session,
+            resource=self.resource,
+            channel_id=int(self.values[0]),
+            admin_command_name=view.admin_command_name,
+        )
+
+
+class _DetectedStructureNativeChannelSelect(discord.ui.ChannelSelect):
+    """Fallback native selector for more than 25 compatible channels."""
+
+    def __init__(
+        self,
+        *,
+        resource: WorkflowCandidateChannelResource,
+    ) -> None:
+        if resource == "management_channel":
+            placeholder = "Choisir le salon de gestion / règles"
+        else:
+            placeholder = "Choisir le salon d'exécution"
+
+        super().__init__(
+            placeholder=placeholder,
+            min_values=1,
+            max_values=1,
+            channel_types=[
+                discord.ChannelType.text,
+            ],
+        )
+
+        self.resource = resource
+
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        """Validate one native Discord selection against the candidate channels."""
+
+        view = self.view
+
+        if not isinstance(
+            view,
+            WorkflowDetectedStructureChannelView,
+        ):
+            raise RuntimeError(
+                "Workflow native structure selector is detached from its view."
+            )
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=view.session,
+        ):
+            return
+
+        await _apply_detected_structure_channel_choice(
+            interaction,
+            coordinator=view.coordinator,
+            session=view.session,
+            resource=self.resource,
+            channel_id=self.values[0].id,
+            admin_command_name=view.admin_command_name,
+        )
+
+
+class WorkflowDetectedStructureChannelView(discord.ui.View):
+    """Collect one unresolved channel role inside a detected structure."""
+
+    def __init__(
+        self,
+        *,
+        coordinator: WorkflowConfigurationCoordinatorService,
+        session: WorkflowConfigurationSession,
+        resource: WorkflowCandidateChannelResource,
+        admin_command_name: str,
+    ) -> None:
+        super().__init__(
+            timeout=300,
+        )
+
+        self.coordinator = coordinator
+        self.session = session
+        self.resource = resource
+        self.admin_command_name = admin_command_name
+
+        channels = _structure_channels_for_resource(
+            session,
+            resource=resource,
+        )
+
+        if len(channels) <= 25:
+            self.add_item(
+                _DetectedStructureChannelSelect(
+                    session=session,
+                    resource=resource,
+                )
+            )
+
+        else:
+            self.add_item(
+                _DetectedStructureNativeChannelSelect(
+                    resource=resource,
+                )
+            )
+
+    @discord.ui.button(
+        label="Créer plutôt un nouveau workflow",
+        style=discord.ButtonStyle.secondary,
+        row=1,
+    )
+    async def create_new(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button,
+    ) -> None:
+        """Abandon structural reuse without mutating Discord."""
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=self.session,
+        ):
+            return
+
+        self.session.clear_selected_structure()
+
+        await interaction.response.send_modal(
+            WorkflowMetadataModal(
+                coordinator=self.coordinator,
+                session=self.session,
+                admin_command_name=self.admin_command_name,
+            )
         )
 
 
@@ -381,7 +1045,7 @@ class _ExistingRoleSelect(discord.ui.RoleSelect):
         self,
         interaction: discord.Interaction,
     ) -> None:
-        """Reject role choices outside Claviger's manageable hierarchy."""
+        """Reject role choices outside the application's manageable hierarchy."""
 
         view = self.view
 
@@ -411,7 +1075,7 @@ class _ExistingRoleSelect(discord.ui.RoleSelect):
         if candidate is None:
             await interaction.response.send_message(
                 (
-                    "Ce rôle n'est pas gérable par Claviger. "
+                    "Ce rôle n'est pas gérable par l'application. "
                     "Vérifie la hiérarchie des rôles."
                 ),
                 ephemeral=True,
@@ -886,7 +1550,7 @@ async def _edit_resource_step(
         content=(
             f"**Configurer : {RESOURCE_LABELS[resource]}**\n\n"
             "Tu peux réutiliser une ressource compatible déjà présente "
-            "sur le serveur ou demander à Claviger de la créer."
+            "sur le serveur ou demander à l'application de la créer."
         ),
         view=WorkflowResourceModeView(
             coordinator=coordinator,
@@ -999,12 +1663,12 @@ async def _edit_review(
 
 
 # ---------------------------------------------------------------------------
-# Public workflow-configuration entry point
+# Manual workflow configuration entry point
 # ---------------------------------------------------------------------------
 
 
 class WorkflowConfigurationStartView(discord.ui.View):
-    """Start one workflow configuration session after discovery is complete."""
+    """Start manual workflow configuration when no structure is reused."""
 
     def __init__(
         self,
@@ -1022,7 +1686,7 @@ class WorkflowConfigurationStartView(discord.ui.View):
         self.admin_command_name = admin_command_name
 
     @discord.ui.button(
-        label="Créer / configurer un workflow",
+        label="Créer un nouveau workflow",
         style=discord.ButtonStyle.primary,
     )
     async def start(
@@ -1030,13 +1694,15 @@ class WorkflowConfigurationStartView(discord.ui.View):
         interaction: discord.Interaction,
         _: discord.ui.Button,
     ) -> None:
-        """Open metadata collection for this frontend session."""
+        """Open metadata collection for one manual workflow session."""
 
         if await _reject_foreign_actor(
             interaction,
             session=self.session,
         ):
             return
+
+        self.session.clear_selected_structure()
 
         await interaction.response.send_modal(
             WorkflowMetadataModal(
@@ -1045,6 +1711,11 @@ class WorkflowConfigurationStartView(discord.ui.View):
                 admin_command_name=self.admin_command_name,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# Public workflow-configuration entry point
+# ---------------------------------------------------------------------------
 
 
 async def run_workflow_configuration(
@@ -1088,15 +1759,26 @@ async def run_workflow_configuration(
         guild_id=guild.id,
         actor_id=interaction.user.id,
         discovery=discovery,
-        persisted_ai_preference_role_id=(ai_preference_role_id),
+        persisted_ai_preference_role_id=ai_preference_role_id,
     )
 
+    if discovery.workflow_candidates:
+        await interaction.followup.send(
+            _detected_structures_content(
+                session,
+            ),
+            ephemeral=True,
+            view=WorkflowDetectedStructureView(
+                coordinator=coordinator,
+                session=session,
+                admin_command_name=admin_command_name,
+            ),
+        )
+        return
+
     await interaction.followup.send(
-        (
-            "**Configuration des workflows**\n\n"
-            "Claviger a analysé les catégories, salons texte et rôles "
-            "actuellement disponibles. Tu peux maintenant créer un workflow "
-            "en réutilisant l'existant ou en créant les ressources manquantes."
+        _detected_structures_content(
+            session,
         ),
         ephemeral=True,
         view=WorkflowConfigurationStartView(
