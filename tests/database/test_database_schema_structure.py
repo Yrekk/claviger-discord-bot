@@ -8,6 +8,11 @@ from claviger.database.schema import DatabaseSchema
 pytestmark = pytest.mark.asyncio
 
 
+# ---------------------------------------------------------------------------
+# Shared database inspection helpers
+# ---------------------------------------------------------------------------
+
+
 async def _get_table_names(
     database: DatabaseConnection,
 ) -> set[str]:
@@ -59,6 +64,11 @@ async def _create_database(
     return database
 
 
+# ---------------------------------------------------------------------------
+# Global schema structure
+# ---------------------------------------------------------------------------
+
+
 async def test_initialize_creates_expected_tables(
     tmp_path: Path,
 ) -> None:
@@ -84,7 +94,14 @@ async def test_initialize_creates_expected_tables(
         "guild_workflow_contexts",
         "database_ownership",
         "guild_admin_configuration",
-    }.issubset(table_names)
+    }.issubset(
+        table_names,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Legacy guild configuration
+# ---------------------------------------------------------------------------
 
 
 async def test_guild_settings_table_has_expected_columns(
@@ -176,6 +193,11 @@ async def test_adult_accesses_table_has_expected_columns(
     }
 
 
+# ---------------------------------------------------------------------------
+# Declarative catalogs and workflows
+# ---------------------------------------------------------------------------
+
+
 async def test_catalog_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
@@ -203,7 +225,7 @@ async def test_catalog_table_has_expected_columns(
 async def test_workflow_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Create the declarative workflow definition schema."""
+    """Create the complete current declarative workflow definition schema."""
 
     database = await _create_database(
         tmp_path,
@@ -223,7 +245,13 @@ async def test_workflow_table_has_expected_columns(
         "channel_mode",
         "sort_order",
         "enabled",
+        # V9 introduced the workflow category as a stable Discord identity.
         "category_id",
+        # V10 completes the core workflow structure required by the
+        # configuration UI. Execution channels remain stored separately in
+        # guild_workflow_channels because a workflow may have several.
+        "management_channel_id",
+        "primary_role_id",
     }
 
 
@@ -252,7 +280,7 @@ async def test_workflow_catalog_table_has_expected_columns(
 async def test_workflow_channel_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Store workflow channel routing using Discord IDs."""
+    """Store workflow execution-channel routing using Discord IDs."""
 
     database = await _create_database(
         tmp_path,
@@ -266,6 +294,11 @@ async def test_workflow_channel_table_has_expected_columns(
         "workflow_key",
         "channel_id",
     }
+
+
+# ---------------------------------------------------------------------------
+# Generic questionnaire contexts
+# ---------------------------------------------------------------------------
 
 
 async def test_context_definition_table_has_expected_columns(
@@ -313,6 +346,11 @@ async def test_workflow_context_table_has_expected_columns(
         "sort_order",
         "enabled",
     }
+
+
+# ---------------------------------------------------------------------------
+# Application ownership and guild ADMIN configuration
+# ---------------------------------------------------------------------------
 
 
 async def test_database_ownership_table_has_expected_columns(
