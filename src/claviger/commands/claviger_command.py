@@ -106,10 +106,18 @@ def create_claviger_group(
 ) -> app_commands.Group:
     """Create the application's administrative command group."""
 
+    # ADMIN routing is inspected live only when the shared application database
+    # is already usable. Before that point the root stays in recovery mode.
+    routing_inspector = (
+        admin_configuration_coordinator_service.inspect
+        if database_state == DatabaseState.READY and database_ownership_bound
+        else None
+    )
+
     admin_group = GuildAdminCommandGroup(
         name=command_name,
         description=f"Commandes d'administration de {application_name}.",
-        command_channel_id=admin_command_channel_id,
+        routing_inspector=routing_inspector,
     )
 
     database_group = create_database_group(

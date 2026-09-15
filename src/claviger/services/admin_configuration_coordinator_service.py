@@ -3,6 +3,9 @@ import discord
 from claviger.models.admin_configuration_coordination_model import (
     AdminConfigurationCoordinationResult,
 )
+from claviger.models.admin_configuration_inspection_model import (
+    AdminConfigurationInspectionResult,
+)
 from claviger.models.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
 )
@@ -44,29 +47,47 @@ class AdminConfigurationCoordinatorService:
         self.reconciliation_service = reconciliation_service
         self.provisioning_service = provisioning_service
 
-    async def configure(
+    async def inspect(
         self,
         guild: discord.Guild,
-    ) -> AdminConfigurationCoordinationResult:
-        """Run one DB-backed ADMIN discovery, reconciliation and provisioning pass."""
+    ) -> AdminConfigurationInspectionResult:
+        """Compare persisted ADMIN routing with Discord without mutating either side."""
 
-        configuration_before = await self.repository.get(
+        configuration = await self.repository.get(
             guild.id,
         )
 
         discovery = self.discovery_service.discover(
             guild,
             configured_category_id=(
-                configuration_before.category_id
-                if configuration_before is not None
-                else None
+                configuration.category_id if configuration is not None else None
             ),
         )
 
         reconciliation = self.reconciliation_service.reconcile(
             discovery=discovery,
-            configuration=configuration_before,
+            configuration=configuration,
         )
+
+        return AdminConfigurationInspectionResult(
+            guild_id=guild.id,
+            configuration=configuration,
+            discovery=discovery,
+            reconciliation=reconciliation,
+        )
+
+    async def configure(
+        self,
+        guild: discord.Guild,
+    ) -> AdminConfigurationCoordinationResult:
+        """Run one DB-backed ADMIN discovery, reconciliation and provisioning pass."""
+
+        inspection = await self.inspect(
+            guild,
+        )
+
+        configuration_before = inspection.configuration
+        reconciliation = inspection.reconciliation
 
         provisioning = await self.provisioning_service.provision(
             guild=guild,
