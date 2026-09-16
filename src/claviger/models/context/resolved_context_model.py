@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from claviger.models.workflow_definition_model import (
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
 )
 
