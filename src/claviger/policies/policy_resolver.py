@@ -11,7 +11,7 @@ from claviger.policies.guild_policy import (
     GuildPolicy,
     GuildPolicyOverrides,
 )
-from claviger.repositories.guild_policy_repository import (
+from claviger.repositories.runtime.guild_policy_repository import (
     GuildPolicyRepository,
 )
 
