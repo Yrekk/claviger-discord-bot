@@ -3,11 +3,11 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.services.role_discovery import (
+from claviger.services.roles.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
 )
-from claviger.services.workflow_structure_discovery_service import (
+from claviger.services.workflows.workflow_structure_discovery_service import (
     WorkflowStructureDiscoveryService,
 )
 
