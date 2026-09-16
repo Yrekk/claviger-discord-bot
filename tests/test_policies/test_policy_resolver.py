@@ -9,7 +9,7 @@ from claviger.policies.default_policy import (
 )
 from claviger.policies.guild_policy import GuildPolicyOverrides
 from claviger.policies.policy_resolver import PolicyResolver
-from claviger.repositories.guild_policy_repository import (
+from claviger.repositories.runtime.guild_policy_repository import (
     GuildPolicyRepository,
 )
 
