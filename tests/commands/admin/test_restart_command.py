@@ -4,7 +4,7 @@ import discord
 import pytest
 
 from claviger.commands.admin.restart_command import create_restart_command
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 
 def create_interaction(
