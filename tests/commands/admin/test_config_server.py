@@ -3,25 +3,25 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState
-from claviger.models.admin_configuration_coordination_model import (
+from claviger.models.admin.admin_configuration_coordination_model import (
     AdminConfigurationCoordinationResult,
 )
-from claviger.models.admin_configuration_reconciliation_model import (
+from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
 )
-from claviger.models.admin_structure_provisioning_model import (
+from claviger.models.admin.admin_structure_provisioning_model import (
     AdminStructureProvisioningResult,
 )
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
 from claviger.services.role_discovery import RoleDiscoveryService
-from claviger.ui.admin_configuration_view import (
+from claviger.ui.admin.admin_configuration_view import (
     AdminCategorySelectionView,
     AdminRoutingSelectionView,
 )
