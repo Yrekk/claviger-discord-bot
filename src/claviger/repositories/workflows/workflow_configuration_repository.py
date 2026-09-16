@@ -5,7 +5,7 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.resolved_workflow_configuration_model import (
+from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
 
