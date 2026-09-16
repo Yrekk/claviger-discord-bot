@@ -1,21 +1,21 @@
 import pytest
 
-from claviger.models.context_capability_model import ContextCapability
-from claviger.models.context_definition_model import ContextDefinition
-from claviger.models.questionnaire_context_question_model import (
+from claviger.models.context.context_capability_model import ContextCapability
+from claviger.models.context.context_definition_model import ContextDefinition
+from claviger.models.context.questionnaire_context_question_model import (
     QuestionnaireContextQuestion,
 )
-from claviger.models.resolved_context_model import ResolvedContext
+from claviger.models.context.resolved_context_model import ResolvedContext
 from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
 )
-from claviger.services.context_capability_registry_service import (
+from claviger.services.context.context_capability_registry_service import (
     ContextCapabilityRegistry,
 )
-from claviger.services.questionnaire_context_planner_service import (
+from claviger.services.context.questionnaire_context_planner_service import (
     QuestionnaireContextPlanner,
 )
-from claviger.services.workflow_context_validator_service import (
+from claviger.services.context.workflow_context_validator_service import (
     ContextNotManageableError,
     WorkflowContextValidator,
 )
