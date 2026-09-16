@@ -19,17 +19,19 @@ from claviger.models.admin.admin_structure_discovery_model import (
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
-from claviger.models.guild_configuration_inspection_model import (
+from claviger.models.runtime.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
-from claviger.models.guild_configuration_metrics_model import GuildConfigurationMetrics
-from claviger.models.guild_policy_inspection_model import (
+from claviger.models.runtime.guild_configuration_metrics_model import (
+    GuildConfigurationMetrics,
+)
+from claviger.models.runtime.guild_policy_inspection_model import (
     GuildPolicyInspection,
     GuildPolicySource,
 )
 from claviger.policies.default_policy import SAFE_DEFAULT_POLICY
 from claviger.reporting.service import ReportService
-from claviger.services.guild_configuration_inspection_service import (
+from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 
