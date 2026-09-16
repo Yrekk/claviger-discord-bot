@@ -2,14 +2,14 @@ import logging
 
 import discord
 
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowCategoryCandidate,
     WorkflowRoleCandidate,
     WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
     WorkflowTextChannelCandidate,
 )
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
 
 logger = logging.getLogger(__name__)
 
