@@ -1,9 +1,5 @@
-from dataclasses import dataclass
+"""Compatibility import for the runtime-domain model."""
 
+from claviger.models.runtime.discord_guild_identity_model import DiscordGuildIdentity
 
-@dataclass(frozen=True, slots=True)
-class DiscordGuildIdentity:
-    """Represent the bot's guild-specific Discord identity."""
-
-    guild_id: int
-    bot_display_name: str
+__all__ = ["DiscordGuildIdentity"]

@@ -1,13 +1,5 @@
-from dataclasses import dataclass
+"""Compatibility import for the runtime-domain model."""
 
+from claviger.models.runtime.discord_runtime_identity_model import DiscordRuntimeIdentity
 
-@dataclass(frozen=True, slots=True)
-class DiscordRuntimeIdentity:
-    """Represent the authenticated Discord application inside one guild."""
-
-    application_id: int
-    application_name: str
-    bot_user_id: int
-    guild_id: int
-    bot_display_name: str
-    admin_command_name: str
+__all__ = ["DiscordRuntimeIdentity"]
