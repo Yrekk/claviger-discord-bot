@@ -4,7 +4,7 @@ import discord
 import pytest
 from discord import app_commands
 
-from claviger.commands.admin_command_group import GuildAdminCommandGroup
+from claviger.commands.admin.admin_command_group import GuildAdminCommandGroup
 from claviger.models.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
 )

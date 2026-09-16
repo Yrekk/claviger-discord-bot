@@ -1,18 +1,18 @@
 from discord import app_commands
 
-from claviger.commands.admin_command_group import GuildAdminCommandGroup
-from claviger.commands.config_command import create_config_group
-from claviger.commands.config_server_command import (
+from claviger.commands.admin.admin_command_group import GuildAdminCommandGroup
+from claviger.commands.admin.config_command import create_config_group
+from claviger.commands.admin.config_server_command import (
     create_config_server_command,
 )
-from claviger.commands.database_command import create_database_group
-from claviger.commands.guild import create_guild_group
-from claviger.commands.report import create_report_group
-from claviger.commands.restart_command import (
+from claviger.commands.admin.database_command import create_database_group
+from claviger.commands.admin.guild import create_guild_group
+from claviger.commands.admin.report import create_report_group
+from claviger.commands.admin.restart_command import (
     RestartCallback,
     create_restart_command,
 )
-from claviger.commands.roles import create_roles_group
+from claviger.commands.admin.roles import create_roles_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,

@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.commands.restart_command import create_restart_command
+from claviger.commands.admin.restart_command import create_restart_command
 from claviger.models.runtime_restart_model import RuntimeRestartRequest
 
 

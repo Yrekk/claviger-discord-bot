@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from claviger.commands.config_command import create_config_group
+from claviger.commands.admin.config_command import create_config_group
 from claviger.database.status import DatabaseState, DatabaseStatus
 from claviger.models.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
