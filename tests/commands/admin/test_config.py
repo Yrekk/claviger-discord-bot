@@ -16,7 +16,9 @@ from claviger.models.admin.admin_structure_discovery_model import (
     AdminChannelCandidate,
     AdminStructureDiscoveryResult,
 )
-from claviger.models.admin.guild_admin_configuration_model import GuildAdminConfiguration
+from claviger.models.admin.guild_admin_configuration_model import (
+    GuildAdminConfiguration,
+)
 from claviger.models.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
