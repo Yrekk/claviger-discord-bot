@@ -4,7 +4,7 @@ import discord
 import pytest
 
 from claviger.commands.general.say_command import create_say_command
-from claviger.services.authorization import (
+from claviger.services.runtime.authorization import (
     AuthorizationService,
     Capability,
 )
