@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.commands.say_command import create_say_command
+from claviger.commands.general.say_command import create_say_command
 from claviger.services.authorization import (
     AuthorizationService,
     Capability,
