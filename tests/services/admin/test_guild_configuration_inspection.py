@@ -8,10 +8,10 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
-from claviger.models.guild_configuration_metrics_model import (
+from claviger.models.runtime.guild_configuration_metrics_model import (
     GuildConfigurationMetrics,
 )
-from claviger.models.guild_policy_inspection_model import (
+from claviger.models.runtime.guild_policy_inspection_model import (
     GuildPolicyInspection,
     GuildPolicySource,
 )
@@ -23,8 +23,8 @@ from claviger.repositories.runtime.guild_configuration_metrics_repository import
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.database_ownership_service import DatabaseOwnershipService
-from claviger.services.guild_configuration_inspection_service import (
+from claviger.services.runtime.database_ownership_service import DatabaseOwnershipService
+from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 
