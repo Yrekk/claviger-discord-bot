@@ -17,7 +17,7 @@ from claviger.models.guild_policy_inspection_model import (
 )
 from claviger.policies.default_policy import SAFE_DEFAULT_POLICY
 from claviger.policies.policy_resolver import PolicyResolver
-from claviger.repositories.guild_configuration_metrics_repository import (
+from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
 from claviger.services.admin.admin_configuration_coordinator_service import (
