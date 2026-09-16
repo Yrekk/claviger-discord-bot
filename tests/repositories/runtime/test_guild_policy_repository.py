@@ -5,7 +5,7 @@ import pytest
 from claviger.database.connection import DatabaseConnection, DatabaseMissingError
 from claviger.database.schema import DatabaseSchema
 from claviger.policies.guild_policy import GuildPolicyOverrides
-from claviger.repositories.guild_policy_repository import (
+from claviger.repositories.runtime.guild_policy_repository import (
     GuildPolicyRepository,
 )
 

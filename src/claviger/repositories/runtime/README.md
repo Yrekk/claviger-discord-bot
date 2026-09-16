@@ -6,6 +6,6 @@
 
 # Repositories runtime
 
-Persistance des informations nécessaires au fonctionnement global ou par guild, par exemple l'ownership applicatif ou certaines policies persistées.
+Persistance des informations nécessaires au fonctionnement global ou par guild, par exemple l'ownership applicatif, les diagnostics de configuration ou certaines policies persistées.
 
 Ces données ne constituent pas un workflow utilisateur mais sécurisent le cycle de vie de l'application.
