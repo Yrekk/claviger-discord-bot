@@ -1,8 +1,8 @@
-from claviger.models.catalog_variant_classification_model import (
+from claviger.models.catalogs.catalog_variant_classification_model import (
     CatalogVariantClassification,
     CatalogVariantPair,
 )
-from claviger.services.catalog_variant_classifier import (
+from claviger.services.catalogs.catalog_variant_classifier import (
     CatalogVariantClassifier,
 )
 

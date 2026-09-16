@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import discord
 import pytest
 
-from claviger.services.role_channel_discovery_service import (
+from claviger.services.catalogs.role_channel_discovery_service import (
     RoleChannelDiscoveryService,
 )
 
