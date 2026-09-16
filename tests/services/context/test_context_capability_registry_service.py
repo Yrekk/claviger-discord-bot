@@ -1,7 +1,7 @@
 import pytest
 
-from claviger.models.context_capability_model import ContextCapability
-from claviger.services.context_capability_registry_service import (
+from claviger.models.context.context_capability_model import ContextCapability
+from claviger.services.context.context_capability_registry_service import (
     ContextCapabilityRegistry,
     DuplicateContextCapabilityError,
 )
