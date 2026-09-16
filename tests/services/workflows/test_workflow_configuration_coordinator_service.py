@@ -3,37 +3,37 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from claviger.models.resolved_workflow_configuration_model import (
+from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationDraft,
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
 )
-from claviger.models.workflow_structure_provisioning_model import (
+from claviger.models.workflows.workflow_structure_provisioning_model import (
     WorkflowStructureProvisioningResult,
 )
 from claviger.repositories.workflows.workflow_configuration_repository import (
     WorkflowConfigurationRepository,
 )
-from claviger.services.workflow_configuration_coordinator_service import (
+from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
     WorkflowConfigurationPersistenceAfterProvisioningError,
 )
-from claviger.services.workflow_configuration_reconciliation_service import (
+from claviger.services.workflows.workflow_configuration_reconciliation_service import (
     WorkflowConfigurationReconciliationService,
 )
-from claviger.services.workflow_configuration_validation_service import (
+from claviger.services.workflows.workflow_configuration_validation_service import (
     WorkflowConfigurationValidationService,
 )
-from claviger.services.workflow_structure_discovery_service import (
+from claviger.services.workflows.workflow_structure_discovery_service import (
     WorkflowStructureDiscoveryService,
 )
-from claviger.services.workflow_structure_provisioning_service import (
+from claviger.services.workflows.workflow_structure_provisioning_service import (
     WorkflowStructureProvisioningService,
 )
 
