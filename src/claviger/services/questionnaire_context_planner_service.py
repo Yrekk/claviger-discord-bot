@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 
-from claviger.models.questionnaire_context_question_model import (
+from claviger.models.context.questionnaire_context_question_model import (
     QuestionnaireContextQuestion,
 )
-from claviger.models.resolved_context_model import ResolvedContext
+from claviger.models.context.resolved_context_model import ResolvedContext
 from claviger.services.workflow_context_validator_service import (
     WorkflowContextValidator,
 )

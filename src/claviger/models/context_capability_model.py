@@ -1,11 +1,5 @@
-from dataclasses import dataclass
+"""Compatibility import for the context-domain capability model."""
 
-from claviger.models.context_definition_model import ContextValueType
+from claviger.models.context.context_capability_model import ContextCapability
 
-
-@dataclass(frozen=True, slots=True)
-class ContextCapability:
-    """Describe one workflow context capability supported by the engine."""
-
-    capability_key: str
-    value_type: ContextValueType
+__all__ = ["ContextCapability"]

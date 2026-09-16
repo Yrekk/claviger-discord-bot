@@ -1,23 +1,8 @@
-from dataclasses import dataclass
-from typing import Literal
+"""Compatibility import for the context-domain definition model."""
 
-ContextValueType = Literal["boolean",]
+from claviger.models.context.context_definition_model import (
+    ContextDefinition,
+    ContextValueType,
+)
 
-
-@dataclass(frozen=True, slots=True)
-class ContextDefinition:
-    """Describe one guild-specific workflow context."""
-
-    guild_id: int
-    context_key: str
-
-    capability_key: str
-    value_type: ContextValueType
-
-    role_id: int
-
-    label: str
-    description: str | None
-
-    sort_order: int
-    enabled: bool
+__all__ = ["ContextDefinition", "ContextValueType"]

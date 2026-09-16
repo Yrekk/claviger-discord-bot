@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from claviger.models.catalog_definition_model import CatalogDefinition
-from claviger.models.context_definition_model import ContextDefinition
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
+from claviger.models.context.context_definition_model import ContextDefinition
 
 WorkflowChannelMode = Literal[
     "restricted",

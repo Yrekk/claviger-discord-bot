@@ -7,7 +7,7 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.context_definition_model import (
+from claviger.models.context.context_definition_model import (
     ContextDefinition,
     ContextValueType,
 )

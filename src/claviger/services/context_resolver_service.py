@@ -1,6 +1,6 @@
 import discord
 
-from claviger.models.resolved_context_model import ResolvedContext
+from claviger.models.context.resolved_context_model import ResolvedContext
 from claviger.models.workflow_definition_model import (
     WorkflowContextBinding,
     WorkflowDefinition,

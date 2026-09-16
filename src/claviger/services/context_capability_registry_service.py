@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from claviger.models.context_capability_model import ContextCapability
+from claviger.models.context.context_capability_model import ContextCapability
 
 DEFAULT_CONTEXT_CAPABILITIES = (
     ContextCapability(

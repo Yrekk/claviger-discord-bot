@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from claviger.models.resolved_context_model import ResolvedContext
+from claviger.models.context.resolved_context_model import ResolvedContext
 from claviger.services.context_capability_registry_service import (
     ContextCapabilityRegistry,
 )
