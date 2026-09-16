@@ -7,8 +7,8 @@ from claviger.database.connection import (
     DatabaseMissingError,
 )
 from claviger.database.schema import DatabaseSchema
-from claviger.models.catalog_definition_model import CatalogDefinition
-from claviger.repositories.catalog_definition_repository import (
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
+from claviger.repositories.catalogs.catalog_definition_repository import (
     CatalogDefinitionRepository,
 )
 
