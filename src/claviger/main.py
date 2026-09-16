@@ -7,7 +7,7 @@ from claviger.config import (
     get_discord_token,
     get_log_level,
 )
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 logger = logging.getLogger(__name__)
 
