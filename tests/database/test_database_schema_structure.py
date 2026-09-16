@@ -84,9 +84,9 @@ async def test_initialize_creates_expected_tables(
 
     assert {
         "guild_settings",
+        "guild_member_interests",
+        "guild_adult_accesses",
         "guild_catalogs",
-        "guild_catalog_entries",
-        "guild_catalog_entry_targets",
         "guild_workflows",
         "guild_workflow_catalogs",
         "guild_workflow_channels",
@@ -98,19 +98,16 @@ async def test_initialize_creates_expected_tables(
         table_names,
     )
 
-    assert "guild_member_interests" not in table_names
-    assert "guild_adult_accesses" not in table_names
-
 
 # ---------------------------------------------------------------------------
-# Guild-wide settings
+# Legacy guild configuration
 # ---------------------------------------------------------------------------
 
 
 async def test_guild_settings_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Store only current guild-wide AI configuration in V11 settings."""
+    """Create the complete current guild settings schema."""
 
     database = await _create_database(
         tmp_path,
@@ -121,8 +118,78 @@ async def test_guild_settings_table_has_expected_columns(
         "guild_settings",
     ) == {
         "guild_id",
-        "ai_enabled",
-        "ai_role_id",
+        "member_role_name",
+        "adult_role_name",
+        "member_interest_prefix",
+        "adult_access_prefix",
+        "salutations_channel_name",
+        "adult_access_channel_name",
+        "role_management_enabled",
+        "adult_access_enabled",
+    }
+
+
+async def test_member_interests_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the complete legacy member interests catalog schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "guild_member_interests",
+    ) == {
+        "guild_id",
+        "role_id",
+        "role_name",
+        "interest_key",
+        "channel_id",
+        "channel_name",
+        "label",
+        "description",
+        "emoji",
+        "sort_order",
+        "enabled",
+        "discord_present",
+        "role_manageable",
+        "channel_present",
+        "mapping_valid",
+        "matches_policy",
+    }
+
+
+async def test_adult_accesses_table_has_expected_columns(
+    tmp_path: Path,
+) -> None:
+    """Create the complete legacy adult access catalog schema."""
+
+    database = await _create_database(
+        tmp_path,
+    )
+
+    assert await _get_column_names(
+        database,
+        "guild_adult_accesses",
+    ) == {
+        "guild_id",
+        "role_id",
+        "role_name",
+        "access_key",
+        "channel_id",
+        "channel_name",
+        "label",
+        "description",
+        "emoji",
+        "sort_order",
+        "enabled",
+        "discord_present",
+        "role_manageable",
+        "channel_present",
+        "mapping_valid",
+        "matches_policy",
     }
 
 
@@ -152,51 +219,6 @@ async def test_catalog_table_has_expected_columns(
         "description",
         "sort_order",
         "enabled",
-    }
-
-
-async def test_catalog_entry_table_has_expected_columns(
-    tmp_path: Path,
-) -> None:
-    """Store one logical questionnaire choice independently from its targets."""
-
-    database = await _create_database(
-        tmp_path,
-    )
-
-    assert await _get_column_names(
-        database,
-        "guild_catalog_entries",
-    ) == {
-        "guild_id",
-        "catalog_key",
-        "entry_key",
-        "label",
-        "description",
-        "emoji",
-        "sort_order",
-        "enabled",
-    }
-
-
-async def test_catalog_entry_target_table_has_expected_columns(
-    tmp_path: Path,
-) -> None:
-    """Store explicit Discord role targets and their persisted variant."""
-
-    database = await _create_database(
-        tmp_path,
-    )
-
-    assert await _get_column_names(
-        database,
-        "guild_catalog_entry_targets",
-    ) == {
-        "guild_id",
-        "catalog_key",
-        "entry_key",
-        "role_id",
-        "variant",
     }
 
 
@@ -282,7 +304,7 @@ async def test_workflow_channel_table_has_expected_columns(
 async def test_context_definition_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Keep generic non-AI workflow context definitions available."""
+    """Create the declarative workflow context definition schema."""
 
     database = await _create_database(
         tmp_path,
@@ -307,7 +329,7 @@ async def test_context_definition_table_has_expected_columns(
 async def test_workflow_context_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Keep generic workflow-to-context bindings available."""
+    """Create the workflow-to-context binding schema."""
 
     database = await _create_database(
         tmp_path,

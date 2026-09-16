@@ -87,34 +87,6 @@ async def _insert_catalog(
     )
 
 
-async def _insert_catalog_entry(
-    connection: aiosqlite.Connection,
-    *,
-    guild_id: int = 123,
-    catalog_key: str = "interests",
-    entry_key: str = "python",
-) -> None:
-    """Insert one valid generic questionnaire entry."""
-
-    await connection.execute(
-        """
-        INSERT INTO guild_catalog_entries (
-            guild_id,
-            catalog_key,
-            entry_key,
-            label
-        )
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            guild_id,
-            catalog_key,
-            entry_key,
-            "Python",
-        ),
-    )
-
-
 async def _insert_context(
     connection: aiosqlite.Connection,
     *,
@@ -150,62 +122,34 @@ async def _insert_context(
 
 
 @pytest.mark.asyncio
-async def test_catalog_entry_requires_existing_catalog(
+async def test_member_interest_requires_channel_mapping(
     tmp_path: Path,
 ) -> None:
-    """Reject questionnaire entries whose catalog definition does not exist."""
+    """Reject member interests without a Discord channel mapping."""
 
     database = await _create_database(
         tmp_path,
     )
 
     async with database.connect() as connection:
-        with pytest.raises(
-            aiosqlite.IntegrityError,
-        ):
-            await _insert_catalog_entry(
-                connection,
-                catalog_key="missing-catalog",
-            )
-
-        await connection.rollback()
-
-
-@pytest.mark.asyncio
-async def test_catalog_target_requires_existing_entry(
-    tmp_path: Path,
-) -> None:
-    """Reject Discord targets whose logical questionnaire entry is unknown."""
-
-    database = await _create_database(
-        tmp_path,
-    )
-
-    async with database.connect() as connection:
-        await _insert_catalog(
-            connection,
-        )
-
         with pytest.raises(
             aiosqlite.IntegrityError,
         ):
             await connection.execute(
                 """
-                INSERT INTO guild_catalog_entry_targets (
+                INSERT INTO guild_member_interests (
                     guild_id,
-                    catalog_key,
-                    entry_key,
                     role_id,
-                    variant
+                    role_name,
+                    interest_key
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?)
                 """,
                 (
                     123,
-                    "interests",
-                    "missing-entry",
                     456,
-                    "default",
+                    "interest-test",
+                    "test",
                 ),
             )
 
@@ -213,87 +157,34 @@ async def test_catalog_target_requires_existing_entry(
 
 
 @pytest.mark.asyncio
-async def test_catalog_target_rejects_non_positive_role_id(
+async def test_adult_access_requires_channel_mapping(
     tmp_path: Path,
 ) -> None:
-    """Reject invalid Discord role identifiers for questionnaire targets."""
+    """Reject adult accesses without a Discord channel mapping."""
 
     database = await _create_database(
         tmp_path,
     )
 
     async with database.connect() as connection:
-        await _insert_catalog(
-            connection,
-        )
-        await _insert_catalog_entry(
-            connection,
-        )
-
         with pytest.raises(
             aiosqlite.IntegrityError,
         ):
             await connection.execute(
                 """
-                INSERT INTO guild_catalog_entry_targets (
+                INSERT INTO guild_adult_accesses (
                     guild_id,
-                    catalog_key,
-                    entry_key,
                     role_id,
-                    variant
+                    role_name,
+                    access_key
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?)
                 """,
                 (
                     123,
-                    "interests",
-                    "python",
-                    0,
-                    "default",
-                ),
-            )
-
-        await connection.rollback()
-
-
-@pytest.mark.asyncio
-async def test_catalog_target_rejects_unknown_variant(
-    tmp_path: Path,
-) -> None:
-    """Persist only explicit target variants understood by the generic engine."""
-
-    database = await _create_database(
-        tmp_path,
-    )
-
-    async with database.connect() as connection:
-        await _insert_catalog(
-            connection,
-        )
-        await _insert_catalog_entry(
-            connection,
-        )
-
-        with pytest.raises(
-            aiosqlite.IntegrityError,
-        ):
-            await connection.execute(
-                """
-                INSERT INTO guild_catalog_entry_targets (
-                    guild_id,
-                    catalog_key,
-                    entry_key,
-                    role_id,
-                    variant
-                )
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    123,
-                    "interests",
-                    "python",
                     456,
-                    "implicit-name-heuristic",
+                    "access-ia-test",
+                    "ia-test",
                 ),
             )
 

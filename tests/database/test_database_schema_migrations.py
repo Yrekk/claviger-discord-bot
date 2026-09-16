@@ -143,15 +143,20 @@ async def _prepare_historical_database(
                 """
             )
 
-        for migration_version in range(
-            6,
-            min(
-                version,
-                10,
-            )
-            + 1,
-        ):
-            for statement in MIGRATIONS[migration_version]:
+        if version >= 6:
+            for statement in MIGRATIONS[6]:
+                await connection.execute(
+                    statement,
+                )
+
+        if version >= 7:
+            for statement in MIGRATIONS[7]:
+                await connection.execute(
+                    statement,
+                )
+
+        if version >= 8:
+            for statement in MIGRATIONS[8]:
                 await connection.execute(
                     statement,
                 )
@@ -178,19 +183,6 @@ async def _get_table_names(
         rows = await cursor.fetchall()
 
     return {row[0] for row in rows}
-
-
-async def _get_column_names(
-    database: DatabaseConnection,
-    table_name: str,
-) -> set[str]:
-    """Return every column defined by one SQLite table."""
-
-    async with database.connect() as connection:
-        cursor = await connection.execute(f"PRAGMA table_info({table_name})")
-        rows = await cursor.fetchall()
-
-    return {row[1] for row in rows}
 
 
 async def _assert_migrates_to_current_version(
@@ -235,51 +227,82 @@ async def test_migrate_upgrades_version_one_database_to_current_schema(
 
     assert {
         "guild_settings",
+        "guild_member_interests",
+        "guild_adult_accesses",
         "guild_catalogs",
-        "guild_catalog_entries",
-        "guild_catalog_entry_targets",
         "guild_workflows",
         "guild_workflow_catalogs",
         "guild_workflow_channels",
     }.issubset(table_names)
 
-    assert "guild_member_interests" not in table_names
-    assert "guild_adult_accesses" not in table_names
 
-
-@pytest.mark.parametrize(
-    "historical_version",
-    [
-        2,
-        3,
-        4,
-    ],
-)
-async def test_legacy_settings_migrate_to_current_guild_ai_settings(
+async def test_migrate_upgrades_version_two_database_to_current_schema(
     tmp_path: Path,
-    historical_version: int,
 ) -> None:
-    """Replace every historical guild-settings shape with the V11 contract."""
+    """Migrate a complete version two database to the current schema."""
 
     database = await _assert_migrates_to_current_version(
         tmp_path,
-        historical_version=historical_version,
+        historical_version=2,
     )
 
-    assert await _get_column_names(
-        database,
-        "guild_settings",
-    ) == {
-        "guild_id",
-        "ai_enabled",
-        "ai_role_id",
-    }
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
+
+        rows = await cursor.fetchall()
+
+    columns = {row[1] for row in rows}
+
+    assert "adult_access_channel_name" in columns
+    assert "adult_rules_channel_name" not in columns
 
 
-async def test_legacy_adult_channel_value_does_not_block_v11_migration(
+async def test_migrate_upgrades_version_three_database_to_current_schema(
     tmp_path: Path,
 ) -> None:
-    """Retire obsolete specialized settings while keeping the guild row valid."""
+    """Migrate a complete version three database to the current schema."""
+
+    database = await _assert_migrates_to_current_version(
+        tmp_path,
+        historical_version=3,
+    )
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
+
+        rows = await cursor.fetchall()
+
+    columns = {row[1] for row in rows}
+
+    assert "adult_access_channel_name" in columns
+    assert "adult_rules_channel_name" not in columns
+
+
+async def test_migrate_upgrades_version_four_database_to_current_schema(
+    tmp_path: Path,
+) -> None:
+    """Migrate a complete version four database to the current schema."""
+
+    database = await _assert_migrates_to_current_version(
+        tmp_path,
+        historical_version=4,
+    )
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
+
+        rows = await cursor.fetchall()
+
+    columns = {row[1] for row in rows}
+
+    assert "adult_access_channel_name" in columns
+    assert "adult_rules_channel_name" not in columns
+
+
+async def test_version_five_migration_preserves_adult_channel_value(
+    tmp_path: Path,
+) -> None:
+    """Preserve the configured adult channel when migrating through version five."""
 
     database = DatabaseConnection(
         tmp_path / "claviger.db",
@@ -316,7 +339,7 @@ async def test_legacy_adult_channel_value_does_not_block_v11_migration(
     async with database.connect() as connection:
         cursor = await connection.execute(
             """
-            SELECT ai_enabled, ai_role_id
+            SELECT adult_access_channel_name
             FROM guild_settings
             WHERE guild_id = ?
             """,
@@ -325,16 +348,13 @@ async def test_legacy_adult_channel_value_does_not_block_v11_migration(
 
         row = await cursor.fetchone()
 
-    assert row == (
-        0,
-        None,
-    )
+    assert row == ("adult-validation",)
 
 
 async def test_migrate_upgrades_version_five_database_to_current_schema(
     tmp_path: Path,
 ) -> None:
-    """Add declarative and normalized catalog storage to a V5 database."""
+    """Add declarative workflow configuration to a version five database."""
 
     database = await _assert_migrates_to_current_version(
         tmp_path,
@@ -347,18 +367,16 @@ async def test_migrate_upgrades_version_five_database_to_current_schema(
 
     assert {
         "guild_catalogs",
-        "guild_catalog_entries",
-        "guild_catalog_entry_targets",
         "guild_workflows",
         "guild_workflow_catalogs",
         "guild_workflow_channels",
     }.issubset(table_names)
 
 
-async def test_migrate_version_eight_database_preserves_runtime_data(
+async def test_migrate_version_eight_database_to_version_nine_preserves_data(
     tmp_path: Path,
 ) -> None:
-    """Carry V8 workflow and ownership data through V9, V10 and V11."""
+    """Add V9 admin structure fields without losing V8 application data."""
 
     database = DatabaseConnection(
         tmp_path / "claviger-v8.db",
@@ -441,9 +459,7 @@ async def test_migrate_version_eight_database_preserves_runtime_data(
                 guild_id,
                 workflow_key,
                 command_name,
-                category_id,
-                management_channel_id,
-                primary_role_id
+                category_id
             FROM guild_workflows
             WHERE guild_id = ?
               AND workflow_key = ?
@@ -467,15 +483,11 @@ async def test_migrate_version_eight_database_preserves_runtime_data(
         ownership_row = await cursor.fetchone()
 
     assert "category_id" in workflow_columns
-    assert "management_channel_id" in workflow_columns
-    assert "primary_role_id" in workflow_columns
 
     assert workflow_row == (
         123,
         "member",
         "membre",
-        None,
-        None,
         None,
     )
 
