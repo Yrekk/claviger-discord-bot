@@ -8,10 +8,10 @@ from claviger.database.status import (
 )
 from claviger.policies.guild_policy import GuildPolicyOverrides
 from claviger.reporting.event import ReportSeverity
-from claviger.services.guild_policy_bootstrap import (
+from claviger.services.roles.role_discovery import RoleDiscoveryService
+from claviger.services.runtime.guild_policy_bootstrap import (
     GuildAlreadyConfiguredError,
 )
-from claviger.services.role_discovery import RoleDiscoveryService
 
 from .helpers import (
     create_interaction,
