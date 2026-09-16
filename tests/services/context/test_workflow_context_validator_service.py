@@ -3,7 +3,7 @@ import pytest
 from claviger.models.context_capability_model import ContextCapability
 from claviger.models.context_definition_model import ContextDefinition
 from claviger.models.resolved_context_model import ResolvedContext
-from claviger.models.workflow_definition_model import (
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
 )
 from claviger.services.context_capability_registry_service import (
