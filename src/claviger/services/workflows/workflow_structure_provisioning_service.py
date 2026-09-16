@@ -2,17 +2,17 @@ from dataclasses import dataclass
 
 import discord
 
-from claviger.models.resolved_workflow_configuration_model import (
+from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_provisioning_model import (
+from claviger.models.workflows.workflow_structure_provisioning_model import (
     WorkflowStructureProvisioningResult,
 )
-from claviger.services.role_discovery import (
+from claviger.services.roles.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
 )
