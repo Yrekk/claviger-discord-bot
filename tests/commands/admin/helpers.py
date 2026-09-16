@@ -9,7 +9,7 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
 )
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
@@ -21,7 +21,7 @@ from claviger.services.admin.admin_configuration_coordinator_service import (
 from claviger.services.database_ownership_service import DatabaseOwnershipService
 from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.role_discovery import RoleDiscoveryService
-from claviger.services.workflow_configuration_coordinator_service import (
+from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
 
