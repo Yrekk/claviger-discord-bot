@@ -14,6 +14,9 @@ from claviger.database.status import (
     DatabaseState,
     DatabaseStatus,
 )
+from claviger.models.admin.guild_admin_configuration_model import (
+    GuildAdminConfiguration,
+)
 
 # Models
 from claviger.models.discord_application_identity_model import (
@@ -21,9 +24,6 @@ from claviger.models.discord_application_identity_model import (
 )
 from claviger.models.discord_guild_identity_model import (
     DiscordGuildIdentity,
-)
-from claviger.models.admin.guild_admin_configuration_model import (
-    GuildAdminConfiguration,
 )
 from claviger.models.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
