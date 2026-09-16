@@ -7,7 +7,7 @@ from claviger.database.schema import DatabaseSchema
 from claviger.models.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
-from claviger.repositories.workflow_configuration_repository import (
+from claviger.repositories.workflows.workflow_configuration_repository import (
     WorkflowConfigurationConflictError,
     WorkflowConfigurationRepository,
 )
