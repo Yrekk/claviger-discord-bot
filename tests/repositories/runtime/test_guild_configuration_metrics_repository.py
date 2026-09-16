@@ -2,7 +2,7 @@ import pytest
 
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
-from claviger.repositories.guild_configuration_metrics_repository import (
+from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
 
