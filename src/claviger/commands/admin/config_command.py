@@ -2,20 +2,20 @@ import discord
 from discord import app_commands
 
 from claviger.database.status import DatabaseState
-from claviger.models.admin_configuration_inspection_model import (
+from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
 )
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
 )
-from claviger.models.guild_configuration_inspection_model import (
+from claviger.models.runtime.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
-from claviger.models.guild_policy_inspection_model import GuildPolicySource
+from claviger.models.runtime.guild_policy_inspection_model import GuildPolicySource
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
-from claviger.services.guild_configuration_inspection_service import (
+from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 

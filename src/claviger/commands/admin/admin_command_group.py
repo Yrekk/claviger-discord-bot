@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 import discord
 from discord import app_commands
 
-from claviger.models.admin_configuration_inspection_model import (
+from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
 )
 

@@ -3,7 +3,7 @@ from collections.abc import Awaitable, Callable
 import discord
 from discord import app_commands
 
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 RestartCallback = Callable[
     [RuntimeRestartRequest],

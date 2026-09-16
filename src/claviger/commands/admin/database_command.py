@@ -11,13 +11,13 @@ from claviger.database.status import (
 )
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.database_ownership_service import (
+from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
 )
-from claviger.ui.admin_configuration_view import AdminConfigurationStartView
+from claviger.ui.admin.admin_configuration_view import AdminConfigurationStartView
 
 logger = logging.getLogger(__name__)
 

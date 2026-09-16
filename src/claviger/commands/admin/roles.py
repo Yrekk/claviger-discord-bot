@@ -3,7 +3,7 @@ from discord import app_commands
 
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
 
 
 def _format_roles(roles: list[discord.Role]) -> list[str]:

@@ -3,16 +3,16 @@ from discord import app_commands
 
 from claviger.database.status import DatabaseState
 from claviger.reporting.service import ReportService
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.workflow_configuration_coordinator_service import (
+from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
-from claviger.ui.admin_configuration_view import (
+from claviger.ui.admin.admin_configuration_view import (
     run_admin_configuration,
 )
-from claviger.ui.workflow_configuration_view import (
+from claviger.ui.workflows.workflow_configuration_view import (
     run_workflow_configuration,
 )
 

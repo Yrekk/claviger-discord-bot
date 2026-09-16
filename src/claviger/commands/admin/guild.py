@@ -4,7 +4,7 @@ from discord import app_commands
 from claviger.database.status import DatabaseState, DatabaseStatusService
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
-from claviger.services.guild_policy_bootstrap import (
+from claviger.services.runtime.guild_policy_bootstrap import (
     GuildAlreadyConfiguredError,
     GuildBootstrapNotAllowedError,
     GuildPolicyBootstrapService,
