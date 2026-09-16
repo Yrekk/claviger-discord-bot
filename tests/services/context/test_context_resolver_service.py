@@ -3,12 +3,12 @@ from unittest.mock import Mock
 import discord
 import pytest
 
-from claviger.models.context_definition_model import ContextDefinition
+from claviger.models.context.context_definition_model import ContextDefinition
 from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
     WorkflowDefinition,
 )
-from claviger.services.context_resolver_service import (
+from claviger.services.context.context_resolver_service import (
     ContextGuildMismatchError,
     ContextResolverService,
     ContextRoleNotFoundError,
