@@ -3,8 +3,9 @@ from collections.abc import Sequence
 import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
+from claviger.database.migrations.v11_generic_catalogs import migrate_v11
 
-CURRENT_SCHEMA_VERSION = 10
+CURRENT_SCHEMA_VERSION = 11
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -415,6 +416,92 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             )
         """,
     ),
+    11: (
+        """
+        CREATE TABLE guild_catalog_entries (
+            guild_id INTEGER NOT NULL,
+            catalog_key TEXT NOT NULL,
+            entry_key TEXT NOT NULL
+                CHECK (length(trim(entry_key)) > 0),
+
+            label TEXT,
+            description TEXT,
+            emoji TEXT,
+
+            sort_order INTEGER NOT NULL DEFAULT 0,
+
+            enabled INTEGER NOT NULL DEFAULT 1
+                CHECK (enabled IN (0, 1)),
+
+            PRIMARY KEY (
+                guild_id,
+                catalog_key,
+                entry_key
+            ),
+
+            FOREIGN KEY (
+                guild_id,
+                catalog_key
+            )
+            REFERENCES guild_catalogs (
+                guild_id,
+                catalog_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE guild_catalog_entry_targets (
+            guild_id INTEGER NOT NULL,
+            catalog_key TEXT NOT NULL,
+            entry_key TEXT NOT NULL,
+
+            role_id INTEGER NOT NULL
+                CHECK (role_id > 0),
+
+            variant TEXT NOT NULL DEFAULT 'default'
+                CHECK (
+                    variant IN (
+                        'default',
+                        'ai',
+                        'no_ai'
+                    )
+                ),
+
+            PRIMARY KEY (
+                guild_id,
+                catalog_key,
+                entry_key,
+                role_id
+            ),
+
+            UNIQUE (
+                guild_id,
+                catalog_key,
+                role_id
+            ),
+
+            FOREIGN KEY (
+                guild_id,
+                catalog_key,
+                entry_key
+            )
+            REFERENCES guild_catalog_entries (
+                guild_id,
+                catalog_key,
+                entry_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE
+        )
+        """,
+    ),
+}
+
+
+MIGRATION_DATA_HOOKS = {
+    11: migrate_v11,
 }
 
 
@@ -548,6 +635,15 @@ class DatabaseSchema:
 
             for statement in statements:
                 await connection.execute(statement)
+
+            data_hook = MIGRATION_DATA_HOOKS.get(
+                version,
+            )
+
+            if data_hook is not None:
+                await data_hook(
+                    connection,
+                )
 
             await connection.execute(f"PRAGMA user_version = {version}")
 
