@@ -20,7 +20,7 @@ from claviger.policies.policy_resolver import PolicyResolver
 from claviger.repositories.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
 from claviger.services.database_ownership_service import DatabaseOwnershipService
