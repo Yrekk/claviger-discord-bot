@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import discord
 
-from claviger.services.admin_structure_discovery_service import (
+from claviger.services.admin.admin_structure_discovery_service import (
     AdminStructureDiscoveryService,
 )
 

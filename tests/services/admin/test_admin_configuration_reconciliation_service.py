@@ -1,15 +1,15 @@
-from claviger.models.admin_configuration_reconciliation_model import (
+from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
 )
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
     AdminStructureDiscoveryResult,
 )
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
-from claviger.services.admin_configuration_reconciliation_service import (
+from claviger.services.admin.admin_configuration_reconciliation_service import (
     AdminConfigurationReconciliationService,
 )
 
