@@ -23,7 +23,9 @@ from claviger.repositories.runtime.guild_configuration_metrics_repository import
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.runtime.database_ownership_service import DatabaseOwnershipService
+from claviger.services.runtime.database_ownership_service import (
+    DatabaseOwnershipService,
+)
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
