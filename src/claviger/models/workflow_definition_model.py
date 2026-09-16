@@ -1,65 +1,17 @@
-from dataclasses import dataclass
-from typing import Literal
+"""Compatibility imports for workflow definition models."""
 
-from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
-from claviger.models.context.context_definition_model import ContextDefinition
+from claviger.models.workflows.workflow_definition_model import (
+    WorkflowCatalogBinding,
+    WorkflowChannelMode,
+    WorkflowContextBinding,
+    WorkflowContextInteractionMode,
+    WorkflowDefinition,
+)
 
-WorkflowChannelMode = Literal[
-    "restricted",
-    "any",
+__all__ = [
+    "WorkflowCatalogBinding",
+    "WorkflowChannelMode",
+    "WorkflowContextBinding",
+    "WorkflowContextInteractionMode",
+    "WorkflowDefinition",
 ]
-
-WorkflowContextInteractionMode = Literal[
-    "editable",
-    "read_only",
-]
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowCatalogBinding:
-    """Bind one catalog definition to a workflow."""
-
-    catalog: CatalogDefinition
-
-    policy_key: str | None
-
-    sort_order: int
-    enabled: bool
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowContextBinding:
-    """Bind one context definition to a workflow."""
-
-    context: ContextDefinition
-
-    interaction_mode: WorkflowContextInteractionMode
-
-    sort_order: int
-    enabled: bool
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowDefinition:
-    """Describe one complete guild-specific workflow."""
-
-    guild_id: int
-    workflow_key: str
-
-    command_name: str
-    command_description: str
-
-    title: str
-    description: str | None
-
-    policy_key: str
-    channel_mode: WorkflowChannelMode
-
-    sort_order: int
-    enabled: bool
-
-    channel_ids: tuple[int, ...]
-    catalogs: tuple[WorkflowCatalogBinding, ...]
-
-    category_id: int | None = None
-    contexts: tuple[WorkflowContextBinding, ...] = ()
