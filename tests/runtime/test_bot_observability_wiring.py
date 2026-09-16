@@ -1,7 +1,7 @@
 from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
 from claviger.reporting.command_tree import ClavigerCommandTree
-from claviger.services.guild_configuration_inspection_service import (
+from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 
