@@ -3,31 +3,31 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from claviger.models.admin_configuration_reconciliation_model import (
+from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
     AdminStructureDiscoveryResult,
 )
-from claviger.models.admin_structure_provisioning_model import (
+from claviger.models.admin.admin_structure_provisioning_model import (
     AdminStructureProvisioningResult,
 )
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.admin_configuration_reconciliation_service import (
+from claviger.services.admin.admin_configuration_reconciliation_service import (
     AdminConfigurationReconciliationService,
 )
-from claviger.services.admin_structure_discovery_service import (
+from claviger.services.admin.admin_structure_discovery_service import (
     AdminStructureDiscoveryService,
 )
-from claviger.services.admin_structure_provisioning_service import (
+from claviger.services.admin.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
 
