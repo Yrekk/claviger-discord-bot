@@ -8,7 +8,7 @@ from claviger.reporting.command_observability import CommandObservabilityService
 from claviger.reporting.event import ReportSeverity
 from claviger.reporting.python_logger import PythonLoggingReporter
 from claviger.reporting.service import ReportService
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
 
