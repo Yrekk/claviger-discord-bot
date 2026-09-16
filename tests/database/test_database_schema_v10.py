@@ -89,7 +89,7 @@ async def test_migrate_version_nine_adds_workflow_resource_identities(
     await schema.migrate()
 
     assert await schema.get_version() == CURRENT_SCHEMA_VERSION
-    assert CURRENT_SCHEMA_VERSION == 10
+    assert CURRENT_SCHEMA_VERSION == 11
 
     async with database.connect() as connection:
         cursor = await connection.execute("PRAGMA table_info(guild_workflows)")
