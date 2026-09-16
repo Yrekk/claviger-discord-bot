@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 
-from claviger.services.authorization import (
+from claviger.services.runtime.authorization import (
     AuthorizationService,
     Capability,
 )
