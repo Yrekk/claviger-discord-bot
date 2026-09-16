@@ -11,8 +11,8 @@ from discord import app_commands
 from discord.http import Route
 
 # Commands
-from claviger.commands.claviger_command import create_claviger_group
-from claviger.commands.say_command import create_say_command
+from claviger.commands.admin.claviger_command import create_claviger_group
+from claviger.commands.general.say_command import create_say_command
 
 # Config
 from claviger.config import (
@@ -31,17 +31,17 @@ from claviger.database.status import (
 )
 
 # Models
-from claviger.models.discord_application_identity_model import (
+from claviger.models.runtime.discord_application_identity_model import (
     DiscordApplicationIdentity,
 )
-from claviger.models.discord_guild_identity_model import (
+from claviger.models.runtime.discord_guild_identity_model import (
     DiscordGuildIdentity,
 )
-from claviger.models.guild_configuration_readiness_model import (
+from claviger.models.runtime.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
 )
-from claviger.models.guild_runtime_state_model import GuildRuntimeState
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.guild_runtime_state_model import GuildRuntimeState
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 # Policies
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
@@ -55,61 +55,61 @@ from claviger.reporting.reporter import Reporter
 from claviger.reporting.service import ReportService
 
 # Repositories
-from claviger.repositories.database_ownership_repository import (
-    DatabaseOwnershipRepository,
-)
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
-from claviger.repositories.guild_configuration_metrics_repository import (
+from claviger.repositories.runtime.database_ownership_repository import (
+    DatabaseOwnershipRepository,
+)
+from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
-from claviger.repositories.guild_policy_repository import GuildPolicyRepository
-from claviger.repositories.workflow_configuration_repository import (
+from claviger.repositories.runtime.guild_policy_repository import GuildPolicyRepository
+from claviger.repositories.workflows.workflow_configuration_repository import (
     WorkflowConfigurationRepository,
 )
 
 # Services
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.admin_configuration_reconciliation_service import (
+from claviger.services.admin.admin_configuration_reconciliation_service import (
     AdminConfigurationReconciliationService,
 )
-from claviger.services.admin_structure_discovery_service import (
+from claviger.services.admin.admin_structure_discovery_service import (
     AdminStructureDiscoveryService,
 )
-from claviger.services.admin_structure_provisioning_service import (
+from claviger.services.admin.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
-from claviger.services.authorization import AuthorizationService
-from claviger.services.database_ownership_service import (
+from claviger.services.roles.role_discovery import RoleDiscoveryService
+from claviger.services.runtime.authorization import AuthorizationService
+from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
     DatabaseOwnershipUnboundError,
 )
-from claviger.services.discord_identity_service import DiscordIdentityService
-from claviger.services.guild_configuration_inspection_service import (
+from claviger.services.runtime.discord_identity_service import DiscordIdentityService
+from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
-from claviger.services.guild_configuration_readiness_service import (
+from claviger.services.runtime.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
-from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.say_service import SayService
-from claviger.services.workflow_configuration_coordinator_service import (
+from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
-from claviger.services.workflow_configuration_reconciliation_service import (
+from claviger.services.workflows.workflow_configuration_reconciliation_service import (
     WorkflowConfigurationReconciliationService,
 )
-from claviger.services.workflow_configuration_validation_service import (
+from claviger.services.workflows.workflow_configuration_validation_service import (
     WorkflowConfigurationValidationService,
 )
-from claviger.services.workflow_structure_discovery_service import (
+from claviger.services.workflows.workflow_structure_discovery_service import (
     WorkflowStructureDiscoveryService,
 )
-from claviger.services.workflow_structure_provisioning_service import (
+from claviger.services.workflows.workflow_structure_provisioning_service import (
     WorkflowStructureProvisioningService,
 )
 
