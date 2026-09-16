@@ -7,8 +7,8 @@ from claviger.database.connection import (
     DatabaseMissingError,
 )
 from claviger.database.schema import DatabaseSchema
-from claviger.models.context_definition_model import ContextDefinition
-from claviger.repositories.context_definition_repository import (
+from claviger.models.context.context_definition_model import ContextDefinition
+from claviger.repositories.context.context_definition_repository import (
     ContextDefinitionRepository,
 )
 
