@@ -18,9 +18,9 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.database_ownership_service import DatabaseOwnershipService
-from claviger.services.guild_policy_bootstrap import GuildPolicyBootstrapService
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
+from claviger.services.runtime.database_ownership_service import DatabaseOwnershipService
+from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
