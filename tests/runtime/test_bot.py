@@ -20,21 +20,21 @@ from claviger.models.admin.guild_admin_configuration_model import (
 )
 
 # Models
-from claviger.models.discord_application_identity_model import (
+from claviger.models.runtime.discord_application_identity_model import (
     DiscordApplicationIdentity,
 )
-from claviger.models.discord_guild_identity_model import (
+from claviger.models.runtime.discord_guild_identity_model import (
     DiscordGuildIdentity,
 )
-from claviger.models.guild_configuration_readiness_model import (
+from claviger.models.runtime.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
     GuildConfigurationReadinessState,
 )
-from claviger.models.guild_runtime_state_model import GuildRuntimeState
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.guild_runtime_state_model import GuildRuntimeState
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 # Services
-from claviger.services.database_ownership_service import (
+from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipMismatchError,
     DatabaseOwnershipUnboundError,
 )
