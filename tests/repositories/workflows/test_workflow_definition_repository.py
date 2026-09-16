@@ -7,14 +7,14 @@ from claviger.database.connection import (
     DatabaseMissingError,
 )
 from claviger.database.schema import DatabaseSchema
-from claviger.models.catalog_definition_model import CatalogDefinition
-from claviger.models.context_definition_model import ContextDefinition
-from claviger.models.workflow_definition_model import (
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
+from claviger.models.context.context_definition_model import ContextDefinition
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowCatalogBinding,
     WorkflowContextBinding,
     WorkflowDefinition,
 )
-from claviger.repositories.workflow_definition_repository import (
+from claviger.repositories.workflows.workflow_definition_repository import (
     WorkflowDefinitionRepository,
 )
 
