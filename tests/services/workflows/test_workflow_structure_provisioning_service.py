@@ -3,15 +3,15 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
 )
-from claviger.services.role_discovery import (
+from claviger.services.roles.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
 )
-from claviger.services.workflow_structure_provisioning_service import (
+from claviger.services.workflows.workflow_structure_provisioning_service import (
     WorkflowStructureProvisioningPartialError,
     WorkflowStructureProvisioningResourceError,
     WorkflowStructureProvisioningService,
