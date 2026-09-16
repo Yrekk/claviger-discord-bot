@@ -1,10 +1,10 @@
 from dataclasses import replace
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowCategoryCandidate,
     WorkflowRoleCandidate,
     WorkflowStructureDiscoveryResult,
