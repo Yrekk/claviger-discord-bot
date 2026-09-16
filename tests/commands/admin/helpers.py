@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import discord
 
-from claviger.commands.claviger_command import create_claviger_group
+from claviger.commands.admin.claviger_command import create_claviger_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
