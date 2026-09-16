@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.connection import DatabaseUnavailableError
-from claviger.models.guild_policy_inspection_model import GuildPolicySource
+from claviger.models.runtime.guild_policy_inspection_model import GuildPolicySource
 from claviger.policies.default_policy import (
     SAFE_DEFAULT_POLICY,
     SUCCUMBRAE_FALLBACK_POLICY,
