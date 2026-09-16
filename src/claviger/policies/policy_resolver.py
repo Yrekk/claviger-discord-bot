@@ -1,5 +1,5 @@
 from claviger.database.connection import DatabaseUnavailableError
-from claviger.models.guild_policy_inspection_model import (
+from claviger.models.runtime.guild_policy_inspection_model import (
     GuildPolicyInspection,
     GuildPolicySource,
 )

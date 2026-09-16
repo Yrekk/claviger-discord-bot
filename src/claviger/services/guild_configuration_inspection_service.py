@@ -1,7 +1,7 @@
 import discord
 
 from claviger.database.status import DatabaseState, DatabaseStatusService
-from claviger.models.guild_configuration_inspection_model import (
+from claviger.models.runtime.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
 from claviger.policies.policy_resolver import PolicyResolver

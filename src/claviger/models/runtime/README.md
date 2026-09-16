@@ -6,12 +6,15 @@
 
 # Models runtime
 
-Modèles décrivant l'état d'exécution de l'application :
+Modèles décrivant l'état d'exécution et de diagnostic de l'application :
 
 - identité Discord de l'application ;
 - identité locale d'une guild ;
 - readiness ;
 - état runtime par guild ;
+- inspection de la configuration d'une guild ;
+- métriques de configuration ;
+- inspection de la policy effective pendant la phase de compatibilité ;
 - demandes de restart.
 
-Ils ne représentent pas un workflow métier : ils décrivent l'état nécessaire au fonctionnement du bot lui-même.
+Ils ne représentent pas un workflow métier : ils décrivent l'état nécessaire au fonctionnement et au diagnostic du bot lui-même.

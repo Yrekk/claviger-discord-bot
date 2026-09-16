@@ -5,7 +5,7 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.guild_configuration_metrics_model import (
+from claviger.models.runtime.guild_configuration_metrics_model import (
     GuildConfigurationMetrics,
 )
 

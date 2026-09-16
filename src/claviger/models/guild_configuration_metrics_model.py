@@ -1,10 +1,7 @@
-from dataclasses import dataclass
+"""Compatibility import for the runtime-domain model."""
 
+from claviger.models.runtime.guild_configuration_metrics_model import (
+    GuildConfigurationMetrics,
+)
 
-@dataclass(frozen=True, slots=True)
-class GuildConfigurationMetrics:
-    """Summarize enabled declarative configuration persisted for one guild."""
-
-    workflow_count: int
-    catalog_count: int
-    context_count: int
+__all__ = ["GuildConfigurationMetrics"]
