@@ -1,7 +1,7 @@
 from unittest.mock import Mock, call
 
 from claviger import main as main_module
-from claviger.models.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
 
 
 def test_main_starts_bot_with_discord_token(monkeypatch) -> None:
