@@ -6,7 +6,7 @@ from claviger.models.questionnaire_context_question_model import (
     QuestionnaireContextQuestion,
 )
 from claviger.models.resolved_context_model import ResolvedContext
-from claviger.models.workflow_definition_model import (
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
 )
 from claviger.services.context_capability_registry_service import (
