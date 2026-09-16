@@ -4,17 +4,17 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowCategoryCandidate,
     WorkflowRoleCandidate,
     WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
     WorkflowTextChannelCandidate,
 )
-from claviger.ui.workflow_configuration_session import (
+from claviger.ui.workflows.workflow_configuration_session import (
     WorkflowConfigurationSession,
 )
-from claviger.ui.workflow_configuration_view import (
+from claviger.ui.workflows.workflow_configuration_view import (
     WorkflowConfigurationStartView,
     WorkflowDetectedStructureChannelView,
     WorkflowDetectedStructureView,
