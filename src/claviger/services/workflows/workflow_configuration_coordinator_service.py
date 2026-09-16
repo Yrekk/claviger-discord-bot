@@ -63,7 +63,7 @@ class WorkflowConfigurationCoordinatorService:
         self,
         guild: discord.Guild,
     ) -> WorkflowStructureDiscoveryResult:
-        """Expose the current read-only Discord workflow resource snapshot without mutation."""
+        """Expose the current read-only Discord workflow resource snapshot."""
 
         return await self.discovery_service.discover(
             guild,
