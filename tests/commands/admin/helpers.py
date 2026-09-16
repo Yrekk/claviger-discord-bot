@@ -15,7 +15,7 @@ from claviger.models.workflow_structure_discovery_model import (
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.service import ReportService
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
 from claviger.services.database_ownership_service import DatabaseOwnershipService
