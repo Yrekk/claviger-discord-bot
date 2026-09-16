@@ -1,15 +1,15 @@
 import pytest
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowCategoryCandidate,
     WorkflowRoleCandidate,
     WorkflowStructureDiscoveryResult,
     WorkflowTextChannelCandidate,
 )
-from claviger.ui.workflow_configuration_session import (
+from claviger.ui.workflows.workflow_configuration_session import (
     WorkflowConfigurationSession,
 )
 
