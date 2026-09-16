@@ -7,10 +7,10 @@ from claviger.database.status import (
     DatabaseStatus,
 )
 from claviger.reporting.event import ReportSeverity
-from claviger.services.database_ownership_service import (
+from claviger.services.roles.role_discovery import RoleDiscoveryService
+from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
 )
-from claviger.services.role_discovery import RoleDiscoveryService
 
 from .helpers import (
     create_interaction,
