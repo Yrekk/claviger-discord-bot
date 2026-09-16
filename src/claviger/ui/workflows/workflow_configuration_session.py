@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationDraft,
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
 )
