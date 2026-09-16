@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.ui.catalog_selection_modal import (
+from claviger.ui.catalogs.catalog_selection_modal import (
     CatalogSelectionModal,
     CatalogSelectionOption,
 )
