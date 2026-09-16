@@ -1,13 +1,13 @@
 import discord
 
-from claviger.models.admin_configuration_reconciliation_model import (
+from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
-from claviger.models.admin_structure_provisioning_model import (
+from claviger.models.admin.admin_structure_provisioning_model import (
     AdminStructureProvisioningResult,
 )
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
 

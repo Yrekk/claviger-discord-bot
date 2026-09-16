@@ -1,6 +1,6 @@
 import discord
 
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
     AdminChannelType,
