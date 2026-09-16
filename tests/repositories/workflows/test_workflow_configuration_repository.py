@@ -4,7 +4,7 @@ import pytest
 
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
-from claviger.models.resolved_workflow_configuration_model import (
+from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
 from claviger.repositories.workflows.workflow_configuration_repository import (
