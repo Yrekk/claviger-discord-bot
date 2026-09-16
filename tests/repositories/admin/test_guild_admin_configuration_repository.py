@@ -4,10 +4,10 @@ import pytest
 
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
 
