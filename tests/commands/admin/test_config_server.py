@@ -20,12 +20,12 @@ from claviger.models.admin.admin_structure_provisioning_model import (
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.ui.admin.admin_configuration_view import (
     AdminCategorySelectionView,
     AdminRoutingSelectionView,
 )
-from claviger.ui.workflow_configuration_view import (
+from claviger.ui.workflows.workflow_configuration_view import (
     WorkflowConfigurationStartView,
 )
 
