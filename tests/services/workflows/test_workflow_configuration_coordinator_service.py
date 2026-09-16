@@ -17,7 +17,7 @@ from claviger.models.workflow_structure_discovery_model import (
 from claviger.models.workflow_structure_provisioning_model import (
     WorkflowStructureProvisioningResult,
 )
-from claviger.repositories.workflow_configuration_repository import (
+from claviger.repositories.workflows.workflow_configuration_repository import (
     WorkflowConfigurationRepository,
 )
 from claviger.services.workflow_configuration_coordinator_service import (
