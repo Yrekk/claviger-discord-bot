@@ -1,0 +1,1 @@
+"""Generic Discord role services."""

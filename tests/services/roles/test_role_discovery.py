@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import discord
 import pytest
 
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
 
 
 def create_role(

@@ -1,10 +1,7 @@
-import discord
+"""Compatibility import for the canonical role manageability service."""
 
+from claviger.services.roles.role_manageability_service import (
+    is_role_manageable,
+)
 
-def is_role_manageable(
-    role: discord.Role,
-    bot_member: discord.Member,
-) -> bool:
-    """Return whether Claviger can add or remove one Discord role."""
-
-    return not role.managed and role < bot_member.top_role
+__all__ = ["is_role_manageable"]

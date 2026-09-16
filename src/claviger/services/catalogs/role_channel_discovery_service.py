@@ -5,7 +5,7 @@ from claviger.models.catalogs.role_channel_discovery_model import (
     DiscordRoleSnapshot,
     GuildRoleChannelSnapshot,
 )
-from claviger.services.role_manageability_service import (
+from claviger.services.roles.role_manageability_service import (
     is_role_manageable,
 )
 

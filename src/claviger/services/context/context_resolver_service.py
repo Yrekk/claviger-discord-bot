@@ -5,7 +5,7 @@ from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
     WorkflowDefinition,
 )
-from claviger.services.role_manageability_service import (
+from claviger.services.roles.role_manageability_service import (
     is_role_manageable,
 )
 
