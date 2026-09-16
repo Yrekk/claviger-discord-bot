@@ -31,14 +31,34 @@ L'objectif est de conserver une architecture modulaire, testable et réutilisabl
 | Version | État | Objectif |
 |---|---|---|
 | **V1.0** | Déployée | Gestion des rôles, catalogues et questionnaires Discord |
-| **V1.1** | En développement | Runtime multi-guild, configuration par serveur, reporting, généricité et robustesse |
+| **V1.1** | En développement — socle stabilisé | Runtime multi-guild, configuration par serveur, reporting, généricité et robustesse |
 | **V1.2** | Planifiée | Onboarding des nouveaux membres et fonctionnalités sociales / fun |
 | **V1.3** | Planifiée | Administration Web et outils de modération |
 | **Long terme** | Exploration | IA conversationnelle, tools et comportements agentiques |
 
 La V1.0 est déployée sur un serveur Linux via Docker.
 
-La V1.1 est développée sur `develop` dans un environnement Discord distinct de la production. Elle ne constitue pas une réécriture : chaque évolution est introduite par petites tranches testées et conservant les comportements déjà validés.
+La V1.1 est actuellement développée sur `refactor/generic-workflows-v11`, dans un environnement Discord distinct de la production. Cette branche doit être intégrée dans `develop` après fermeture fonctionnelle et validation complète. La V1.1 ne constitue pas une réécriture : chaque évolution est introduite par petites tranches testées et conservant les comportements déjà validés.
+
+### Checkpoint V1.1 — 16 septembre 2026
+
+Le socle multi-guild, la configuration ADMIN, le reporting par guild et la configuration générique d'un workflow jusqu'à sa persistence sont implémentés.
+
+La réorganisation architecturale de fin de V1.1 est terminée sur la branche de travail :
+
+- arborescence organisée par domaines fonctionnels ;
+- chemins canoniques sous `models/`, `repositories/`, `services/` et `ui/` ;
+- tests rangés en miroir ;
+- mini-README dans les dossiers fonctionnels ;
+- anciens shims plats devenus inutiles supprimés.
+
+Le schéma SQLite courant reste **V10**. Le prochain chantier fonctionnel est la **Migration V11**. L'exécution runtime entièrement générique des workflows persistés reste à construire.
+
+La roadmap opérationnelle du reste de la V1.1 est maintenue dans :
+
+```text
+documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
+```
 
 ---
 
@@ -1018,6 +1038,24 @@ La consolidation V1.1 a déjà introduit plusieurs changements structurants.
 - `/{bot} config-server` ;
 - diagnostic read-only `/{bot} config scan`.
 
+### Configuration générique des workflows
+
+La chaîne de configuration est implémentée jusqu'à la persistence :
+
+```text
+Discord UI
+→ WorkflowConfigurationDraft
+→ discovery
+→ reconciliation
+→ preflight
+→ provisioning
+→ persistence SQLite
+```
+
+Le wizard sait sélectionner ou créer les ressources nécessaires et ne déclenche aucune mutation avant confirmation finale.
+
+Cette capacité de configuration ne doit pas être confondue avec l'exécution runtime générique, qui reste à construire.
+
 ### Readiness par guild
 
 - `READY` ;
@@ -1043,72 +1081,76 @@ Guild C rejointe pendant le runtime
 
 sans contamination mutuelle.
 
+### Réorganisation architecturale
+
+La réorganisation de fin de V1.1 est terminée sur la branche de travail :
+
+- domaines fonctionnels séparés ;
+- arborescence `src/` clarifiée ;
+- tests rangés en miroir ;
+- mini-README dans les dossiers fonctionnels ;
+- anciens chemins de compatibilité plats supprimés lorsqu'ils n'avaient plus de consommateur ;
+- aucun refactor fonctionnel majeur mélangé à cette phase.
+
 ---
 
 # V1.1 — reste à réaliser
 
-La roadmap de fin de V1.1 comprend encore principalement :
-
-### Workflows/catalogues configurables
-
-Remplacer progressivement les deux définitions runtime historiques :
+La source de reprise détaillée est :
 
 ```text
-member_interests
-adult_accesses
+documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
 ```
 
-par des définitions persistées et génériques.
-
-### Questionnaire générique
-
-Réutiliser un même moteur UI/workflow pour plusieurs usages.
-
-### Parcours adulte complémentaire
-
-Ouvrir une seconde modal uniquement lorsqu'une étape complémentaire est réellement nécessaire.
-
-### UI config-server
-
-Ajouter les composants Discord permettant de résoudre explicitement les cas :
+L'ordre fonctionnel retenu est :
 
 ```text
-IMPORT
-NEEDS_CHOICE
+1. Migration SQLite V11
+2. Adaptation de config-server au modèle V11
+3. Catalogue/questionnaire générique
+4. Binding explicite workflow → runtime
+5. Robustesse / recovery / éventuel Last Known Good
+6. Smoke tests Discord DEV
+7. Audit final
+8. Documentation finale
+9. Ruff + pytest + CI
+10. Intégration dans develop
+11. Déploiement contrôlé
 ```
 
-sans inférence sémantique.
+### Migration SQLite V11
 
-### Last Known Good
+Faire évoluer le stockage spécialisé historique vers un modèle générique d'entrées de catalogue et de cibles Discord, tout en déplaçant la préférence IA au niveau de la guild.
 
-Préparer un snapshot par guild pour certaines lectures sûres lorsque SQLite devient temporairement indisponible.
+La migration doit être atomique, fail-closed et préserver tous les rôles sources avant suppression des anciennes structures.
 
-Les mutations persistantes resteront fail-closed.
+### Catalogue et questionnaire génériques
 
-### Nettoyage des compatibilités
+Réutiliser un même moteur pour les catalogues configurés et les parcours utilisateur, sans logique runtime codée autour de `member_interests`, `adult_accesses`, `access-ia-*` ou `access-no-ia-*`.
 
-Supprimer les éléments temporaires une fois leurs remplaçants validés :
+### Binding runtime explicite
 
-- identité runtime combinée historique ;
-- anciens resolvers ;
-- anciens fallbacks inutiles ;
-- dépendances ENV devenues obsolètes ;
-- noms et wrappers de compatibilité.
+Une définition de workflow persistée devra être reliée explicitement à son executor/handler runtime.
 
-### Audit final
+Aucune heuristique fondée sur le nom de commande, le préfixe de rôle, le nom du workflow ou le nom des salons ne doit décider silencieusement du moteur d'exécution.
 
-Avant la V1.1 :
+### Robustesse et audit final
 
+Avant livraison :
+
+- campagne de défaillances ;
+- vérification du drift Discord ;
 - audit architecture ;
 - audit sécurité ;
-- audit logging ;
+- audit logging/reporting ;
 - audit documentation ;
-- campagne de défaillances ;
 - smoke tests sur plusieurs guilds.
 
-### CI/CD
+### CI et intégration
 
-La CI et le déploiement contrôlé doivent être ajoutés après stabilisation fonctionnelle.
+La CI existe déjà et exécute Ruff + pytest sur `develop` et `main`.
+
+La fin de V1.1 consiste donc à rendre la branche de travail verte, l'intégrer dans `develop`, laisser la CI valider l'intégration, puis préparer le déploiement contrôlé.
 
 ---
 
@@ -1322,7 +1364,7 @@ Le conteneur :
 
 Le bot ne doit pas recevoir d'accès direct au socket Docker pour gérer son propre restart.
 
-Le déploiement contrôlé et la CI/CD font partie des étapes finales de consolidation.
+Le déploiement contrôlé fait partie des étapes finales de consolidation après validation de `develop`.
 
 ---
 
@@ -1335,13 +1377,16 @@ main
 → version stable
 
 develop
-→ développement de la prochaine version
+→ branche d'intégration de la prochaine version
+
+refactor/generic-workflows-v11
+→ branche de travail actuelle pour la fin de V1.1
 
 deployment branch
 → état utilisé pour un déploiement contrôlé
 ```
 
-Les évolutions sont testées avant intégration sur la branche stable.
+Les évolutions sont testées avant intégration sur `develop`, puis avant livraison sur la branche stable ou de déploiement appropriée.
 
 ---
 
@@ -1361,7 +1406,14 @@ Elle comprend notamment :
 - audits d'architecture ;
 - documentation technique ;
 - sécurité / logs / observabilité ;
-- déploiement.
+- déploiement ;
+- roadmap opérationnelle de fin de V1.1.
+
+Pour la reprise de la V1.1, le document prioritaire est :
+
+```text
+documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
+```
 
 Cette documentation fait partie du projet au même titre que le code.
 
