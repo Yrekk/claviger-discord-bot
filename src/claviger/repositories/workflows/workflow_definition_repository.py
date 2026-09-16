@@ -8,12 +8,12 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.catalog_definition_model import CatalogDefinition
-from claviger.models.context_definition_model import (
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
+from claviger.models.context.context_definition_model import (
     ContextDefinition,
     ContextValueType,
 )
-from claviger.models.workflow_definition_model import (
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowCatalogBinding,
     WorkflowChannelMode,
     WorkflowContextBinding,
