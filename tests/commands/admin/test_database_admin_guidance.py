@@ -3,11 +3,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState, DatabaseStatus
-from claviger.services.admin_configuration_coordinator_service import (
+from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
 from claviger.services.role_discovery import RoleDiscoveryService
-from claviger.ui.admin_configuration_view import AdminConfigurationStartView
+from claviger.ui.admin.admin_configuration_view import AdminConfigurationStartView
 
 from .helpers import create_interaction, create_test_group
 
