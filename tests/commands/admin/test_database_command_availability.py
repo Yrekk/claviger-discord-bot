@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState
-from claviger.services.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_discovery import RoleDiscoveryService
 
 from .helpers import create_test_group
 
