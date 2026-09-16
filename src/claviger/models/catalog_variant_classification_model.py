@@ -1,22 +1,11 @@
-from dataclasses import dataclass
+"""Compatibility imports for catalog variant classification models."""
 
+from claviger.models.catalogs.catalog_variant_classification_model import (
+    CatalogVariantClassification,
+    CatalogVariantPair,
+)
 
-@dataclass(frozen=True, slots=True)
-class CatalogVariantPair:
-    """Represent one logical no-AI / AI catalog variant pair."""
-
-    theme_key: str
-    no_ai_key: str
-    ai_key: str
-
-
-@dataclass(frozen=True, slots=True)
-class CatalogVariantClassification:
-    """Represent AI-variant semantics found inside one catalog."""
-
-    pairs: tuple[CatalogVariantPair, ...]
-    solo_keys: tuple[str, ...]
-    ai_only_keys: tuple[str, ...]
-    no_ai_only_keys: tuple[str, ...]
-    invalid_keys: tuple[str, ...]
-    duplicate_keys: tuple[str, ...]
+__all__ = [
+    "CatalogVariantClassification",
+    "CatalogVariantPair",
+]

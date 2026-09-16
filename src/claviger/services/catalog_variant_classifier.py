@@ -1,7 +1,7 @@
 from collections import Counter
 from collections.abc import Iterable
 
-from claviger.models.catalog_variant_classification_model import (
+from claviger.models.catalogs.catalog_variant_classification_model import (
     CatalogVariantClassification,
     CatalogVariantPair,
 )

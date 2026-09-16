@@ -5,7 +5,7 @@ from claviger.database.connection import (
     DatabaseMissingError,
     DatabaseUnavailableError,
 )
-from claviger.models.catalog_definition_model import CatalogDefinition
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
 
 
 class CatalogDefinitionRepository:

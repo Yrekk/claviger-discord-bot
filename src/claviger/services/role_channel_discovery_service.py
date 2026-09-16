@@ -1,6 +1,6 @@
 import discord
 
-from claviger.models.role_channel_discovery_model import (
+from claviger.models.catalogs.role_channel_discovery_model import (
     DiscordChannelSnapshot,
     DiscordRoleSnapshot,
     GuildRoleChannelSnapshot,

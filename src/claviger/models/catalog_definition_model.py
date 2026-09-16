@@ -1,18 +1,5 @@
-from dataclasses import dataclass
+"""Compatibility import for the catalog-domain model."""
 
+from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
 
-@dataclass(frozen=True, slots=True)
-class CatalogDefinition:
-    """Describe one guild-specific declarative role catalog."""
-
-    guild_id: int
-    catalog_key: str
-
-    role_prefix: str
-
-    display_name: str
-    entry_name: str
-    description: str | None
-
-    sort_order: int
-    enabled: bool
+__all__ = ["CatalogDefinition"]
