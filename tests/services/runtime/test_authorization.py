@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock
 import discord
 import pytest
 
-from claviger.services.authorization import (
+from claviger.services.runtime.authorization import (
     AuthorizationService,
     Capability,
 )

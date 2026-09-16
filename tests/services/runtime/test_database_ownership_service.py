@@ -4,10 +4,10 @@ import pytest
 
 from claviger.database.connection import DatabaseConnection
 from claviger.database.schema import DatabaseSchema
-from claviger.repositories.database_ownership_repository import (
+from claviger.repositories.runtime.database_ownership_repository import (
     DatabaseOwnershipRepository,
 )
-from claviger.services.database_ownership_service import (
+from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipMismatchError,
     DatabaseOwnershipService,
     DatabaseOwnershipUnboundError,

@@ -1,17 +1,14 @@
-> **Réorganisation de fin V1.1**
->
-> Ce dossier fait partie de l'arborescence cible. Tant que la migration n'est pas terminée,
-> certains fichiers correspondant à cette responsabilité peuvent encore se trouver dans le dossier parent.
-> Les déplacements seront réalisés progressivement avec mise à jour des imports et des tests.
-
 # Services runtime
 
-Services nécessaires au cycle de vie et à la sécurité d'exécution de l'application :
+Services nécessaires au cycle de vie, à l'identité et à la sécurité d'exécution de l'application.
 
-- identité Discord ;
-- readiness ;
-- ownership de la base ;
-- bootstrap de configuration ;
-- contrôles transversaux d'autorisation lorsque leur portée est runtime.
+Ce domaine regroupe notamment :
 
-Ils préparent un environnement sûr avant que les workflows normaux puissent être exposés.
+- l'identité Discord de l'application et des guilds ;
+- la readiness d'une guild ;
+- l'ownership de la base de données ;
+- l'inspection de configuration runtime ;
+- les contrôles d'autorisation transversaux ;
+- le bootstrap de policy encore conservé pendant la phase de compatibilité.
+
+Ces services préparent et vérifient un environnement sûr avant que les workflows normaux puissent être exposés.

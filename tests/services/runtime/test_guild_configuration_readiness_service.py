@@ -2,21 +2,16 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-# Models
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
-from claviger.models.guild_configuration_readiness_model import (
+from claviger.models.runtime.guild_configuration_readiness_model import (
     GuildConfigurationReadinessState,
 )
-
-# Repositories
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
-
-# Services
-from claviger.services.guild_configuration_readiness_service import (
+from claviger.services.runtime.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
 

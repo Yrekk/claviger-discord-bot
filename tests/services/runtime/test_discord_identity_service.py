@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.services.discord_identity_service import (
+from claviger.services.runtime.discord_identity_service import (
     DiscordIdentityService,
     InvalidApplicationCommandNameError,
     normalize_application_command_name,
@@ -15,9 +15,7 @@ def test_normalize_application_command_name() -> None:
     """Normalize application names for Discord administrative commands."""
 
     assert normalize_application_command_name("Claviger") == "claviger"
-
     assert normalize_application_command_name("Experimentum Bot") == "experimentum-bot"
-
     assert normalize_application_command_name("Écho   Bot") == "echo-bot"
 
 

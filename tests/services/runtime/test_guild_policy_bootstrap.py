@@ -6,10 +6,10 @@ from claviger.policies.default_policy import (
     SUCCUMBRAE_FALLBACK_POLICY,
 )
 from claviger.policies.guild_policy import GuildPolicyOverrides
-from claviger.repositories.guild_policy_repository import (
+from claviger.repositories.runtime.guild_policy_repository import (
     GuildPolicyRepository,
 )
-from claviger.services.guild_policy_bootstrap import (
+from claviger.services.runtime.guild_policy_bootstrap import (
     GuildAlreadyConfiguredError,
     GuildBootstrapNotAllowedError,
     GuildPolicyBootstrapService,
