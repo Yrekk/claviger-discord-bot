@@ -1,16 +1,10 @@
-> **Réorganisation de fin V1.1**
->
-> Ce dossier fait partie de l'arborescence cible. Tant que la migration n'est pas terminée,
-> certains fichiers correspondant à cette responsabilité peuvent encore se trouver dans le dossier parent.
-> Les déplacements seront réalisés progressivement avec mise à jour des imports et des tests.
-
 # Services de workflows
 
-Ce sous-dossier regroupe les services qui configurent ou exécutent les workflows.
+Ce dossier contient les implémentations canoniques des services génériques de workflow.
 
-Un **workflow** représente un parcours applicatif configurable : à partir d'une définition, d'un contexte et de choix utilisateur, Claviger détermine le comportement à appliquer.
+Un workflow représente un parcours applicatif configurable : à partir d'une définition, d'un contexte et de choix utilisateur, Claviger détermine les ressources et le comportement à appliquer.
 
-On y trouve conceptuellement :
+Le flux conceptuel reste :
 
 ```text
 definition / configuration
@@ -28,4 +22,6 @@ preflight
 execution
 ```
 
-Les workflows historiques `/membre` et `/noctis` doivent progressivement devenir des façades/configurations de ce système générique, sans heuristique basée sur leurs noms.
+Les services de ce domaine ne doivent pas dépendre de noms de workflows historiques. Les noms, commandes, rôles et catalogues applicatifs sont des données de configuration ; ils ne constituent pas des branches métier codées en dur.
+
+Pendant la réorganisation de fin V1.1, les anciens modules directement sous `services/` restent temporairement des façades d'import. Ils seront supprimés après migration complète des consommateurs vers les chemins canoniques.
