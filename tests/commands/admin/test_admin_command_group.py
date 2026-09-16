@@ -5,17 +5,17 @@ import pytest
 from discord import app_commands
 
 from claviger.commands.admin.admin_command_group import GuildAdminCommandGroup
-from claviger.models.admin_configuration_inspection_model import (
+from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
 )
-from claviger.models.admin_configuration_reconciliation_model import (
+from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
-from claviger.models.admin_structure_discovery_model import (
+from claviger.models.admin.admin_structure_discovery_model import (
     AdminStructureDiscoveryResult,
 )
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
 
