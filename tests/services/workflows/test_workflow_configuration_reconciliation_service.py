@@ -1,16 +1,16 @@
 import pytest
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationDraft,
     WorkflowResourceSelection,
 )
-from claviger.models.workflow_structure_discovery_model import (
+from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowCategoryCandidate,
     WorkflowRoleCandidate,
     WorkflowStructureDiscoveryResult,
     WorkflowTextChannelCandidate,
 )
-from claviger.services.workflow_configuration_reconciliation_service import (
+from claviger.services.workflows.workflow_configuration_reconciliation_service import (
     WorkflowAiPreferenceRoleRequiredError,
     WorkflowCategoryMismatchError,
     WorkflowConfigurationReconciliationError,
@@ -18,7 +18,7 @@ from claviger.services.workflow_configuration_reconciliation_service import (
     WorkflowMutationPermissionError,
     WorkflowRoleCollisionError,
 )
-from claviger.services.workflow_configuration_validation_service import (
+from claviger.services.workflows.workflow_configuration_validation_service import (
     WorkflowConfigurationValidationError,
     WorkflowConfigurationValidationService,
 )
