@@ -1,8 +1,8 @@
 """Transform specialized V10 guild data into the generic V11 model."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import groupby
-from collections.abc import Iterable
 
 import aiosqlite
 
