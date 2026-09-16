@@ -4,7 +4,7 @@ import discord
 import pytest
 
 from claviger.models.context_definition_model import ContextDefinition
-from claviger.models.workflow_definition_model import (
+from claviger.models.workflows.workflow_definition_model import (
     WorkflowContextBinding,
     WorkflowDefinition,
 )
