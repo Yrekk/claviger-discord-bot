@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.models.guild_admin_configuration_model import (
+from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
 from claviger.reporting.discord_forum import (
@@ -13,7 +13,7 @@ from claviger.reporting.event import (
     ReportEvent,
     ReportSeverity,
 )
-from claviger.repositories.guild_admin_configuration_repository import (
+from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
 
