@@ -2,13 +2,13 @@ import logging
 
 import discord
 
-from claviger.models.workflow_configuration_model import (
+from claviger.models.workflows.workflow_configuration_model import (
     WorkflowResourceSelection,
 )
-from claviger.services.workflow_configuration_coordinator_service import (
+from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
-from claviger.ui.workflow_configuration_session import (
+from claviger.ui.workflows.workflow_configuration_session import (
     WorkflowCandidateChannelResource,
     WorkflowConfigurationSession,
     WorkflowUiResource,
