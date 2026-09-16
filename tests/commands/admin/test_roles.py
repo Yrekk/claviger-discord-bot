@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.reporting.event import ReportSeverity
-from claviger.services.role_discovery import RoleDiscoveryService, RoleHierarchy
+from claviger.services.roles.role_discovery import RoleDiscoveryService, RoleHierarchy
 
 from .helpers import create_interaction, create_role, get_scan_command
 
