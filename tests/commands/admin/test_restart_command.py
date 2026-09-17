@@ -38,6 +38,10 @@ def create_interaction(
     interaction.response = Mock()
     interaction.response.send_message = AsyncMock()
 
+    interaction.client = Mock()
+    interaction.client.tree = Mock()
+    interaction.client.tree.defer_until_completion = Mock()
+
     return interaction
 
 
@@ -94,8 +98,8 @@ async def test_restart_rejects_non_owner() -> None:
 
 
 @pytest.mark.asyncio
-async def test_restart_acknowledges_before_requesting_restart() -> None:
-    """Acknowledge the interaction before shutting down the Discord client."""
+async def test_restart_acknowledges_before_scheduling_restart() -> None:
+    """Acknowledge first, then defer shutdown until command completion."""
 
     restart_callback = AsyncMock()
 
@@ -116,6 +120,21 @@ async def test_restart_acknowledges_before_requesting_restart() -> None:
         "Redémarrage de l'application en cours…",
         ephemeral=True,
     )
+
+    # The Discord client must still be alive while the slash-command callback
+    # unwinds. The actual restart callback therefore runs only from the later
+    # app_command_completion boundary.
+    restart_callback.assert_not_awaited()
+
+    scheduler = interaction.client.tree.defer_until_completion
+    scheduler.assert_called_once()
+
+    interaction_token, deferred_restart = scheduler.call_args.args
+
+    assert interaction_token == "restart-token"
+    assert callable(deferred_restart)
+
+    await deferred_restart()
 
     restart_callback.assert_awaited_once_with(
         RuntimeRestartRequest(
