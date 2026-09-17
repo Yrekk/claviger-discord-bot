@@ -4,10 +4,10 @@ import discord
 import pytest
 
 from claviger.services.runtime.guild_ai_role_provisioning_service import (
+    PROVISIONING_REASON,
     GuildAIRoleProvisioningPartialError,
     GuildAIRoleProvisioningPermissionError,
     GuildAIRoleProvisioningService,
-    PROVISIONING_REASON,
 )
 
 
