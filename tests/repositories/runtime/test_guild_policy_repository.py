@@ -6,6 +6,7 @@ from claviger.database.connection import DatabaseConnection, DatabaseMissingErro
 from claviger.database.schema import DatabaseSchema
 from claviger.policies.guild_policy import GuildPolicyOverrides
 from claviger.repositories.runtime.guild_policy_repository import (
+    GuildPolicyPersistenceRetiredError,
     GuildPolicyRepository,
 )
 
@@ -13,7 +14,7 @@ from claviger.repositories.runtime.guild_policy_repository import (
 async def create_repository(
     tmp_path: Path,
 ) -> GuildPolicyRepository:
-    """Create an initialized temporary guild policy repository."""
+    """Create an initialized temporary compatibility repository."""
 
     database = DatabaseConnection(
         tmp_path / "claviger.db",
@@ -31,144 +32,46 @@ async def create_repository(
 
 
 @pytest.mark.asyncio
-async def test_get_returns_none_when_guild_has_no_configuration(
+async def test_get_returns_no_sqlite_overrides_after_v11(
     tmp_path: Path,
 ) -> None:
-    """Return None when the database contains no row for the guild."""
+    """V11 uses code snapshots instead of persisted V1 policy overrides."""
 
     repository = await create_repository(
         tmp_path,
     )
 
-    overrides = await repository.get(
-        123,
-    )
-
-    assert overrides is None
+    assert await repository.get(123) is None
 
 
 @pytest.mark.asyncio
-async def test_save_and_get_guild_policy_overrides(
+async def test_save_rejects_retired_policy_persistence(
     tmp_path: Path,
 ) -> None:
-    """Persist and reload guild-specific policy overrides."""
+    """Do not silently recreate the V1 guild-settings contract."""
 
     repository = await create_repository(
         tmp_path,
     )
 
-    expected = GuildPolicyOverrides(
-        adult_role_name="Accès adulte",
-        member_interest_prefix="interest-",
-        adult_access_prefix="access-",
-        role_management_enabled=True,
-        adult_access_enabled=False,
-    )
-
-    await repository.save(
-        123,
-        expected,
-    )
-
-    actual = await repository.get(
-        123,
-    )
-
-    assert actual == expected
-
-
-@pytest.mark.asyncio
-async def test_save_supports_empty_overrides(
-    tmp_path: Path,
-) -> None:
-    """Persist an explicit guild configuration with no overridden values."""
-
-    repository = await create_repository(
-        tmp_path,
-    )
-
-    await repository.save(
-        123,
-        GuildPolicyOverrides(),
-    )
-
-    actual = await repository.get(
-        123,
-    )
-
-    assert actual == GuildPolicyOverrides()
-
-
-@pytest.mark.asyncio
-async def test_save_replaces_existing_overrides(
-    tmp_path: Path,
-) -> None:
-    """Replace the complete override set when a guild is saved again."""
-
-    repository = await create_repository(
-        tmp_path,
-    )
-
-    await repository.save(
-        123,
-        GuildPolicyOverrides(
-            adult_role_name="Ancien rôle",
-            role_management_enabled=True,
-        ),
-    )
-
-    replacement = GuildPolicyOverrides(
-        member_role_name="Citoyen",
-        adult_access_enabled=True,
-    )
-
-    await repository.save(
-        123,
-        replacement,
-    )
-
-    actual = await repository.get(
-        123,
-    )
-
-    assert actual == replacement
-
-
-@pytest.mark.asyncio
-async def test_guild_configurations_are_isolated(
-    tmp_path: Path,
-) -> None:
-    """Keep policy overrides isolated by Discord guild ID."""
-
-    repository = await create_repository(
-        tmp_path,
-    )
-
-    first = GuildPolicyOverrides(
-        member_role_name="Membre A",
-    )
-    second = GuildPolicyOverrides(
-        member_role_name="Membre B",
-    )
-
-    await repository.save(
-        123,
-        first,
-    )
-    await repository.save(
-        456,
-        second,
-    )
-
-    assert await repository.get(123) == first
-    assert await repository.get(456) == second
+    with pytest.raises(
+        GuildPolicyPersistenceRetiredError,
+        match="retired by schema V11",
+    ):
+        await repository.save(
+            123,
+            GuildPolicyOverrides(
+                member_role_name="Membre",
+            ),
+        )
 
 
 @pytest.mark.asyncio
 async def test_get_does_not_create_missing_database(
     tmp_path: Path,
 ) -> None:
-    """Do not create SQLite while trying to read missing configuration."""
+    """Do not create SQLite while checking retired compatibility state."""
+
     database_path = tmp_path / "claviger.db"
 
     database = DatabaseConnection(
@@ -182,6 +85,26 @@ async def test_get_does_not_create_missing_database(
     with pytest.raises(DatabaseMissingError):
         await repository.get(
             123,
+        )
+
+    assert database_path.exists() is False
+
+
+@pytest.mark.asyncio
+async def test_save_does_not_create_missing_database(
+    tmp_path: Path,
+) -> None:
+    """Reject obsolete writes without creating an empty SQLite file."""
+
+    database_path = tmp_path / "claviger.db"
+    repository = GuildPolicyRepository(
+        DatabaseConnection(database_path),
+    )
+
+    with pytest.raises(DatabaseMissingError):
+        await repository.save(
+            123,
+            GuildPolicyOverrides(),
         )
 
     assert database_path.exists() is False

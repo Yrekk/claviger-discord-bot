@@ -85,7 +85,7 @@ async def _context(
         INSERT INTO guild_context_definitions
             (guild_id, context_key, capability_key, value_type, role_id, label, enabled)
         VALUES (?, 'shared-ai', 'ai_preference', 'boolean', ?, 'IA', ?)
-    """,
+        """,
         (guild_id, role_id, enabled),
     )
 
@@ -105,11 +105,13 @@ async def _unexpected(*args, **kwargs):
 
 @pytest.mark.parametrize("version", range(1, 11))
 async def test_all_supported_versions_reach_v11(tmp_path: Path, version: int) -> None:
-    """Keep each supported upgrade path and retire both specialized tables."""
+    """Keep each supported upgrade path and retire specialized V1 storage."""
 
     database = await _historical(tmp_path, version)
     await DatabaseSchema(database).migrate()
+
     assert await DatabaseSchema(database).get_version() == CURRENT_SCHEMA_VERSION == 11
+
     names = {
         row[0]
         for row in await _rows(
@@ -119,18 +121,25 @@ async def test_all_supported_versions_reach_v11(tmp_path: Path, version: int) ->
     assert {"guild_catalog_entries", "guild_catalog_entry_targets"} <= names
     assert not {"guild_member_interests", "guild_adult_accesses"} & names
 
+    guild_settings_columns = [
+        row[1]
+        for row in await _rows(database, "PRAGMA table_info(guild_settings)")
+    ]
+    assert guild_settings_columns == ["guild_id", "ai_enabled", "ai_role_id"]
+
 
 async def test_fresh_database_never_probes_or_recovers_legacy_data(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A known-new installation must not attempt historical recovery at all."""
+    """A known-new installation must not attempt historical catalog recovery."""
 
     monkeypatch.setattr(migration_v11, "_has_rows", _unexpected)
     monkeypatch.setattr(migration_v11, "_copy_legacy_catalog", _unexpected)
-    monkeypatch.setattr(migration_v11, "_copy_ai_settings", _unexpected)
+
     database = DatabaseConnection(tmp_path / "new.db")
     await DatabaseSchema(database).initialize()
+
     assert await DatabaseSchema(database).get_version() == 11
     assert await _rows(database, "SELECT * FROM guild_settings") == []
     assert await _rows(database, "SELECT * FROM guild_catalogs") == []
@@ -144,8 +153,9 @@ async def test_empty_historical_database_skips_conversion(
 
     database = await _historical(tmp_path)
     monkeypatch.setattr(migration_v11, "_copy_legacy_catalog", _unexpected)
-    monkeypatch.setattr(migration_v11, "_copy_ai_settings", _unexpected)
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(database, "SELECT * FROM guild_catalog_entries") == []
 
 
@@ -165,7 +175,9 @@ async def test_only_nonempty_source_is_converted(
         return await original(connection, source)
 
     monkeypatch.setattr(migration_v11, "_copy_legacy_catalog", record)
+
     await DatabaseSchema(database).migrate()
+
     assert calls == ["guild_member_interests"]
 
 
@@ -198,13 +210,15 @@ async def test_pair_uses_no_ai_metadata_and_preserves_both_targets(
         mapping_valid=0,
         matches_policy=0,
     )
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database,
         """
         SELECT entry_key, label, description, emoji, sort_order, enabled
         FROM guild_catalog_entries
-    """,
+        """,
     ) == [("fantasy", "Fantasy", "Original", "✨", 4, 1)]
     assert await _rows(
         database,
@@ -212,13 +226,9 @@ async def test_pair_uses_no_ai_metadata_and_preserves_both_targets(
         SELECT role_id, variant, enabled, discord_present, role_manageable,
                channel_present, mapping_valid, matches_policy
         FROM guild_catalog_entry_targets ORDER BY role_id
-    """,
+        """,
     ) == [(501, "no_ai", 1, 1, 1, 1, 1, 1), (502, "ai", 0, 0, 0, 0, 0, 0)]
-    assert await _rows(
-        database, "SELECT ai_enabled, ai_role_id FROM guild_settings"
-    ) == [
-        (1, None),
-    ]
+    assert await _rows(database, "SELECT * FROM guild_settings") == []
 
 
 async def test_empty_no_ai_metadata_does_not_fall_back_to_ai(tmp_path: Path) -> None:
@@ -235,12 +245,14 @@ async def test_empty_no_ai_metadata_does_not_fall_back_to_ai(tmp_path: Path) -> 
         emoji="🤖",
         enabled=1,
     )
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database,
         """
         SELECT label, description, emoji, enabled FROM guild_catalog_entries
-    """,
+        """,
     ) == [(None, "", None, 0)]
 
 
@@ -263,12 +275,12 @@ async def test_singletons_preserve_metadata_without_inventing_emojis(
 
     database = await _historical(tmp_path)
     await _insert(database, access_key=key, label="Choice", emoji=None)
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database, "SELECT entry_key, label, emoji FROM guild_catalog_entries"
-    ) == [
-        (entry, "Choice", None),
-    ]
+    ) == [(entry, "Choice", None)]
     assert await _rows(database, "SELECT variant FROM guild_catalog_entry_targets") == [
         (variant,)
     ]
@@ -279,19 +291,19 @@ async def test_interest_named_ia_remains_an_ordinary_interest(tmp_path: Path) ->
 
     database = await _historical(tmp_path)
     await _insert(database, "guild_member_interests", interest_key="ia")
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database, "SELECT entry_key, variant FROM guild_catalog_entry_targets"
-    ) == [
-        ("ia", "base"),
-    ]
+    ) == [("ia", "base")]
     assert await _rows(database, "SELECT * FROM guild_settings") == []
 
 
-async def test_v5_production_data_and_policy_survive_without_invented_workflows(
+async def test_v5_policy_fields_feed_conversion_then_are_retired(
     tmp_path: Path,
 ) -> None:
-    """An older production DB has data but no declarative catalog definitions."""
+    """Use legacy prefixes during conversion without keeping V1 policy columns."""
 
     database = await _historical(tmp_path, 5)
     await _execute(
@@ -299,26 +311,22 @@ async def test_v5_production_data_and_policy_survive_without_invented_workflows(
         """
         INSERT INTO guild_settings (guild_id, adult_access_prefix, adult_role_name)
         VALUES (123, 'themes-', 'Existing role')
-    """,
+        """,
     )
     await _insert(database, access_key="ia-art", role_name="themes-ia-art")
     await _insert(
         database, "guild_member_interests", role_id=600, interest_key="cuisine"
     )
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database,
-        """
-        SELECT adult_access_prefix, adult_role_name, ai_enabled, ai_role_id
-        FROM guild_settings
-    """,
-    ) == [("themes-", "Existing role", 1, None)]
+        "SELECT guild_id, ai_enabled, ai_role_id FROM guild_settings",
+    ) == [(123, None, None)]
     assert await _rows(
         database, "SELECT role_prefix FROM guild_catalogs ORDER BY role_prefix"
-    ) == [
-        ("interest-",),
-        ("themes-",),
-    ]
+    ) == [("interest-",), ("themes-",)]
     assert await _rows(database, "SELECT * FROM guild_workflows") == []
     assert len(await _rows(database, "SELECT * FROM guild_catalog_entry_targets")) == 2
 
@@ -335,7 +343,7 @@ async def test_reuses_existing_catalog_and_preserves_workflow_bindings(
         INSERT INTO guild_catalogs
             (guild_id, catalog_key, role_prefix, display_name, entry_name, enabled)
         VALUES (123, 'chosen-key', 'access-', 'Custom catalog', 'Theme', 0)
-    """,
+        """,
     )
     await _execute(
         database,
@@ -343,26 +351,26 @@ async def test_reuses_existing_catalog_and_preserves_workflow_bindings(
         INSERT INTO guild_workflows
             (guild_id, workflow_key, command_name, command_description, title, policy_key)
         VALUES (123, 'custom', 'custom', 'Description', 'Custom workflow', 'public')
-    """,
+        """,
     )
     await _execute(
         database,
         """
         INSERT INTO guild_workflow_catalogs (guild_id, workflow_key, catalog_key)
         VALUES (123, 'custom', 'chosen-key')
-    """,
+        """,
     )
     before = await _rows(database, "SELECT * FROM guild_workflow_catalogs")
     await _insert(database)
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(database, "SELECT catalog_key FROM guild_catalog_entries") == [
         ("chosen-key",)
     ]
     assert await _rows(
         database, "SELECT display_name, enabled FROM guild_catalogs"
-    ) == [
-        ("Custom catalog", 0),
-    ]
+    ) == [("Custom catalog", 0)]
     assert await _rows(database, "SELECT * FROM guild_workflow_catalogs") == before
 
 
@@ -373,44 +381,47 @@ async def test_guilds_are_isolated_and_ownership_is_preserved(tmp_path: Path) ->
     await _execute(database, "INSERT INTO database_ownership VALUES (1, 9000)")
     await _insert(database, guild_id=123, label="A")
     await _insert(database, guild_id=456, label="B")
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database, "SELECT guild_id, label FROM guild_catalog_entries ORDER BY guild_id"
-    ) == [
-        (123, "A"),
-        (456, "B"),
-    ]
+    ) == [(123, "A"), (456, "B")]
     assert await _rows(database, "SELECT * FROM database_ownership") == [(1, 9000)]
 
 
 @pytest.mark.parametrize("enabled", [0, 1])
-async def test_imports_explicit_ai_context_even_with_empty_catalogs(
-    tmp_path: Path, enabled: int
+async def test_legacy_ai_context_is_retired_without_carrying_state(
+    tmp_path: Path,
+    enabled: int,
 ) -> None:
-    """Preserve recorded AI identity and activation without guessing a role by name."""
+    """V11 starts AI configuration clean instead of inheriting workflow state."""
 
     database = await _historical(tmp_path)
     await _context(database, enabled=enabled)
+
     await DatabaseSchema(database).migrate()
+
+    assert await _rows(database, "SELECT * FROM guild_settings") == []
     assert await _rows(
-        database, "SELECT ai_enabled, ai_role_id FROM guild_settings"
-    ) == [(enabled, 900)]
-    assert await _rows(database, "SELECT role_id FROM guild_context_definitions") == [
-        (900,)
-    ]
+        database,
+        "SELECT role_id FROM guild_context_definitions WHERE capability_key = 'ai_preference'",
+    ) == []
 
 
 async def test_unconfigured_guild_stays_distinct_from_ai_disabled(
     tmp_path: Path,
 ) -> None:
-    """Existing policy configuration alone does not answer the AI setup question."""
+    """Existing V1 configuration alone does not answer the V11 AI setup question."""
 
     database = await _historical(tmp_path)
     await _execute(
         database,
         "INSERT INTO guild_settings (guild_id, adult_access_enabled) VALUES (123, 1)",
     )
+
     await DatabaseSchema(database).migrate()
+
     assert await _rows(
         database, "SELECT ai_enabled, ai_role_id FROM guild_settings"
     ) == [(None, None)]
@@ -418,31 +429,37 @@ async def test_unconfigured_guild_stays_distinct_from_ai_disabled(
 
 @pytest.mark.parametrize("bad_key", ["", "ia-", "no-ia-", " space "])
 async def test_invalid_key_rolls_back_schema_data_and_version(
-    tmp_path: Path, bad_key: str
+    tmp_path: Path,
+    bad_key: str,
 ) -> None:
     """Invalid migration input must leave the whole V10 database unchanged."""
 
     database = await _historical(tmp_path)
     await _insert(database, access_key=bad_key)
     before = _dump(database)
+
     with pytest.raises(LegacyCatalogMigrationError):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before
     assert await DatabaseSchema(database).get_version() == 10
 
 
 @pytest.mark.parametrize("second_key", ["no-ia-fantasy", "fantasy"])
 async def test_duplicate_or_colliding_logical_keys_fail_closed(
-    tmp_path: Path, second_key: str
+    tmp_path: Path,
+    second_key: str,
 ) -> None:
-    """Do not merge duplicate variants or a plain singleton into the same theme."""
+    """Do not merge duplicate variants or ambiguous singleton/variant shapes."""
 
     database = await _historical(tmp_path)
     await _insert(database)
     await _insert(database, role_id=502, access_key=second_key)
     before = _dump(database)
+
     with pytest.raises(LegacyCatalogMigrationError):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before
 
 
@@ -453,14 +470,17 @@ async def test_same_role_in_two_historical_catalogs_is_rejected(tmp_path: Path) 
     await _insert(database)
     await _insert(database, "guild_member_interests", interest_key="coding")
     before = _dump(database)
+
     with pytest.raises(aiosqlite.IntegrityError):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before
 
 
 @pytest.mark.parametrize("prefix", ["access-special-", "access"])
 async def test_overlapping_configured_prefixes_fail_closed(
-    tmp_path: Path, prefix: str
+    tmp_path: Path,
+    prefix: str,
 ) -> None:
     """Do not silently choose between nested catalog prefixes."""
 
@@ -470,39 +490,49 @@ async def test_overlapping_configured_prefixes_fail_closed(
         """
         INSERT INTO guild_catalogs (guild_id, catalog_key, role_prefix, display_name, entry_name)
         VALUES (123, 'existing', ?, 'Existing', 'Choice')
-    """,
+        """,
         (prefix,),
     )
     await _insert(database)
     before = _dump(database)
+
     with pytest.raises(LegacyCatalogMigrationError, match="prefix"):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before
 
 
-async def test_reserved_ai_role_cannot_be_migrated_as_questionnaire_target(
+async def test_legacy_ai_role_can_become_catalog_target_after_context_retirement(
     tmp_path: Path,
 ) -> None:
-    """Reserved preference roles must not silently become ordinary choices."""
+    """The old workflow AI identity is not reserved by the new guild AI model."""
 
     database = await _historical(tmp_path)
     await _context(database, role_id=501)
     await _insert(database)
-    before = _dump(database)
-    with pytest.raises(LegacyCatalogMigrationError, match="preference role"):
-        await DatabaseSchema(database).migrate()
-    assert _dump(database) == before
+
+    await DatabaseSchema(database).migrate()
+
+    assert await _rows(
+        database,
+        "SELECT role_id FROM guild_catalog_entry_targets",
+    ) == [(501,)]
+    assert await _rows(
+        database,
+        "SELECT role_id FROM guild_context_definitions WHERE capability_key = 'ai_preference'",
+    ) == []
 
 
 @pytest.mark.parametrize(
-    "exception_type", [RuntimeError, ValueError, asyncio.CancelledError]
+    "exception_type",
+    [RuntimeError, ValueError, asyncio.CancelledError],
 )
 async def test_failure_after_source_removal_restores_everything(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     exception_type: type[BaseException],
 ) -> None:
-    """Even after DROP TABLE, transaction rollback restores both catalogs and DDL."""
+    """Even late migration failure must restore the complete V10 database."""
 
     database = await _historical(tmp_path)
     await _insert(database)
@@ -514,13 +544,16 @@ async def test_failure_after_source_removal_restores_everything(
         raise exception_type("Injected interruption")
 
     monkeypatch.setattr(schema_module, "migrate_v11_data", fail_after_drop)
+
     with pytest.raises(exception_type):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before
     assert await DatabaseSchema(database).get_version() == 10
-    # A clean retry must work, proving there is no half-created target schema.
+
     monkeypatch.setattr(schema_module, "migrate_v11_data", original)
     await DatabaseSchema(database).migrate()
+
     assert await DatabaseSchema(database).get_version() == 11
 
 
@@ -537,6 +570,7 @@ async def test_ai_setting_constraints(tmp_path: Path, sql: str) -> None:
 
     database = DatabaseConnection(tmp_path / "new.db")
     await DatabaseSchema(database).initialize()
+
     with pytest.raises(aiosqlite.IntegrityError):
         await _execute(database, sql)
 
@@ -548,19 +582,17 @@ async def test_unknown_ai_state_and_explicit_false_are_both_supported(
 
     database = DatabaseConnection(tmp_path / "new.db")
     await DatabaseSchema(database).initialize()
+
     for guild, enabled in [(1, None), (2, 0), (3, 1)]:
         await _execute(
             database,
             "INSERT INTO guild_settings (guild_id, ai_enabled) VALUES (?, ?)",
             (guild, enabled),
         )
+
     assert await _rows(
         database, "SELECT ai_enabled, ai_role_id FROM guild_settings ORDER BY guild_id"
-    ) == [
-        (None, None),
-        (0, None),
-        (1, None),
-    ]
+    ) == [(None, None), (0, None), (1, None)]
 
 
 async def test_future_schema_is_rejected_without_any_mutation(tmp_path: Path) -> None:
@@ -569,6 +601,8 @@ async def test_future_schema_is_rejected_without_any_mutation(tmp_path: Path) ->
     database = await _historical(tmp_path)
     await _execute(database, "PRAGMA user_version = 12")
     before = _dump(database)
+
     with pytest.raises(schema_module.UnsupportedSchemaVersionError):
         await DatabaseSchema(database).migrate()
+
     assert _dump(database) == before

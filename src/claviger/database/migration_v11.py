@@ -1,4 +1,4 @@
-"""Convert historical catalogs into generic entries and Discord targets.
+"""Convert historical catalogs into generic V11 storage.
 
 Only this migration interprets the former member/adult storage conventions.
 It never contacts Discord, grants roles, or invents workflow bindings. Its caller
@@ -119,7 +119,6 @@ async def _fetchall(
 async def _has_rows(connection: aiosqlite.Connection, table: str) -> bool:
     """Probe a trusted historical table without loading its contents."""
 
-    # table is chosen exclusively from the migration's fixed _SOURCES tuple.
     async with connection.execute(f"SELECT EXISTS(SELECT 1 FROM {table})") as cursor:
         return bool((await cursor.fetchone())[0])
 
@@ -129,12 +128,7 @@ async def _resolve_catalog(
     source: _LegacyCatalog,
     guild_id: int,
 ) -> str:
-    """Reuse the exact configured prefix or create a migration-only definition.
-
-    The V5 production schema has no declarative catalog rows yet. In that case
-    we persist a catalog, but never synthesize an executable workflow or command.
-    Existing definitions and workflow bindings are preserved unchanged.
-    """
+    """Reuse the configured historical prefix or create a migration definition."""
 
     settings = await _fetchall(
         connection,
@@ -143,6 +137,7 @@ async def _resolve_catalog(
     )
     prefix = settings[0]["prefix"] if settings else None
     prefix = source.default_prefix if prefix is None else prefix
+
     if not prefix or prefix != prefix.strip():
         raise LegacyCatalogMigrationError(
             f"Guild {guild_id}: invalid historical prefix in {source.prefix_column}."
@@ -154,7 +149,6 @@ async def _resolve_catalog(
         (guild_id,),
     )
     exact = [row for row in catalogs if row["role_prefix"] == prefix]
-    # An overlapping prefix would give the same roles two different domains.
     overlaps = [
         row
         for row in catalogs
@@ -164,18 +158,22 @@ async def _resolve_catalog(
             or row["role_prefix"].startswith(prefix)
         )
     ]
+
     if overlaps or len(exact) > 1:
         raise LegacyCatalogMigrationError(
             f"Guild {guild_id}: ambiguous catalog prefix {prefix!r}."
         )
+
     if exact:
         return str(exact[0]["catalog_key"])
 
     catalog_key = f"migrated-{prefix.rstrip('-')}"
+
     if any(row["catalog_key"] == catalog_key for row in catalogs):
         raise LegacyCatalogMigrationError(
             f"Guild {guild_id}: catalog key {catalog_key!r} already has another prefix."
         )
+
     await connection.execute(
         """
         INSERT INTO guild_catalogs
@@ -219,18 +217,22 @@ def _classify_rows(
     """Group historical variants; ordinary generic accesses stay independent."""
 
     by_key: dict[str, aiosqlite.Row] = {}
+
     for row in rows:
         key = row[source.key_column]
+
         if not key or key != key.strip() or key in by_key:
             raise LegacyCatalogMigrationError(
                 f"Guild {guild_id}: invalid or duplicate key {key!r} in {source.table}."
             )
+
         by_key[key] = row
 
     if not source.has_variants:
         return [(key, [(row, "base")]) for key, row in sorted(by_key.items())]
 
     classification = CatalogVariantClassifier().classify(by_key)
+
     if classification.invalid_keys or classification.duplicate_keys:
         raise LegacyCatalogMigrationError(
             f"Guild {guild_id}: invalid historical access variants."
@@ -242,12 +244,9 @@ def _classify_rows(
     ]
     singleton_keys = {key for key, _ in singleton_groups}
 
-    pair_groups: list[
-        tuple[str, list[tuple[aiosqlite.Row, str]]]
-    ] = []
+    pair_groups: list[tuple[str, list[tuple[aiosqlite.Row, str]]]] = []
+
     for pair in classification.pairs:
-        # The no-AI row is deliberately first: its metadata always wins,
-        # including None/empty values. No fallback to an AI robot emoji.
         pair_groups.append(
             (
                 pair.theme_key,
@@ -258,9 +257,8 @@ def _classify_rows(
             )
         )
 
-    incomplete_groups: list[
-        tuple[str, list[tuple[aiosqlite.Row, str]]]
-    ] = []
+    incomplete_groups: list[tuple[str, list[tuple[aiosqlite.Row, str]]]] = []
+
     for keys, variant, prefix in (
         (classification.no_ai_only_keys, "no_ai", "no-ia-"),
         (classification.ai_only_keys, "ai", "ia-"),
@@ -288,26 +286,30 @@ def _classify_rows(
 
     groups.extend(incomplete_groups)
     names = [key for key, _ in groups]
+
     if len(names) != len(set(names)):
         raise LegacyCatalogMigrationError(
             f"Guild {guild_id}: a singleton collides with an incomplete variant entry."
         )
+
     return groups
 
 
 async def _copy_legacy_catalog(
     connection: aiosqlite.Connection,
     source: _LegacyCatalog,
-) -> set[int]:
+) -> None:
     """Transfer one nonempty source and prove every role and state was preserved."""
 
     rows = await _fetchall(connection, f"SELECT * FROM {source.table}")
     by_guild: dict[int, list[aiosqlite.Row]] = defaultdict(list)
+
     for row in rows:
         by_guild[row["guild_id"]].append(row)
-    ai_guilds: set[int] = set()
+
     for guild_id, guild_rows in by_guild.items():
         catalog_key = await _resolve_catalog(connection, source, guild_id)
+
         for entry_key, targets in _classify_rows(source, guild_rows, guild_id):
             canonical = targets[0][0]
             await connection.execute(
@@ -328,6 +330,7 @@ async def _copy_legacy_catalog(
                     canonical["enabled"],
                 ),
             )
+
             for row, variant in targets:
                 await connection.execute(
                     """
@@ -355,11 +358,7 @@ async def _copy_legacy_catalog(
                         row["matches_policy"],
                     ),
                 )
-                if variant == "ai":
-                    ai_guilds.add(guild_id)
 
-    # A count alone cannot detect a substituted role or accidentally reset flag.
-    # Compare the actual source identities, mappings and availability states.
     columns = (
         "guild_id",
         "role_id",
@@ -383,53 +382,61 @@ async def _copy_legacy_catalog(
         """,
     )
     actual = {tuple(row[column] for column in columns) for row in actual_rows}
+
     if len(actual_rows) != len(rows) or actual != expected:
         raise LegacyCatalogMigrationError(
             f"Target conservation failed for {source.table}."
         )
-    return ai_guilds
 
 
-async def _copy_ai_settings(
+async def _retire_legacy_ai_contexts(
     connection: aiosqlite.Connection,
-    ai_guilds: set[int],
 ) -> None:
-    """Import a recorded AI identity, never infer a role ID from its name.
+    """Retire workflow-owned AI configuration without carrying its old identity."""
 
-    Legacy AI targets prove a historical AI capability, but do not identify the
-    preference role. Such guilds become enabled with a missing role to configure.
-    A guild with no historical AI evidence stays unconfigured (NULL).
-    """
-
-    contexts = await _fetchall(
-        connection,
+    await connection.execute(
         """
-        SELECT guild_id, role_id, enabled FROM guild_context_definitions
-        WHERE capability_key = 'ai_preference'
-        """,
+        DELETE FROM guild_workflow_contexts
+        WHERE (guild_id, context_key) IN (
+            SELECT guild_id, context_key
+            FROM guild_context_definitions
+            WHERE capability_key = 'ai_preference'
+        )
+        """
     )
-    settings = {guild_id: (1, None) for guild_id in ai_guilds}
-    for row in contexts:
-        conflicts = await _fetchall(
-            connection,
-            "SELECT 1 FROM guild_catalog_entry_targets WHERE guild_id = ? AND role_id = ?",
-            (row["guild_id"], row["role_id"]),
+    await connection.execute(
+        """
+        DELETE FROM guild_context_definitions
+        WHERE capability_key = 'ai_preference'
+        """
+    )
+
+
+async def _rebuild_guild_settings(
+    connection: aiosqlite.Connection,
+) -> None:
+    """Retire V1 workflow policy columns and keep only V11 guild AI settings."""
+
+    await connection.execute(
+        """
+        CREATE TABLE guild_settings_v11 (
+            guild_id INTEGER PRIMARY KEY,
+            ai_enabled INTEGER
+                CHECK (ai_enabled IS NULL OR ai_enabled IN (0, 1)),
+            ai_role_id INTEGER
+                CHECK (ai_role_id IS NULL OR ai_role_id > 0)
         )
-        if conflicts:
-            raise LegacyCatalogMigrationError(
-                f"Guild {row['guild_id']}: AI preference role also appears in a catalog."
-            )
-        settings[row["guild_id"]] = (row["enabled"], row["role_id"])
-    for guild_id, (enabled, role_id) in settings.items():
-        await connection.execute(
-            """
-            INSERT INTO guild_settings (guild_id, ai_enabled, ai_role_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT (guild_id) DO UPDATE SET
-                ai_enabled = excluded.ai_enabled, ai_role_id = excluded.ai_role_id
-            """,
-            (guild_id, enabled, role_id),
-        )
+        """
+    )
+    await connection.execute(
+        """
+        INSERT INTO guild_settings_v11 (guild_id, ai_enabled, ai_role_id)
+        SELECT guild_id, NULL, NULL
+        FROM guild_settings
+        """
+    )
+    await connection.execute("DROP TABLE guild_settings")
+    await connection.execute("ALTER TABLE guild_settings_v11 RENAME TO guild_settings")
 
 
 async def migrate_v11_data(
@@ -437,36 +444,33 @@ async def migrate_v11_data(
     *,
     transfer_legacy_data: bool,
 ) -> None:
-    """Validate and retire legacy catalogs inside the caller's V11 transaction.
-
-    Fresh initialization skips all legacy data reads. Existing databases probe
-    each source with EXISTS and invoke conversion only for nonempty tables.
-    AI contexts remain temporarily readable for the next config-server tranche;
-    this storage-only tranche does not claim to switch existing UI writers.
-    """
+    """Validate, convert and retire V1 storage inside the V11 transaction."""
 
     if not connection.in_transaction:
         raise RuntimeError("V11 data migration requires an active transaction.")
 
     if transfer_legacy_data:
-        ai_guilds: set[int] = set()
         for source in _SOURCES:
             if await _has_rows(connection, source.table):
-                ai_guilds.update(await _copy_legacy_catalog(connection, source))
-        async with connection.execute(
-            "SELECT EXISTS(SELECT 1 FROM guild_context_definitions "
-            "WHERE capability_key = 'ai_preference')"
-        ) as cursor:
-            has_ai_context = bool((await cursor.fetchone())[0])
-        if ai_guilds or has_ai_context:
-            await _copy_ai_settings(connection, ai_guilds)
+                await _copy_legacy_catalog(connection, source)
+
+    await _retire_legacy_ai_contexts(connection)
 
     violations = await _fetchall(connection, "PRAGMA foreign_key_check")
+
     if violations:
         raise LegacyCatalogMigrationError(
             "Foreign key validation failed before source removal."
         )
 
-    # Source destruction is last. Any subsequent failure also rolls it back.
     for source in _SOURCES:
         await connection.execute(f"DROP TABLE {source.table}")
+
+    await _rebuild_guild_settings(connection)
+
+    violations = await _fetchall(connection, "PRAGMA foreign_key_check")
+
+    if violations:
+        raise LegacyCatalogMigrationError(
+            "Foreign key validation failed after V11 source retirement."
+        )

@@ -11,7 +11,7 @@ from claviger.models.runtime.guild_ai_configuration_model import (
 
 
 class GuildAIConfigurationRepository:
-    """Persist guild-scoped AI settings without owning historical guild policy."""
+    """Persist the V11 guild-scoped AI configuration."""
 
     def __init__(
         self,
@@ -25,22 +25,9 @@ class GuildAIConfigurationRepository:
     ) -> GuildAIConfiguration | None:
         """Return the persisted AI configuration for one guild.
 
-        Args:
-            guild_id:
-                Discord guild snowflake whose AI configuration must be loaded.
-
-        Returns:
-            GuildAIConfiguration | None:
-                The stored AI configuration. ``None`` means that no
-                ``guild_settings`` row exists for the guild; a row whose
-                ``ai_enabled`` value is NULL is returned as an explicit
-                UNCONFIGURED configuration instead.
-
-        Raises:
-            DatabaseMissingError:
-                If the SQLite database file does not exist.
-            DatabaseUnavailableError:
-                If SQLite cannot read the configuration.
+        ``None`` means that no ``guild_settings`` row exists for the guild. A
+        row whose ``ai_enabled`` value is NULL is an explicit UNCONFIGURED
+        state and is returned as a configuration object.
         """
 
         if not self.database.exists():
@@ -82,23 +69,7 @@ class GuildAIConfigurationRepository:
         self,
         configuration: GuildAIConfiguration,
     ) -> None:
-        """Create or replace only the AI-owned columns for one guild.
-
-        Existing policy values stored in the same ``guild_settings`` row are
-        intentionally left untouched. This keeps the physical SQLite layout
-        independent from the application ownership boundary between guild
-        policy and AI configuration.
-
-        Args:
-            configuration:
-                Complete AI configuration to persist for one guild.
-
-        Raises:
-            DatabaseMissingError:
-                If the SQLite database file does not exist.
-            DatabaseUnavailableError:
-                If SQLite rejects or cannot persist the configuration.
-        """
+        """Create or replace the complete V11 AI state for one guild."""
 
         if not self.database.exists():
             raise DatabaseMissingError(
