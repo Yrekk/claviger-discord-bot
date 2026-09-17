@@ -11,6 +11,19 @@ class GuildAIConfigurationState(StrEnum):
     ENABLED = "enabled"
 
 
+class GuildAIConfigurationInspectionState(StrEnum):
+    """Describe live readiness of one guild's AI configuration."""
+
+    MISSING = "missing"
+    UNCONFIGURED = "unconfigured"
+    DISABLED = "disabled"
+    ENABLED_ROLE_MISSING = "enabled_role_missing"
+    ENABLED_ROLE_NOT_FOUND = "enabled_role_not_found"
+    ENABLED_ROLE_UNUSABLE = "enabled_role_unusable"
+    BOT_MEMBER_UNAVAILABLE = "bot_member_unavailable"
+    READY = "ready"
+
+
 @dataclass(frozen=True, slots=True)
 class GuildAIConfiguration:
     """Store guild-scoped AI capability settings independently from guild policy.
@@ -46,3 +59,22 @@ class GuildAIConfiguration:
             return GuildAIConfigurationState.ENABLED_ROLE_MISSING
 
         return GuildAIConfigurationState.ENABLED
+
+
+@dataclass(frozen=True, slots=True)
+class GuildAIConfigurationInspection:
+    """Combine persisted AI settings with live Discord role validation."""
+
+    guild_id: int
+    state: GuildAIConfigurationInspectionState
+    configuration: GuildAIConfiguration | None
+    role_name: str | None = None
+
+    @property
+    def is_ready_for_workflows(self) -> bool:
+        """Return whether config-server may continue into workflow setup."""
+
+        return self.state in {
+            GuildAIConfigurationInspectionState.DISABLED,
+            GuildAIConfigurationInspectionState.READY,
+        }
