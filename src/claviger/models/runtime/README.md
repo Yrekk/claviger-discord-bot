@@ -12,6 +12,7 @@ Modèles décrivant l'état d'exécution et de diagnostic de l'application :
 - identité locale d'une guild ;
 - readiness ;
 - état runtime par guild ;
+- configuration IA partagée au niveau d'une guild ;
 - inspection de la configuration d'une guild ;
 - métriques de configuration ;
 - inspection de la policy effective pendant la phase de compatibilité ;
