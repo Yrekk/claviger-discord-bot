@@ -19,7 +19,7 @@ branche feature dédiée
 → validation locale du développeur
 → smoke Discord si nécessaire
 → corrections sur la feature
-→ merge uniquement après acceptation explicite du développeur
+→ PR/merge uniquement après acceptation explicite du développeur
 ```
 
 La branche d'intégration actuelle est :
@@ -29,6 +29,43 @@ refactor/generic-workflows-v11
 ```
 
 `develop` reste hors périmètre jusqu'à la fermeture fonctionnelle de V1.1.
+
+## Chaîne de branches après fermeture V1.1
+
+La chaîne de promotion validée pour Claviger est :
+
+```text
+feature/*
+→ PR vers refactor/generic-workflows-v11
+→ fermeture fonctionnelle V1.1
+→ PR vers develop
+→ PR/promotion vers deploy/succumbrae
+→ déploiement sur Succumbrae
+→ smoke et validation production
+→ seulement après validation à 100 % : promotion vers main
+```
+
+`main` est la branche **STABLE**. Elle ne sert pas de branche de validation de déploiement et ne reçoit pas du code simplement parce que `develop` est vert.
+
+`deploy/succumbrae` est la branche de release/déploiement du serveur Succumbrae. Le CD doit donc cibler cette branche, pas `main`.
+
+Une anomalie découverte sur Succumbrae doit être corrigée avant promotion vers `main` ; `main` doit rester représentative d'un état déjà validé en conditions réelles.
+
+## Environnements `.env`
+
+Claviger utilise désormais un sélecteur d'environnement (`CLAVIGER_ENV`) afin de distinguer notamment développement et production.
+
+Le déploiement ne doit plus reconstruire un `.env` de production à partir d'un `.env` de développement. La procédure cible est :
+
+```text
+configuration production existante
+→ copie/reprise du profil de production (.env.production)
+→ adaptation du .env / sélecteur d'environnement pour le conteneur cible
+→ validation docker compose
+→ démarrage
+```
+
+Les secrets restent hors Git et hors image Docker. Lors d'une évolution des variables attendues, comparer la configuration de production avec `.env.example` et mettre à jour le serveur avant le nouveau conteneur.
 
 ## Répartition des responsabilités
 
@@ -41,7 +78,7 @@ refactor/generic-workflows-v11
 - créer des commits cohérents sur la branche feature ;
 - expliquer les responsabilités, flux et risques ;
 - ne jamais merger seule vers la branche d'intégration ;
-- ne jamais toucher `develop` sans décision explicite du développeur.
+- ne jamais promouvoir vers `develop`, `deploy/succumbrae` ou `main` sans décision explicite du développeur.
 
 ### Développeur
 
@@ -50,7 +87,8 @@ refactor/generic-workflows-v11
 - exécuter les tests et smoke tests ;
 - challenger les choix ;
 - décider si la tranche est acceptée ;
-- décider du merge.
+- décider des PR/merges et de chaque promotion de branche ;
+- valider le déploiement réel avant toute promotion vers `main`.
 
 ## Ordre de validation
 
@@ -98,6 +136,7 @@ Quand une session devient longue ou approche de sa limite :
 2. noter branche et dernier commit fonctionnel validé ;
 3. distinguer clairement `validé`, `implémenté mais pas smoké`, `décidé mais pas implémenté` ;
 4. écrire la prochaine tranche exacte ;
-5. conserver les anomalies observées et les smoke tests restant à faire.
+5. conserver les anomalies observées et les smoke tests restant à faire ;
+6. rappeler la chaîne de promotion jusqu'à `main` si la session approche de la fermeture/release.
 
 Une nouvelle session doit relire la passation puis vérifier le code réel avant de continuer.
