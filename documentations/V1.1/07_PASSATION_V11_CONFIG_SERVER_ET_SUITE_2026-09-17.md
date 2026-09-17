@@ -295,3 +295,39 @@ Convention de validation locale : lorsqu'une séquence ordonnée est donnée et 
 - tests miroir correspondants.
 
 Avant toute modification, vérifier le HEAD réel de `feature/v11-ai-config-server` et comparer avec le commit fonctionnel de référence ci-dessus.
+
+---
+
+## 11. Chaîne de promotion et environnement de déploiement
+
+Cette règle est structurante pour la fermeture V1.1 et remplace toute interprétation où `main` servirait de branche de préproduction.
+
+Chaîne validée :
+
+```text
+feature/*
+→ PR vers refactor/generic-workflows-v11
+→ fermeture V1.1
+→ PR vers develop
+→ PR/promotion vers deploy/succumbrae
+→ déploiement réel sur Succumbrae
+→ smoke et validation production
+→ seulement si le déploiement est validé à 100 % : promotion vers main
+```
+
+La branche distante de déploiement existe sous le nom exact `deploy/succumbrae`.
+
+`main` est la branche **STABLE** : elle ne reçoit que du code déjà validé en production. Le futur CD doit donc partir de `deploy/succumbrae` et non de `main`.
+
+### Environnements
+
+Le projet utilise désormais `CLAVIGER_ENV` pour sélectionner l'environnement. Lors du déploiement V1.1 :
+
+- repartir de la configuration de production existante / `.env.production` ;
+- adapter le `.env` servant de sélecteur pour le nouveau conteneur ;
+- comparer les variables attendues avec `.env.example` ;
+- ne jamais recopier aveuglément le `.env` de développement vers le serveur ;
+- valider la configuration Compose avant démarrage ;
+- conserver secrets et fichiers d'environnement de production hors Git et hors image Docker.
+
+La mise à jour de l'environnement du serveur fait partie du plan de déploiement V1.1 au même titre que le backup SQLite, la migration et le smoke post-déploiement.
