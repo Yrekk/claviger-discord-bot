@@ -7,7 +7,7 @@ Ce domaine regroupe notamment :
 - l'identité Discord de l'application et des guilds ;
 - la readiness d'une guild ;
 - l'ownership de la base de données ;
-- la configuration et la validation live de l'option IA d'une guild ;
+- la configuration IA partagée d'une guild, sa validation live et le provisioning de son rôle réservé ;
 - l'inspection de configuration runtime ;
 - les contrôles d'autorisation transversaux ;
 - le bootstrap de policy encore conservé pendant la phase de compatibilité.

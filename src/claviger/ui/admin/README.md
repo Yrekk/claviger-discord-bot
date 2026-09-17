@@ -6,8 +6,8 @@
 
 # UI ADMIN
 
-Composants Discord utilisés pour guider la configuration ADMIN d'une guild.
+Composants Discord utilisés pour guider la configuration ADMIN d'une guild et l'étape IA partagée de `config-server`.
 
 Ils présentent les choix, recueillent la décision humaine et appellent les services de configuration.
 
-Ils ne doivent pas dupliquer discovery, reconciliation ou provisioning.
+Ils ne doivent pas dupliquer discovery, reconciliation, validation métier ou provisioning.

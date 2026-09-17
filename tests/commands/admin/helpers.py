@@ -9,6 +9,11 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.models.runtime.guild_ai_configuration_model import (
+    GuildAIConfiguration,
+    GuildAIConfigurationInspection,
+    GuildAIConfigurationInspectionState,
+)
 from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
 )
@@ -21,6 +26,9 @@ from claviger.services.admin.admin_configuration_coordinator_service import (
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
+)
+from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
+    GuildAIConfigurationCoordinatorService,
 )
 from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
@@ -85,6 +93,9 @@ def create_test_group(
     database_ownership_service: DatabaseOwnershipService | None = None,
     admin_configuration_coordinator_service: (
         AdminConfigurationCoordinatorService | None
+    ) = None,
+    ai_configuration_coordinator_service: (
+        GuildAIConfigurationCoordinatorService | None
     ) = None,
     workflow_configuration_coordinator_service: (
         WorkflowConfigurationCoordinatorService | None
@@ -158,6 +169,32 @@ def create_test_group(
         )
         admin_configuration_coordinator_service.configure = AsyncMock()
 
+    if ai_configuration_coordinator_service is None:
+        ai_configuration_coordinator_service = Mock(
+            spec=GuildAIConfigurationCoordinatorService,
+        )
+
+        async def inspect_disabled(guild: discord.Guild) -> GuildAIConfigurationInspection:
+            """Expose the default test guild as explicitly AI-disabled."""
+
+            return GuildAIConfigurationInspection(
+                guild_id=guild.id,
+                state=GuildAIConfigurationInspectionState.DISABLED,
+                configuration=GuildAIConfiguration(
+                    guild_id=guild.id,
+                    ai_enabled=False,
+                    ai_role_id=None,
+                ),
+            )
+
+        ai_configuration_coordinator_service.inspect = AsyncMock(
+            side_effect=inspect_disabled,
+        )
+        ai_configuration_coordinator_service.enable = AsyncMock()
+        ai_configuration_coordinator_service.disable = AsyncMock()
+        ai_configuration_coordinator_service.assign_role = AsyncMock()
+        ai_configuration_coordinator_service.create_and_assign_role = AsyncMock()
+
     if workflow_configuration_coordinator_service is None:
         workflow_configuration_coordinator_service = Mock(
             spec=WorkflowConfigurationCoordinatorService,
@@ -182,6 +219,7 @@ def create_test_group(
         role_discovery_service=role_discovery_service,
         guild_policy_bootstrap_service=guild_policy_bootstrap_service,
         admin_configuration_coordinator_service=admin_configuration_coordinator_service,
+        ai_configuration_coordinator_service=ai_configuration_coordinator_service,
         workflow_configuration_coordinator_service=workflow_configuration_coordinator_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
@@ -317,6 +355,9 @@ def get_config_server_command(
     *,
     database_state: DatabaseState = DatabaseState.READY,
     database_ownership_bound: bool = True,
+    ai_configuration_coordinator_service: (
+        GuildAIConfigurationCoordinatorService | None
+    ) = None,
 ):
     """Create and retrieve the dynamic /{bot} config-server command."""
 
@@ -326,6 +367,7 @@ def get_config_server_command(
     group, _, _, _, _ = create_test_group(
         role_discovery_service,
         admin_configuration_coordinator_service=coordinator,
+        ai_configuration_coordinator_service=ai_configuration_coordinator_service,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,
     )
