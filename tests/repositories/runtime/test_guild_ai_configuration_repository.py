@@ -8,12 +8,8 @@ from claviger.models.runtime.guild_ai_configuration_model import (
     GuildAIConfiguration,
     GuildAIConfigurationState,
 )
-from claviger.policies.guild_policy import GuildPolicyOverrides
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
-)
-from claviger.repositories.runtime.guild_policy_repository import (
-    GuildPolicyRepository,
 )
 
 
@@ -103,7 +99,7 @@ async def test_save_and_get_enabled_ai_with_role(
 
 
 @pytest.mark.asyncio
-async def test_save_replaces_only_ai_configuration_values(
+async def test_save_replaces_complete_ai_configuration_values(
     tmp_path: Path,
 ) -> None:
     """Allow later AI choices to replace the previous persisted state."""
@@ -154,55 +150,30 @@ async def test_ai_configurations_are_isolated_by_guild(
 
 
 @pytest.mark.asyncio
-async def test_ai_save_preserves_policy_columns_in_shared_settings_row(
+async def test_save_uses_only_final_v11_guild_settings_contract(
     tmp_path: Path,
 ) -> None:
-    """Do not overwrite policy data merely because both contracts share one table."""
+    """Persist AI state without depending on any retired V1 policy columns."""
 
-    ai_repository, database = await create_repository(tmp_path)
-    policy_repository = GuildPolicyRepository(database)
-    policy = GuildPolicyOverrides(
-        member_role_name="Membre",
-        adult_access_prefix="access-",
-        adult_access_enabled=True,
-    )
-    await policy_repository.save(123, policy)
-
-    await ai_repository.save(
-        GuildAIConfiguration(
-            guild_id=123,
-            ai_enabled=True,
-            ai_role_id=999,
-        )
-    )
-
-    assert await policy_repository.get(123) == policy
-
-
-@pytest.mark.asyncio
-async def test_policy_save_preserves_ai_columns_in_shared_settings_row(
-    tmp_path: Path,
-) -> None:
-    """Keep AI data intact when the historical policy repository updates its slice."""
-
-    ai_repository, database = await create_repository(tmp_path)
-    policy_repository = GuildPolicyRepository(database)
+    repository, database = await create_repository(tmp_path)
     expected = GuildAIConfiguration(
         guild_id=123,
         ai_enabled=True,
         ai_role_id=999,
     )
-    await ai_repository.save(expected)
 
-    await policy_repository.save(
-        123,
-        GuildPolicyOverrides(
-            member_role_name="Citoyen",
-            role_management_enabled=True,
-        ),
-    )
+    await repository.save(expected)
 
-    assert await ai_repository.get(123) == expected
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
+        columns = {row[1] for row in await cursor.fetchall()}
+
+    assert columns == {
+        "guild_id",
+        "ai_enabled",
+        "ai_role_id",
+    }
+    assert await repository.get(123) == expected
 
 
 @pytest.mark.asyncio

@@ -101,14 +101,14 @@ async def test_initialize_creates_expected_tables(
 
 
 # ---------------------------------------------------------------------------
-# Legacy guild configuration
+# Guild-wide AI configuration
 # ---------------------------------------------------------------------------
 
 
 async def test_guild_settings_table_has_expected_columns(
     tmp_path: Path,
 ) -> None:
-    """Create the complete current guild settings schema."""
+    """Keep only the V11 guild-wide AI configuration contract."""
 
     database = await _create_database(
         tmp_path,
@@ -119,14 +119,6 @@ async def test_guild_settings_table_has_expected_columns(
         "guild_settings",
     ) == {
         "guild_id",
-        "member_role_name",
-        "adult_role_name",
-        "member_interest_prefix",
-        "adult_access_prefix",
-        "salutations_channel_name",
-        "adult_access_channel_name",
-        "role_management_enabled",
-        "adult_access_enabled",
         "ai_enabled",
         "ai_role_id",
     }

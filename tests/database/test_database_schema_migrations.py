@@ -185,6 +185,18 @@ async def _get_table_names(
     return {row[0] for row in rows}
 
 
+async def _get_guild_settings_columns(
+    database: DatabaseConnection,
+) -> set[str]:
+    """Return the final V11 guild-settings column contract."""
+
+    async with database.connect() as connection:
+        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
+        rows = await cursor.fetchall()
+
+    return {row[1] for row in rows}
+
+
 async def _assert_migrates_to_current_version(
     tmp_path: Path,
     historical_version: int,
@@ -239,70 +251,58 @@ async def test_migrate_upgrades_version_one_database_to_current_schema(
 async def test_migrate_upgrades_version_two_database_to_current_schema(
     tmp_path: Path,
 ) -> None:
-    """Migrate a complete version two database to the current schema."""
+    """Retire V2 policy columns when reaching the current V11 schema."""
 
     database = await _assert_migrates_to_current_version(
         tmp_path,
         historical_version=2,
     )
 
-    async with database.connect() as connection:
-        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
-
-        rows = await cursor.fetchall()
-
-    columns = {row[1] for row in rows}
-
-    assert "adult_access_channel_name" in columns
-    assert "adult_rules_channel_name" not in columns
+    assert await _get_guild_settings_columns(database) == {
+        "guild_id",
+        "ai_enabled",
+        "ai_role_id",
+    }
 
 
 async def test_migrate_upgrades_version_three_database_to_current_schema(
     tmp_path: Path,
 ) -> None:
-    """Migrate a complete version three database to the current schema."""
+    """Retire V3 policy columns when reaching the current V11 schema."""
 
     database = await _assert_migrates_to_current_version(
         tmp_path,
         historical_version=3,
     )
 
-    async with database.connect() as connection:
-        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
-
-        rows = await cursor.fetchall()
-
-    columns = {row[1] for row in rows}
-
-    assert "adult_access_channel_name" in columns
-    assert "adult_rules_channel_name" not in columns
+    assert await _get_guild_settings_columns(database) == {
+        "guild_id",
+        "ai_enabled",
+        "ai_role_id",
+    }
 
 
 async def test_migrate_upgrades_version_four_database_to_current_schema(
     tmp_path: Path,
 ) -> None:
-    """Migrate a complete version four database to the current schema."""
+    """Retire V4 policy columns when reaching the current V11 schema."""
 
     database = await _assert_migrates_to_current_version(
         tmp_path,
         historical_version=4,
     )
 
-    async with database.connect() as connection:
-        cursor = await connection.execute("PRAGMA table_info(guild_settings)")
-
-        rows = await cursor.fetchall()
-
-    columns = {row[1] for row in rows}
-
-    assert "adult_access_channel_name" in columns
-    assert "adult_rules_channel_name" not in columns
+    assert await _get_guild_settings_columns(database) == {
+        "guild_id",
+        "ai_enabled",
+        "ai_role_id",
+    }
 
 
-async def test_version_five_migration_preserves_adult_channel_value(
+async def test_version_five_legacy_channel_value_is_retired_by_v11(
     tmp_path: Path,
 ) -> None:
-    """Preserve the configured adult channel when migrating through version five."""
+    """Do not carry obsolete V1 workflow policy values into V11 settings."""
 
     database = DatabaseConnection(
         tmp_path / "claviger.db",
@@ -336,19 +336,24 @@ async def test_version_five_migration_preserves_adult_channel_value(
 
     await schema.migrate()
 
+    assert await _get_guild_settings_columns(database) == {
+        "guild_id",
+        "ai_enabled",
+        "ai_role_id",
+    }
+
     async with database.connect() as connection:
         cursor = await connection.execute(
             """
-            SELECT adult_access_channel_name
+            SELECT guild_id, ai_enabled, ai_role_id
             FROM guild_settings
             WHERE guild_id = ?
             """,
             (123,),
         )
-
         row = await cursor.fetchone()
 
-    assert row == ("adult-validation",)
+    assert row == (123, None, None)
 
 
 async def test_migrate_upgrades_version_five_database_to_current_schema(
@@ -492,4 +497,3 @@ async def test_migrate_version_eight_database_to_version_nine_preserves_data(
     )
 
     assert ownership_row == (789,)
-
