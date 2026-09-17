@@ -11,7 +11,7 @@ Ce sous-dossier regroupe les commandes administratives de Claviger.
 
 Il contient notamment les commandes ou groupes liés à :
 
-- la configuration du serveur ;
+- la configuration du serveur, avec `config-server` comme adaptateur Discord du parcours ADMIN → IA → workflows ;
 - la base de données ;
 - le diagnostic ;
 - les rôles administratifs ;
