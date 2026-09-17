@@ -61,6 +61,9 @@ from claviger.repositories.admin.guild_admin_configuration_repository import (
 from claviger.repositories.runtime.database_ownership_repository import (
     DatabaseOwnershipRepository,
 )
+from claviger.repositories.runtime.guild_ai_configuration_repository import (
+    GuildAIConfigurationRepository,
+)
 from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
@@ -89,6 +92,15 @@ from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipUnboundError,
 )
 from claviger.services.runtime.discord_identity_service import DiscordIdentityService
+from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
+    GuildAIConfigurationCoordinatorService,
+)
+from claviger.services.runtime.guild_ai_configuration_service import (
+    GuildAIConfigurationService,
+)
+from claviger.services.runtime.guild_ai_role_provisioning_service import (
+    GuildAIRoleProvisioningService,
+)
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
@@ -193,6 +205,10 @@ class ClavigerBot(discord.Client):
             self.database,
         )
 
+        self.guild_ai_configuration_repository = GuildAIConfigurationRepository(
+            self.database,
+        )
+
         self.guild_configuration_metrics_repository = (
             GuildConfigurationMetricsRepository(
                 self.database,
@@ -219,6 +235,18 @@ class ClavigerBot(discord.Client):
                     self.admin_configuration_reconciliation_service
                 ),
                 provisioning_service=self.admin_structure_provisioning_service,
+            )
+        )
+
+        # Guild-wide AI configuration pipeline
+        self.guild_ai_configuration_service = GuildAIConfigurationService(
+            self.guild_ai_configuration_repository,
+        )
+        self.guild_ai_role_provisioning_service = GuildAIRoleProvisioningService()
+        self.guild_ai_configuration_coordinator_service = (
+            GuildAIConfigurationCoordinatorService(
+                configuration_service=self.guild_ai_configuration_service,
+                provisioning_service=self.guild_ai_role_provisioning_service,
             )
         )
 
@@ -466,6 +494,9 @@ class ClavigerBot(discord.Client):
                 self.report_service,
                 admin_configuration_coordinator_service=(
                     self.admin_configuration_coordinator_service
+                ),
+                ai_configuration_coordinator_service=(
+                    self.guild_ai_configuration_coordinator_service
                 ),
                 workflow_configuration_coordinator_service=(
                     self.workflow_configuration_coordinator_service
