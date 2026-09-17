@@ -122,72 +122,39 @@ async def _insert_context(
 
 
 @pytest.mark.asyncio
-async def test_member_interest_requires_channel_mapping(
-    tmp_path: Path,
-) -> None:
-    """Reject member interests without a Discord channel mapping."""
+async def test_catalog_target_requires_channel_mapping(tmp_path: Path) -> None:
+    """Reject a role target whose Discord channel identity is missing."""
 
-    database = await _create_database(
-        tmp_path,
-    )
-
+    database = await _create_database(tmp_path)
     async with database.connect() as connection:
-        with pytest.raises(
-            aiosqlite.IntegrityError,
-        ):
+        await _insert_catalog(connection)
+        await connection.execute(
+            "INSERT INTO guild_catalog_entries (guild_id, catalog_key, entry_key) "
+            "VALUES (123, 'interests', 'test')"
+        )
+        with pytest.raises(aiosqlite.IntegrityError, match="channel_id"):
             await connection.execute(
-                """
-                INSERT INTO guild_member_interests (
-                    guild_id,
-                    role_id,
-                    role_name,
-                    interest_key
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    123,
-                    456,
-                    "interest-test",
-                    "test",
-                ),
+                "INSERT INTO guild_catalog_entry_targets "
+                "(guild_id, catalog_key, entry_key, role_id, role_name, variant) "
+                "VALUES (123, 'interests', 'test', 456, 'interest-test', 'base')"
             )
-
         await connection.rollback()
 
 
 @pytest.mark.asyncio
-async def test_adult_access_requires_channel_mapping(
-    tmp_path: Path,
-) -> None:
-    """Reject adult accesses without a Discord channel mapping."""
+async def test_catalog_target_requires_existing_entry(tmp_path: Path) -> None:
+    """Prevent orphan targets from bypassing a configured catalog entry."""
 
-    database = await _create_database(
-        tmp_path,
-    )
-
+    database = await _create_database(tmp_path)
     async with database.connect() as connection:
-        with pytest.raises(
-            aiosqlite.IntegrityError,
-        ):
+        await _insert_catalog(connection)
+        with pytest.raises(aiosqlite.IntegrityError, match="FOREIGN KEY"):
             await connection.execute(
-                """
-                INSERT INTO guild_adult_accesses (
-                    guild_id,
-                    role_id,
-                    role_name,
-                    access_key
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    123,
-                    456,
-                    "access-ia-test",
-                    "ia-test",
-                ),
+                "INSERT INTO guild_catalog_entry_targets "
+                "(guild_id, catalog_key, entry_key, role_id, role_name, channel_id, "
+                "channel_name, variant) "
+                "VALUES (123, 'interests', 'missing', 456, 'r', 789, 'c', 'base')"
             )
-
         await connection.rollback()
 
 

@@ -227,8 +227,8 @@ async def test_migrate_upgrades_version_one_database_to_current_schema(
 
     assert {
         "guild_settings",
-        "guild_member_interests",
-        "guild_adult_accesses",
+        "guild_catalog_entries",
+        "guild_catalog_entry_targets",
         "guild_catalogs",
         "guild_workflows",
         "guild_workflow_catalogs",
@@ -492,3 +492,4 @@ async def test_migrate_version_eight_database_to_version_nine_preserves_data(
     )
 
     assert ownership_row == (789,)
+

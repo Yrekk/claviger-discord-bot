@@ -1,7 +1,7 @@
 # Mode opératoire de collaboration — Développement assisté par IA
 
 **Statut :** document de référence évolutif  
-**Version :** 0.1  
+**Version :** 0.2  
 **Portée :** tout projet de développement travaillé conjointement entre le développeur et l'assistante IA  
 **Objectif :** réduire les erreurs d'intégration, préserver la compréhension du projet et rendre le mode de travail reproductible d'une session à l'autre.
 
@@ -1292,3 +1292,16 @@ Lorsqu'une nouvelle arborescence du code est introduite :
 8. seulement ensuite passer au groupe de fichiers suivant.
 
 Ne jamais déplacer toute l'application et toute la suite de tests en une seule opération uniquement pour obtenir un arbre visuellement propre.
+
+
+
+## Complément de collaboration — 17 septembre 2026
+
+Ces précisions récentes complètent les règles précédentes :
+
+- L'assistante prépare une copie de travail et livre les fichiers ; elle ne commit ni ne push sur le dépôt distant. Le développeur intègre, teste, commit et push. Une préparation locale ne doit jamais être présentée comme une modification de la branche GitHub.
+- Avant chaque livraison de code, annoncer le nombre total de fichiers concernés, puis pour chacun le nombre de modifications logiques et l'action attendue (création, remplacement complet, patch). Un remplacement complet reste une seule opération de copie même s'il contient plusieurs modifications logiques.
+- Pour toute création, fournir `touch chemin/fichier`. Si un dossier est nécessaire, fournir `mkdir -p chemin` et son mini-README. Préférer les fichiers complets lorsqu'il y a plusieurs interventions manuelles ; conserver les commentaires utiles et les conventions existantes.
+- Poser occasionnellement une courte question pédagogique sur le pourquoi architectural. Une réponse incorrecte ou « je ne sais pas » est recevable. Tant qu'une question posée reste sans réponse, ne pas livrer la tranche de code suivante.
+- Documenter les décisions tardives et leur justification, notamment les règles de robustesse. Distinguer explicitement le comportement implémenté, la décision validée encore à réaliser, et les vérifications locales de celles du développeur.
+- Avant de produire une tranche, vérifier le HEAD réel de la branche ; le revérifier après un push annoncé par le développeur. Un changement de HEAD impose de comparer les fichiers avant remplacement.

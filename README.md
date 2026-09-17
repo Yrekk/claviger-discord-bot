@@ -1,5 +1,17 @@
 # Claviger
 
+## Livraison stockage V11 — 17 septembre 2026
+
+Tranche préparée depuis `refactor/generic-workflows-v11`, commit `8353649`.
+Après intégration de ces fichiers, le schéma cible est **V11**. La migration et ses tests sont implémentés ; l'intégration locale et le commit restent à effectuer par le développeur.
+
+**État transitoire : ne pas démarrer cette tranche contre les bases réelles.** Le wizard actuel écrit encore la préférence IA dans les anciens contextes ; son adaptation à `guild_settings` est le prochain chantier. Le runtime générique reste à construire. Les anciens moteurs spécialisés ont déjà été retirés de cette branche : leurs descriptions ci-dessous servent de référence historique, pas de garantie de disponibilité.
+
+Validation locale sur données synthétiques : **488 tests réussis**, contre 444 au checkpoint initial, Ruff sans erreur. Aucun test Discord réel ni migration des bases de production/développement n'a été effectué.
+
+Lire [le contrat et la passation de cette tranche](documentations/V1.1/06_Migration_V11_Contrat_et_Passation.md) pour les décisions récentes, les limites, les fichiers et les commandes de validation. Ce complément actualise les sections antérieures concernant la prochaine migration et la configuration IA.
+
+
 Claviger est un bot Discord développé en Python pour automatiser la gestion d'accès, de préférences et de rôles à partir de workflows contrôlés par le serveur.
 
 Le projet est né d'un besoin concret : permettre aux utilisateurs de gérer eux-mêmes certains de leurs accès Discord sans transformer le bot en simple couche de commandes impératives.
@@ -52,7 +64,7 @@ La réorganisation architecturale de fin de V1.1 est terminée sur la branche de
 - mini-README dans les dossiers fonctionnels ;
 - anciens shims plats devenus inutiles supprimés.
 
-Le schéma SQLite courant reste **V10**. Le prochain chantier fonctionnel est la **Migration V11**. L'exécution runtime entièrement générique des workflows persistés reste à construire.
+Le schéma cible de la tranche livrée est **V11**. Le prochain chantier est l’adaptation de `config-server` aux paramètres IA de guild. L'exécution runtime entièrement générique des workflows persistés reste à construire.
 
 La roadmap opérationnelle du reste de la V1.1 est maintenue dans :
 
@@ -916,7 +928,7 @@ Il ne donne pas au bot un accès au socket Docker ni à l'hôte.
 
 # Tests
 
-Claviger dispose de plus de **560 tests automatisés**.
+La suite exécutée pour cette tranche compte **488 tests réussis** (444 avant la migration V11).
 
 Ils couvrent notamment :
 
@@ -1517,3 +1529,4 @@ Claviger est aujourd'hui à la fois :
 - un laboratoire d'architecture logicielle ;
 - un terrain d'expérimentation autour de l'automatisation ;
 - un exemple documenté de développement logiciel fortement assisté par intelligence artificielle.
+

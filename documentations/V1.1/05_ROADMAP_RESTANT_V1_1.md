@@ -1,10 +1,22 @@
 # ROADMAP — reste à faire pour Claviger V1.1
 
+## Livraison stockage V11 — 17 septembre 2026
+
+Tranche préparée depuis `refactor/generic-workflows-v11`, commit `8353649`.
+Après intégration de ces fichiers, le schéma cible est **V11**. La migration et ses tests sont implémentés ; l'intégration locale et le commit restent à effectuer par le développeur.
+
+**État transitoire : ne pas démarrer cette tranche contre les bases réelles.** Le wizard actuel écrit encore la préférence IA dans les anciens contextes ; son adaptation à `guild_settings` est le prochain chantier. Le runtime générique reste à construire. Les anciens moteurs spécialisés ont déjà été retirés de cette branche : leurs descriptions ci-dessous servent de référence historique, pas de garantie de disponibilité.
+
+Validation locale sur données synthétiques : **488 tests réussis**, contre 444 au checkpoint initial, Ruff sans erreur. Aucun test Discord réel ni migration des bases de production/développement n'a été effectué.
+
+Lire [le contrat et la passation de cette tranche](06_Migration_V11_Contrat_et_Passation.md) pour les décisions récentes, les limites, les fichiers et les commandes de validation. Ce complément actualise les sections antérieures concernant la prochaine migration et la configuration IA.
+
+
 État de référence : 16 septembre 2026.
 
 Branche de travail : `refactor/generic-workflows-v11`.
 
-Schéma SQLite courant : **V10**.
+Schéma au checkpoint initial : **V10** ; cible de la tranche livrée : **V11**.
 
 Ce document est volontairement autonome. Il doit permettre à une nouvelle session de reprendre la fin de V1.1 sans réinterpréter les anciens prompts, sans refaire le nettoyage architectural déjà terminé et sans introduire de logique métier historique comme nouvelle architecture.
 
@@ -89,7 +101,7 @@ Le wizard sait déjà gérer des ressources `existing` ou `create`, construire u
 
 **Attention : ceci ne signifie pas que l'exécution runtime des workflows persistés est générique.**
 
-Les façades historiques `/membre` et `/noctis` possèdent encore leurs moteurs d'exécution explicites.
+Les anciens moteurs spécialisés `/membre` et `/noctis` ont été retirés ; leur remplacement par le runtime générique reste à construire.
 
 ## Réorganisation architecturale de fin de V1.1
 
@@ -149,7 +161,7 @@ guild_settings.ai_role_id
 
 Contraintes :
 
-- `ai_enabled` stocké comme booléen SQLite contrôlé (`0/1`) ;
+- `ai_enabled` nullable : `NULL` non configuré, `0` désactivé, `1` activé ;
 - `ai_role_id` nullable ;
 - l'identité durable du rôle IA est son ID Discord ;
 - la configuration d'un workflow ne doit plus créer une vérité IA parallèle par workflow.
@@ -463,3 +475,4 @@ python -m pytest -q
 ```
 
 Ne pas sauter directement à l'étape IA/agentique, à la V1.2 ou à l'administration Web tant que ce socle V1.1 n'est pas fermé.
+

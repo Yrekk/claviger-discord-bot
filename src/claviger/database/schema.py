@@ -3,8 +3,9 @@ from collections.abc import Sequence
 import aiosqlite
 
 from claviger.database.connection import DatabaseConnection
+from claviger.database.migration_v11 import MIGRATION_11_STATEMENTS, migrate_v11_data
 
-CURRENT_SCHEMA_VERSION = 10
+CURRENT_SCHEMA_VERSION = 11
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -415,6 +416,7 @@ MIGRATIONS: dict[int, Sequence[str]] = {
             )
         """,
     ),
+    11: MIGRATION_11_STATEMENTS,
 }
 
 
@@ -510,6 +512,7 @@ class DatabaseSchema:
             await self._apply_migration(
                 connection,
                 version,
+                transfer_legacy_data=current_version != 0,
             )
 
     async def _get_version(
@@ -531,6 +534,8 @@ class DatabaseSchema:
         self,
         connection: aiosqlite.Connection,
         version: int,
+        *,
+        transfer_legacy_data: bool = True,
     ) -> None:
         """Apply one schema migration atomically."""
 
@@ -549,10 +554,20 @@ class DatabaseSchema:
             for statement in statements:
                 await connection.execute(statement)
 
+            if version == 11:
+                # A newly initialized application cannot have historical rows.
+                # Keep that fact explicit instead of probing empty legacy tables.
+                await migrate_v11_data(
+                    connection,
+                    transfer_legacy_data=transfer_legacy_data,
+                )
+
             await connection.execute(f"PRAGMA user_version = {version}")
 
             await connection.commit()
 
-        except (aiosqlite.Error, RuntimeError):
+        except BaseException:
+            # Also roll back conversion errors and cancellation. Re-raising
+            # preserves the original failure; this boundary never swallows it.
             await connection.rollback()
             raise

@@ -84,8 +84,8 @@ async def test_initialize_creates_expected_tables(
 
     assert {
         "guild_settings",
-        "guild_member_interests",
-        "guild_adult_accesses",
+        "guild_catalog_entries",
+        "guild_catalog_entry_targets",
         "guild_catalogs",
         "guild_workflows",
         "guild_workflow_catalogs",
@@ -97,6 +97,7 @@ async def test_initialize_creates_expected_tables(
     }.issubset(
         table_names,
     )
+    assert not {"guild_member_interests", "guild_adult_accesses"} & table_names
 
 
 # ---------------------------------------------------------------------------
@@ -126,64 +127,40 @@ async def test_guild_settings_table_has_expected_columns(
         "adult_access_channel_name",
         "role_management_enabled",
         "adult_access_enabled",
+        "ai_enabled",
+        "ai_role_id",
     }
 
 
-async def test_member_interests_table_has_expected_columns(
-    tmp_path: Path,
-) -> None:
-    """Create the complete legacy member interests catalog schema."""
+async def test_catalog_entries_table_has_expected_columns(tmp_path: Path) -> None:
+    """Store questionnaire metadata once per logical catalog entry."""
 
-    database = await _create_database(
-        tmp_path,
-    )
-
-    assert await _get_column_names(
-        database,
-        "guild_member_interests",
-    ) == {
+    database = await _create_database(tmp_path)
+    assert await _get_column_names(database, "guild_catalog_entries") == {
         "guild_id",
-        "role_id",
-        "role_name",
-        "interest_key",
-        "channel_id",
-        "channel_name",
+        "catalog_key",
+        "entry_key",
         "label",
         "description",
         "emoji",
         "sort_order",
         "enabled",
-        "discord_present",
-        "role_manageable",
-        "channel_present",
-        "mapping_valid",
-        "matches_policy",
     }
 
 
-async def test_adult_accesses_table_has_expected_columns(
-    tmp_path: Path,
-) -> None:
-    """Create the complete legacy adult access catalog schema."""
+async def test_catalog_entry_targets_table_has_expected_columns(tmp_path: Path) -> None:
+    """Keep each Discord target's identity and availability independent."""
 
-    database = await _create_database(
-        tmp_path,
-    )
-
-    assert await _get_column_names(
-        database,
-        "guild_adult_accesses",
-    ) == {
+    database = await _create_database(tmp_path)
+    assert await _get_column_names(database, "guild_catalog_entry_targets") == {
         "guild_id",
+        "catalog_key",
+        "entry_key",
         "role_id",
         "role_name",
-        "access_key",
         "channel_id",
         "channel_name",
-        "label",
-        "description",
-        "emoji",
-        "sort_order",
+        "variant",
         "enabled",
         "discord_present",
         "role_manageable",
