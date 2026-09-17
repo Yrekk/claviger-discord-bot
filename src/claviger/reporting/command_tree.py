@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Awaitable, Callable
 
 import discord
 from discord import app_commands
@@ -6,6 +7,8 @@ from discord import app_commands
 from claviger.reporting.command_observability import CommandObservabilityService
 
 logger = logging.getLogger(__name__)
+
+CompletionCallback = Callable[[], Awaitable[None]]
 
 
 class ClavigerCommandTree(app_commands.CommandTree):
@@ -16,6 +19,11 @@ class ClavigerCommandTree(app_commands.CommandTree):
     ``on_app_command_completion`` event for commands that returned normally.
     Claviger uses this tree as the error boundary and lets ``ClavigerBot`` forward
     the completion event back here. This avoids command-by-command logging hooks.
+
+    Commands may also register one-shot callbacks that must run only after
+    discord.py has emitted the completion event. This is notably used by runtime
+    restart so the Discord client is never closed while its command dispatcher is
+    still unwinding the slash-command callback.
     """
 
     def __init__(
@@ -30,12 +38,30 @@ class ClavigerCommandTree(app_commands.CommandTree):
         # created. Resolve the service lazily on the first real command instead
         # of introducing a circular construction dependency in ClavigerBot.
         self._command_observability_service: CommandObservabilityService | None = None
+        self._completion_callbacks: dict[str, CompletionCallback] = {}
+
+    def defer_until_completion(
+        self,
+        interaction_token: str,
+        callback: CompletionCallback,
+    ) -> None:
+        """Register one action to run after this exact interaction completes."""
+
+        if not interaction_token:
+            raise ValueError("Interaction token is required for deferred completion.")
+
+        if interaction_token in self._completion_callbacks:
+            raise RuntimeError(
+                "A completion callback is already registered for this interaction."
+            )
+
+        self._completion_callbacks[interaction_token] = callback
 
     async def record_completion(
         self,
         interaction: discord.Interaction,
     ) -> None:
-        """Record a completed command without turning reporting into a new failure."""
+        """Record completion, then execute any matching deferred lifecycle action."""
 
         try:
             await self._get_command_observability_service().record_completion(
@@ -49,6 +75,24 @@ class ClavigerCommandTree(app_commands.CommandTree):
                 "Unable to record application-command completion."
             )
 
+        callback = self._completion_callbacks.pop(
+            interaction.token,
+            None,
+        )
+
+        if callback is None:
+            return
+
+        try:
+            await callback()
+
+        except Exception:
+            # The command already completed successfully. A deferred lifecycle
+            # action therefore cannot be routed through the command error path.
+            logger.exception(
+                "Unable to execute deferred application-command completion action."
+            )
+
     async def on_error(
         self,
         interaction: discord.Interaction,
@@ -56,6 +100,13 @@ class ClavigerCommandTree(app_commands.CommandTree):
         /,
     ) -> None:
         """Separate expected rejections from unexpected command failures."""
+
+        # A command that failed never reached the normal completion boundary.
+        # Discard any action that was meant to happen only after success.
+        self._completion_callbacks.pop(
+            interaction.token,
+            None,
+        )
 
         service = self._get_command_observability_service()
 

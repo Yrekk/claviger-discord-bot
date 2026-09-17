@@ -47,8 +47,30 @@ def create_restart_command(
             interaction_token=interaction.token,
         )
 
-        await restart_callback(
-            restart_request,
+        command_tree = getattr(
+            interaction.client,
+            "tree",
+            None,
+        )
+        defer_until_completion = getattr(
+            command_tree,
+            "defer_until_completion",
+            None,
+        )
+
+        if not callable(defer_until_completion):
+            raise RuntimeError(
+                "Runtime restart requires a command tree completion scheduler."
+            )
+
+        # Closing discord.py from inside the command callback destroys its event
+        # loop reference before CommandTree can dispatch app_command_completion.
+        # Execute the restart only from that explicit completion boundary.
+        defer_until_completion(
+            interaction.token,
+            lambda: restart_callback(
+                restart_request,
+            ),
         )
 
     return restart
