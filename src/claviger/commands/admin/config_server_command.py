@@ -6,11 +6,17 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
+from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
+    GuildAIConfigurationCoordinatorService,
+)
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
 from claviger.ui.admin.admin_configuration_view import (
     run_admin_configuration,
+)
+from claviger.ui.admin.guild_ai_configuration_view import (
+    run_guild_ai_configuration,
 )
 from claviger.ui.workflows.workflow_configuration_view import (
     run_workflow_configuration,
@@ -19,6 +25,7 @@ from claviger.ui.workflows.workflow_configuration_view import (
 
 def create_config_server_command(
     admin_coordinator: AdminConfigurationCoordinatorService,
+    ai_configuration_coordinator: GuildAIConfigurationCoordinatorService,
     workflow_coordinator: WorkflowConfigurationCoordinatorService,
     *,
     admin_command_name: str,
@@ -35,7 +42,7 @@ def create_config_server_command(
     async def config_server(
         interaction: discord.Interaction,
     ) -> None:
-        """Run server configuration from ADMIN readiness into workflow setup."""
+        """Run server configuration from ADMIN through AI into workflow setup."""
 
         # Server configuration is always guild-scoped. DM execution must never
         # attempt to infer or reuse a Discord guild from another runtime state.
@@ -100,17 +107,35 @@ def create_config_server_command(
 
         if not admin_ready:
             # IMPORT, NEEDS_CHOICE and incomplete COMPLETE paths already expose
-            # their own interactive ADMIN continuation. Workflows must not start
-            # until that routing has actually been persisted.
+            # their own interactive ADMIN continuation. Later stages must not
+            # start until that routing has actually been persisted.
             return
 
-        # From this point the ADMIN backend is persistently ready. The Discord
-        # frontend may now collect workflow choices over the shared backend
-        # contract introduced by the workflow configuration pipeline.
-        await run_workflow_configuration(
+        async def continue_workflow_configuration(
+            source_interaction: discord.Interaction,
+        ) -> None:
+            """Open workflow setup after the shared guild AI stage is ready."""
+
+            await run_workflow_configuration(
+                source_interaction,
+                coordinator=workflow_coordinator,
+                admin_command_name=admin_command_name,
+            )
+
+        # The Discord command does not interpret AI states itself. The dedicated
+        # backend coordinator and UI adapter decide whether the guild may proceed
+        # immediately or must collect/repair the shared AI configuration first.
+        ai_ready = await run_guild_ai_configuration(
             interaction,
-            coordinator=workflow_coordinator,
-            admin_command_name=admin_command_name,
+            coordinator=ai_configuration_coordinator,
+            continuation=continue_workflow_configuration,
+        )
+
+        if not ai_ready:
+            return
+
+        await continue_workflow_configuration(
+            interaction,
         )
 
     return config_server
