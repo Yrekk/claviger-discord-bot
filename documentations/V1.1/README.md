@@ -1,48 +1,39 @@
-# Documentation V1.1
+# Documentation V1.1 — index de reprise
 
-## Livraison stockage V11 — 17 septembre 2026
+Ce dossier contient les documents de continuité fonctionnelle et architecturale de Claviger V1.1.
 
-Tranche préparée depuis `refactor/generic-workflows-v11`, commit `8353649`.
-Après intégration de ces fichiers, le schéma cible est **V11**. La migration et ses tests sont implémentés ; l'intégration locale et le commit restent à effectuer par le développeur.
+## Reprise prioritaire
 
-**État transitoire : ne pas démarrer cette tranche contre les bases réelles.** Le wizard actuel écrit encore la préférence IA dans les anciens contextes ; son adaptation à `guild_settings` est le prochain chantier. Le runtime générique reste à construire. Les anciens moteurs spécialisés ont déjà été retirés de cette branche : leurs descriptions ci-dessous servent de référence historique, pas de garantie de disponibilité.
+Pour reprendre le projet après une coupure de session, lire d'abord :
 
-Validation locale sur données synthétiques : **488 tests réussis**, contre 444 au checkpoint initial, Ruff sans erreur. Aucun test Discord réel ni migration des bases de production/développement n'a été effectué.
+1. `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` ;
+2. `05_ROADMAP_RESTANT_V1_1.md` ;
+3. le HEAD réel de la branche feature indiquée dans la passation.
 
-Lire [le contrat et la passation de cette tranche](06_Migration_V11_Contrat_et_Passation.md) pour les décisions récentes, les limites, les fichiers et les commandes de validation. Ce complément actualise les sections antérieures concernant la prochaine migration et la configuration IA.
-
-
-Ce dossier regroupe les documents spécifiques au développement de Claviger V1.1.
-
-La V1.1 vise notamment :
-
-- le runtime multi-guild ;
-- la configuration ADMIN par guild ;
-- les workflows configurables ;
-- la réduction des dépendances historiques à un serveur unique ;
-- la robustesse face aux états partiels ;
-- une architecture réutilisable par Discord, une future administration Web et de futurs tools IA.
+Le code courant et les décisions les plus récentes priment sur les documents historiques.
 
 ## État actuel
 
-Le socle multi-guild, la configuration ADMIN, le reporting par guild et la configuration générique d'un workflow jusqu'à sa persistence sont implémentés.
+Au checkpoint du 17 septembre 2026 :
 
-La réorganisation architecturale de fin de V1.1 est également terminée sur `refactor/generic-workflows-v11` : domaines fonctionnels séparés, tests rangés en miroir, mini-README et suppression des anciens shims plats devenus inutiles.
-
-Le schéma SQLite courant reste **V10**. Le prochain chantier fonctionnel est la **Migration V11**, puis le moteur générique de catalogue/questionnaire et la liaison explicite entre workflows persistés et exécution runtime.
+- schéma SQLite V11 ;
+- migration V10 → V11 validée sur playground représentatif ;
+- `guild_settings` final limité à `guild_id`, `ai_enabled`, `ai_role_id` ;
+- ancien contexte `ai_preference` retiré ;
+- restart Discord corrigé et smoké ;
+- flux `config-server` validé jusqu'à `ADMIN → IA → workflows` ;
+- configuration du rôle IA global validée ;
+- prochaine tranche : réservations/filtrage des rôles workflow + annotation des structures déjà utilisées.
 
 ## Documents
 
-Les documents numérotés suivent l'évolution du projet :
+- `00_Prompt_maitre_continuite_Claviger_V1_1.pdf` : cadrage historique de continuité ;
+- `01_Claviger_Retrospective_Interventions_Humaines_V1_1.pdf` : rétrospective ;
+- `02_Configuration_Workflows_V1_1.md` : architecture du wizard générique ;
+- `03_Arborescence_Cible_Fin_V1_1.md` : cible de réorganisation déjà réalisée ;
+- `04_Prompt_Reorganisation_Arborescence_Fin_V1_1.md` : historique de la réorganisation ;
+- `05_ROADMAP_RESTANT_V1_1.md` : roadmap actuelle ;
+- `06_Migration_V11_Contrat_et_Passation.md` : contrat initial de la tranche migration V11 ;
+- `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` : **passation opérationnelle courante**.
 
-- `00_Prompt_maitre_continuite_Claviger_V1_1.pdf` : cadrage de continuité historique ;
-- `01_Claviger_Retrospective_Interventions_Humaines_V1_1.pdf` : rétrospective des interventions ;
-- `02_Configuration_Workflows_V1_1.md` : état du wizard et de la configuration générique des workflows ;
-- `03_Arborescence_Cible_Fin_V1_1.md` : cible utilisée pour la réorganisation architecturale ;
-- `04_Prompt_Reorganisation_Arborescence_Fin_V1_1.md` : prompt ayant cadré cette réorganisation ;
-- `05_ROADMAP_RESTANT_V1_1.md` : **source de reprise prioritaire pour le reste de la V1.1**.
-
-La documentation de continuité décrit l'état d'une période donnée. Le code de la branche de travail reste la source de vérité lorsqu'il a évolué depuis.
-
-Pour reprendre la fin de V1.1 dans une nouvelle session, lire en priorité le README principal puis `05_ROADMAP_RESTANT_V1_1.md`. Ne pas recommencer la réorganisation d'arborescence : elle est considérée terminée.
-
+La branche d'intégration V1.1 reste `refactor/generic-workflows-v11`. `develop` ne doit pas être touchée avant fermeture et validation explicite de la V1.1.
