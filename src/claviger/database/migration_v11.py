@@ -101,6 +101,8 @@ _SOURCES = (
     ),
 )
 
+_VARIANT_COLLISION_SUFFIX = "--ai-variants"
+
 
 async def _fetchall(
     connection: aiosqlite.Connection,
@@ -185,12 +187,36 @@ async def _resolve_catalog(
     return catalog_key
 
 
+def _allocate_variant_entry_key(
+    theme_key: str,
+    *,
+    singleton_keys: set[str],
+    variant_theme_keys: set[str],
+    used_keys: set[str],
+) -> str:
+    """Disambiguate a paired AI family from a generic access of the same name."""
+
+    if theme_key not in used_keys:
+        return theme_key
+
+    stem = f"{theme_key}{_VARIANT_COLLISION_SUFFIX}"
+    candidate = stem
+    suffix = 2
+    reserved_keys = singleton_keys | variant_theme_keys
+
+    while candidate in reserved_keys or candidate in used_keys:
+        candidate = f"{stem}-{suffix}"
+        suffix += 1
+
+    return candidate
+
+
 def _classify_rows(
     source: _LegacyCatalog,
     rows: list[aiosqlite.Row],
     guild_id: int,
 ) -> list[tuple[str, list[tuple[aiosqlite.Row, str]]]]:
-    """Group historical variants; ordinary keys remain literal singletons."""
+    """Group historical variants; ordinary generic accesses stay independent."""
 
     by_key: dict[str, aiosqlite.Row] = {}
     for row in rows:
@@ -210,11 +236,19 @@ def _classify_rows(
             f"Guild {guild_id}: invalid historical access variants."
         )
 
-    groups: list[tuple[str, list[tuple[aiosqlite.Row, str]]]] = []
+    singleton_groups = [
+        (key, [(by_key[key], "base")])
+        for key in classification.solo_keys
+    ]
+    singleton_keys = {key for key, _ in singleton_groups}
+
+    pair_groups: list[
+        tuple[str, list[tuple[aiosqlite.Row, str]]]
+    ] = []
     for pair in classification.pairs:
         # The no-AI row is deliberately first: its metadata always wins,
         # including None/empty values. No fallback to an AI robot emoji.
-        groups.append(
+        pair_groups.append(
             (
                 pair.theme_key,
                 [
@@ -223,18 +257,40 @@ def _classify_rows(
                 ],
             )
         )
+
+    incomplete_groups: list[
+        tuple[str, list[tuple[aiosqlite.Row, str]]]
+    ] = []
     for keys, variant, prefix in (
-        (classification.solo_keys, "base", ""),
         (classification.no_ai_only_keys, "no_ai", "no-ia-"),
         (classification.ai_only_keys, "ai", "ia-"),
     ):
         for key in keys:
-            groups.append((key.removeprefix(prefix), [(by_key[key], variant)]))
+            incomplete_groups.append(
+                (key.removeprefix(prefix), [(by_key[key], variant)])
+            )
 
+    variant_theme_keys = {
+        theme_key for theme_key, _ in pair_groups + incomplete_groups
+    }
+    used_keys = set(singleton_keys)
+    groups = list(singleton_groups)
+
+    for theme_key, targets in sorted(pair_groups, key=lambda group: group[0]):
+        entry_key = _allocate_variant_entry_key(
+            theme_key,
+            singleton_keys=singleton_keys,
+            variant_theme_keys=variant_theme_keys,
+            used_keys=used_keys,
+        )
+        used_keys.add(entry_key)
+        groups.append((entry_key, targets))
+
+    groups.extend(incomplete_groups)
     names = [key for key, _ in groups]
     if len(names) != len(set(names)):
         raise LegacyCatalogMigrationError(
-            f"Guild {guild_id}: a singleton collides with a variant entry."
+            f"Guild {guild_id}: a singleton collides with an incomplete variant entry."
         )
     return groups
 
