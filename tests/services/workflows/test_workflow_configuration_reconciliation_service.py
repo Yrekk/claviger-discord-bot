@@ -17,7 +17,6 @@ from claviger.services.workflows.workflow_configuration_reconciliation_service i
     WorkflowMutationPermissionError,
 )
 from claviger.services.workflows.workflow_configuration_validation_service import (
-    WorkflowConfigurationValidationError,
     WorkflowConfigurationValidationService,
 )
 

@@ -8,6 +8,8 @@ from claviger.database.connection import (
 from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
+
+
 class WorkflowConfigurationConflictError(RuntimeError):
     """Raised when workflow configuration conflicts with persisted identities."""
 
