@@ -478,6 +478,44 @@ def test_ambiguous_porta_structure_exposes_protected_channel_selector() -> None:
     }
 
 
+def test_detected_structure_content_mentions_existing_workflow_binding() -> None:
+    """Tell the operator that a reusable structure already serves a workflow."""
+
+    discovery = _porta_discovery()
+    candidate = discovery.workflow_candidates[0]
+
+    discovery = WorkflowStructureDiscoveryResult(
+        categories=discovery.categories,
+        text_channels=discovery.text_channels,
+        manageable_roles=discovery.manageable_roles,
+        can_create_channels=discovery.can_create_channels,
+        can_create_roles=discovery.can_create_roles,
+        workflow_candidates=(
+            WorkflowStructureCandidate(
+                category=candidate.category,
+                protected_channels=candidate.protected_channels,
+                interactive_channels=candidate.interactive_channels,
+                configured_command_names=(
+                    "membre",
+                ),
+            ),
+        ),
+    )
+
+    session = WorkflowConfigurationSession(
+        guild_id=123,
+        actor_id=42,
+        discovery=discovery,
+    )
+
+    content = _detected_structures_content(
+        session,
+    )
+
+    assert "/membre" in content
+    assert "déjà configuré" in content
+
+
 # ---------------------------------------------------------------------------
 # Public workflow configuration entry point
 # ---------------------------------------------------------------------------

@@ -3,6 +3,9 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
+from claviger.models.workflows.workflow_configuration_inspection_model import (
+    WorkflowConfigurationInspection,
+)
 from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
@@ -10,6 +13,9 @@ from claviger.models.workflows.workflow_configuration_model import (
 from claviger.services.roles.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
+)
+from claviger.services.workflows.workflow_configuration_inspection_service import (
+    WorkflowConfigurationInspectionService,
 )
 from claviger.services.workflows.workflow_structure_provisioning_service import (
     WorkflowStructureProvisioningPartialError,
@@ -231,6 +237,7 @@ def _configuration(
 def _service(
     *,
     manageable_roles: list[MagicMock] | None = None,
+    inspection: WorkflowConfigurationInspection | None = None,
 ) -> WorkflowStructureProvisioningService:
     """Create provisioning around the shared authoritative role hierarchy."""
 
@@ -250,8 +257,26 @@ def _service(
         )
     )
 
+    inspection_service = MagicMock(
+        spec=WorkflowConfigurationInspectionService,
+    )
+    inspection_service.inspect = AsyncMock(
+        return_value=inspection
+        or WorkflowConfigurationInspection(
+            guild_id=123,
+            workflows=(),
+            ai_role_id=None,
+            reserved_role_ids=frozenset(),
+            reserved_role_prefixes=(),
+        )
+    )
+    inspection_service.is_role_reserved.side_effect = (
+        WorkflowConfigurationInspectionService.is_role_reserved
+    )
+
     return WorkflowStructureProvisioningService(
         role_discovery_service=role_discovery_service,
+        inspection_service=inspection_service,
     )
 
 
@@ -495,6 +520,151 @@ async def test_provision_rejects_role_that_became_unmanageable() -> None:
                 ),
                 primary_role=_existing(
                     300,
+                ),
+            ),
+        )
+
+    guild.create_category.assert_not_awaited()
+    guild.create_text_channel.assert_not_awaited()
+    guild.create_role.assert_not_awaited()
+
+
+async def test_provision_rejects_role_reserved_after_reconciliation() -> None:
+    """Recheck persisted role reservations immediately before Discord mutation."""
+
+    guild = _guild()
+
+    category = _category(
+        category_id=100,
+        bot_member=guild.me,
+    )
+    management_channel = _text_channel(
+        channel_id=200,
+        category_id=100,
+        default_role=guild.default_role,
+        bot_member=guild.me,
+        everyone_can_send=False,
+    )
+    execution_channel = _text_channel(
+        channel_id=201,
+        category_id=100,
+        default_role=guild.default_role,
+        bot_member=guild.me,
+    )
+
+    guild.channels = [
+        category,
+        management_channel,
+        execution_channel,
+    ]
+
+    primary_role = _role(
+        300,
+        "Membre",
+    )
+    service = _service(
+        manageable_roles=[
+            primary_role,
+        ],
+        inspection=WorkflowConfigurationInspection(
+            guild_id=123,
+            workflows=(),
+            ai_role_id=300,
+            reserved_role_ids=frozenset(
+                {
+                    300,
+                }
+            ),
+            reserved_role_prefixes=(),
+        ),
+    )
+
+    with pytest.raises(
+        WorkflowStructureProvisioningResourceError,
+        match="now reserved",
+    ):
+        await service.provision(
+            guild=guild,
+            configuration=_configuration(
+                category=_existing(
+                    100,
+                ),
+                management_channel=_existing(
+                    200,
+                ),
+                execution_channel=_existing(
+                    201,
+                ),
+                primary_role=_existing(
+                    300,
+                ),
+            ),
+        )
+
+    guild.create_category.assert_not_awaited()
+    guild.create_text_channel.assert_not_awaited()
+    guild.create_role.assert_not_awaited()
+
+
+async def test_provision_rejects_created_primary_role_using_reserved_prefix() -> None:
+    """Prevent a new primary role from entering a bound questionnaire namespace."""
+
+    guild = _guild()
+
+    category = _category(
+        category_id=100,
+        bot_member=guild.me,
+    )
+    management_channel = _text_channel(
+        channel_id=200,
+        category_id=100,
+        default_role=guild.default_role,
+        bot_member=guild.me,
+        everyone_can_send=False,
+    )
+    execution_channel = _text_channel(
+        channel_id=201,
+        category_id=100,
+        default_role=guild.default_role,
+        bot_member=guild.me,
+    )
+
+    guild.channels = [
+        category,
+        management_channel,
+        execution_channel,
+    ]
+
+    service = _service(
+        inspection=WorkflowConfigurationInspection(
+            guild_id=123,
+            workflows=(),
+            ai_role_id=None,
+            reserved_role_ids=frozenset(),
+            reserved_role_prefixes=(
+                "interest-",
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        WorkflowStructureProvisioningResourceError,
+        match="name is reserved",
+    ):
+        await service.provision(
+            guild=guild,
+            configuration=_configuration(
+                category=_existing(
+                    100,
+                ),
+                management_channel=_existing(
+                    200,
+                ),
+                execution_channel=_existing(
+                    201,
+                ),
+                primary_role=_create(
+                    "interest-admin",
                 ),
             ),
         )

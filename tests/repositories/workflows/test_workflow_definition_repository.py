@@ -95,6 +95,8 @@ async def _insert_workflow(
     policy_key: str = "public",
     channel_mode: str = "restricted",
     category_id: int | None = None,
+    management_channel_id: int | None = None,
+    primary_role_id: int | None = None,
     sort_order: int = 0,
     enabled: bool = True,
 ) -> None:
@@ -113,10 +115,12 @@ async def _insert_workflow(
                 policy_key,
                 channel_mode,
                 category_id,
+                management_channel_id,
+                primary_role_id,
                 sort_order,
                 enabled
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 guild_id,
@@ -128,6 +132,8 @@ async def _insert_workflow(
                 policy_key,
                 channel_mode,
                 category_id,
+                management_channel_id,
+                primary_role_id,
                 sort_order,
                 enabled,
             ),
@@ -674,6 +680,8 @@ async def test_repository_hydrates_workflow_category_id(
     await _insert_workflow(
         database,
         category_id=987654321,
+        management_channel_id=987654322,
+        primary_role_id=987654323,
     )
 
     result = await repository.get(
@@ -683,3 +691,5 @@ async def test_repository_hydrates_workflow_category_id(
 
     assert result is not None
     assert result.category_id == 987654321
+    assert result.management_channel_id == 987654322
+    assert result.primary_role_id == 987654323

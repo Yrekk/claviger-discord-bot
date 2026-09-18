@@ -49,6 +49,8 @@ def test_bot_composes_shared_workflow_configuration_pipeline(
     # Persistence belongs to the shared application database and is not owned by
     # the Discord UI. Future frontends must therefore reuse this same repository.
     assert bot.workflow_configuration_repository is not None
+    assert bot.workflow_definition_repository is not None
+    assert bot.workflow_configuration_inspection_service is not None
 
     # Validation, discovery, reconciliation and provisioning stay explicit. This
     # prevents Discord components from quietly accumulating domain behavior.
@@ -70,6 +72,10 @@ def test_bot_composes_shared_workflow_configuration_pipeline(
         is bot.workflow_structure_discovery_service
     )
     assert (
+        coordinator.inspection_service
+        is bot.workflow_configuration_inspection_service
+    )
+    assert (
         coordinator.reconciliation_service
         is bot.workflow_configuration_reconciliation_service
     )
@@ -87,4 +93,8 @@ def test_bot_composes_shared_workflow_configuration_pipeline(
     assert (
         bot.workflow_structure_provisioning_service.role_discovery_service
         is bot.role_discovery_service
+    )
+    assert (
+        bot.workflow_structure_provisioning_service.inspection_service
+        is bot.workflow_configuration_inspection_service
     )

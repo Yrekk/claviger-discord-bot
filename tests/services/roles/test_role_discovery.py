@@ -36,12 +36,18 @@ def create_guild(
     *,
     roles: list[discord.Role],
     bot_role: discord.Role,
+    bot_member_roles: list[discord.Role] | None = None,
 ) -> Mock:
     """Create a mocked Discord guild containing Claviger."""
     guild = Mock(spec=discord.Guild)
 
     bot_member = Mock(spec=discord.Member)
     bot_member.top_role = bot_role
+    bot_member.roles = (
+        bot_member_roles
+        if bot_member_roles is not None
+        else [bot_role]
+    )
 
     guild.me = bot_member
     guild.fetch_roles = AsyncMock(return_value=roles)
@@ -174,6 +180,52 @@ async def test_get_hierarchy_keeps_managed_roles_as_unmanageable() -> None:
         managed_below,
     ]
     assert everyone not in hierarchy.unmanageable_roles
+
+
+@pytest.mark.asyncio
+async def test_get_hierarchy_excludes_every_role_carried_by_bot_member() -> None:
+    """Never expose the bot's own lower roles as manageable business roles."""
+
+    service = RoleDiscoveryService()
+
+    claviger = create_role(
+        role_id=3,
+        name="Claviger",
+        position=50,
+    )
+    experimentum = create_role(
+        role_id=4,
+        name="Experimentum",
+        position=40,
+    )
+    member = create_role(
+        role_id=5,
+        name="Membre",
+        position=30,
+    )
+
+    guild = create_guild(
+        roles=[
+            member,
+            experimentum,
+            claviger,
+        ],
+        bot_role=claviger,
+        bot_member_roles=[
+            claviger,
+            experimentum,
+        ],
+    )
+
+    hierarchy = await service.get_hierarchy(
+        guild,
+    )
+
+    assert hierarchy.manageable_roles == [
+        member,
+    ]
+    assert experimentum not in hierarchy.unmanageable_roles
+    assert experimentum not in hierarchy.trusted_roles
 
 
 @pytest.mark.asyncio

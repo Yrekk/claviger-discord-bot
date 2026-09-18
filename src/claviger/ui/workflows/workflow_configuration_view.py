@@ -117,9 +117,19 @@ def _detected_structures_content(
                     "- Salons interactifs : "
                     f"{_display_channel_names(candidate.interactive_channels)}"
                 ),
-                "",
             ]
         )
+
+        if candidate.configured_command_names:
+            commands = ", ".join(
+                f"`/{command_name}`"
+                for command_name in candidate.configured_command_names
+            )
+            lines.append(
+                f"- Workflow(s) déjà configuré(s) : {commands}"
+            )
+
+        lines.append("")
 
     remaining = len(candidates) - len(visible_candidates)
 
@@ -439,6 +449,17 @@ class _DetectedStructureSelect(discord.ui.Select):
                 f"{len(candidate.protected_channels)} protégé(s) • "
                 f"{len(candidate.interactive_channels)} interactif(s)"
             )
+
+            if len(candidate.configured_command_names) == 1:
+                description += (
+                    " • "
+                    f"/{candidate.configured_command_names[0]} déjà configuré"
+                )
+            elif candidate.configured_command_names:
+                description += (
+                    " • "
+                    f"{len(candidate.configured_command_names)} workflows déjà configurés"
+                )
 
             options.append(
                 discord.SelectOption(

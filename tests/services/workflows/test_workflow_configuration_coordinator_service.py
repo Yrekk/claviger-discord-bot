@@ -6,6 +6,9 @@ import pytest
 from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
+from claviger.models.workflows.workflow_configuration_inspection_model import (
+    WorkflowConfigurationInspection,
+)
 from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationDraft,
     WorkflowConfigurationSpec,
@@ -23,6 +26,9 @@ from claviger.repositories.workflows.workflow_configuration_repository import (
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
     WorkflowConfigurationPersistenceAfterProvisioningError,
+)
+from claviger.services.workflows.workflow_configuration_inspection_service import (
+    WorkflowConfigurationInspectionService,
 )
 from claviger.services.workflows.workflow_configuration_reconciliation_service import (
     WorkflowConfigurationReconciliationService,
@@ -107,6 +113,27 @@ def _discovery() -> WorkflowStructureDiscoveryResult:
     )
 
 
+def _inspection_service() -> MagicMock:
+    """Create one inspection service with no persisted reservations."""
+
+    service = MagicMock(
+        spec=WorkflowConfigurationInspectionService,
+    )
+    service.inspect = AsyncMock(
+        return_value=WorkflowConfigurationInspection(
+            guild_id=123,
+            workflows=(),
+            ai_role_id=None,
+            reserved_role_ids=frozenset(),
+            reserved_role_prefixes=(),
+        )
+    )
+    service.is_role_reserved.side_effect = (
+        WorkflowConfigurationInspectionService.is_role_reserved
+    )
+    return service
+
+
 async def test_configure_runs_complete_workflow_pipeline() -> None:
     """Coordinate validation through final SQLite persistence."""
 
@@ -147,6 +174,8 @@ async def test_configure_runs_complete_workflow_pipeline() -> None:
         return_value=discovery,
     )
 
+    inspection_service = _inspection_service()
+
     reconciliation_service = MagicMock(
         spec=WorkflowConfigurationReconciliationService,
     )
@@ -163,6 +192,7 @@ async def test_configure_runs_complete_workflow_pipeline() -> None:
         repository=repository,
         validation_service=validation_service,
         discovery_service=discovery_service,
+        inspection_service=inspection_service,
         reconciliation_service=reconciliation_service,
         provisioning_service=provisioning_service,
     )
@@ -180,6 +210,10 @@ async def test_configure_runs_complete_workflow_pipeline() -> None:
 
     discovery_service.discover.assert_awaited_once_with(
         guild,
+    )
+    inspection_service.inspect.assert_awaited_once_with(
+        123,
+        current_workflow_key="member",
     )
 
     reconciliation_service.reconcile.assert_called_once_with(
@@ -246,6 +280,8 @@ async def test_configure_reports_persistence_failure_after_provisioning() -> Non
         return_value=_discovery(),
     )
 
+    inspection_service = _inspection_service()
+
     reconciliation_service = MagicMock(
         spec=WorkflowConfigurationReconciliationService,
     )
@@ -262,6 +298,7 @@ async def test_configure_reports_persistence_failure_after_provisioning() -> Non
         repository=repository,
         validation_service=validation_service,
         discovery_service=discovery_service,
+        inspection_service=inspection_service,
         reconciliation_service=reconciliation_service,
         provisioning_service=provisioning_service,
     )
