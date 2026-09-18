@@ -9,6 +9,9 @@ from claviger.services.admin.admin_configuration_coordinator_service import (
 from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
     GuildAIConfigurationCoordinatorService,
 )
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
+)
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
@@ -32,6 +35,7 @@ def create_config_server_command(
     database_state: DatabaseState,
     database_ownership_bound: bool,
     report_service: ReportService | None = None,
+    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
 ) -> app_commands.Command:
     """Create the complete guild configuration command."""
 
@@ -121,6 +125,7 @@ def create_config_server_command(
                 coordinator=workflow_coordinator,
                 admin_command_name=admin_command_name,
                 report_service=report_service,
+                ai_questionnaire_owner_service=ai_questionnaire_owner_service,
             )
 
         # The Discord command does not interpret AI states itself. The dedicated

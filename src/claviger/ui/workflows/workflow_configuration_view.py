@@ -85,6 +85,23 @@ def _optional_text(
     return normalized or None
 
 
+def _ai_questionnaire_review_label(
+    session: WorkflowConfigurationSession,
+) -> str:
+    """Describe the staged unique-owner decision in the workflow review."""
+
+    if session.ai_questionnaire_owner is True:
+        return "Oui — ce workflow deviendra l’unique propriétaire"
+
+    if session.ai_questionnaire_owner is False:
+        return "Non — propriétaire actuel conservé"
+
+    if session.ai_questionnaire_owner_service is not None:
+        return "Indisponible — IA serveur désactivée ou rôle IA absent"
+
+    return "Non configuré dans cette surface"
+
+
 def _display_channel_names(
     channels: tuple,
 ) -> str:
@@ -1397,6 +1414,76 @@ async def _emit_workflow_configuration_failed(
     )
 
 
+class WorkflowAIQuestionnaireChoiceView(discord.ui.View):
+    """Ask whether this workflow should own the global AI preference question."""
+
+    def __init__(
+        self,
+        *,
+        coordinator: WorkflowConfigurationCoordinatorService,
+        session: WorkflowConfigurationSession,
+        admin_command_name: str,
+    ) -> None:
+        super().__init__(
+            timeout=300,
+        )
+
+        self.coordinator = coordinator
+        self.session = session
+        self.admin_command_name = admin_command_name
+
+    @discord.ui.button(
+        label="Oui, sur ce workflow",
+        style=discord.ButtonStyle.primary,
+    )
+    async def use_this_workflow(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button,
+    ) -> None:
+        """Stage this workflow as the future unique questionnaire owner."""
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=self.session,
+        ):
+            return
+
+        self.session.ai_questionnaire_owner = True
+
+        await _edit_review(
+            interaction,
+            coordinator=self.coordinator,
+            session=self.session,
+            admin_command_name=self.admin_command_name,
+        )
+
+    @discord.ui.button(
+        label="Non, conserver l’existant",
+        style=discord.ButtonStyle.secondary,
+    )
+    async def keep_current_owner(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button,
+    ) -> None:
+        """Leave the current unique questionnaire owner unchanged."""
+
+        if await _reject_foreign_actor(
+            interaction,
+            session=self.session,
+        ):
+            return
+
+        self.session.ai_questionnaire_owner = False
+
+        await _edit_review(
+            interaction,
+            coordinator=self.coordinator,
+            session=self.session,
+            admin_command_name=self.admin_command_name,
+        )
+
 class WorkflowConfigurationReviewView(discord.ui.View):
     """Require explicit confirmation before Discord or SQLite mutation begins."""
 
@@ -1482,6 +1569,76 @@ class WorkflowConfigurationReviewView(discord.ui.View):
 
         configuration = result.configuration
 
+        ai_questionnaire_summary = "- Question IA : propriétaire actuel inchangé"
+
+        if self.session.ai_questionnaire_owner is True:
+            owner_service = self.session.ai_questionnaire_owner_service
+
+            if owner_service is None:
+                ai_questionnaire_summary = (
+                    "⚠️ Question IA : service d’attribution indisponible"
+                )
+            else:
+                try:
+                    previous_owner, current_owner = await owner_service.assign(
+                        guild_id=self.session.guild_id,
+                        workflow_key=configuration.workflow_key,
+                    )
+                except Exception as error:
+                    logger.exception(
+                        "Workflow %s persisted but AI questionnaire ownership failed for guild %s.",
+                        configuration.workflow_key,
+                        self.session.guild_id,
+                    )
+
+                    if self.session.report_service is not None:
+                        await self.session.report_service.emit(
+                            ReportEvent(
+                                event_type="workflow.ai_questionnaire.assign_failed",
+                                severity=ReportSeverity.ERROR,
+                                title="Échec d’attribution du questionnaire IA",
+                                summary=(
+                                    "Le workflow a été enregistré mais n’a pas pu devenir "
+                                    "propriétaire de la question IA."
+                                ),
+                                details=f"{type(error).__name__}: {error}",
+                                guild_id=interaction.guild.id,
+                                guild_label=interaction.guild.name,
+                                actor_id=interaction.user.id,
+                                actor_label=interaction.user.display_name,
+                            )
+                        )
+
+                    ai_questionnaire_summary = (
+                        "⚠️ Question IA : workflow enregistré, attribution échouée"
+                    )
+                else:
+                    if self.session.report_service is not None:
+                        await self.session.report_service.emit(
+                            ReportEvent(
+                                event_type="workflow.ai_questionnaire.owner_changed",
+                                severity=ReportSeverity.INFO,
+                                title="Workflow du questionnaire IA modifié",
+                                summary=(
+                                    f"/{configuration.command_name} est maintenant "
+                                    "l’unique workflow qui propose la préférence IA."
+                                ),
+                                details=(
+                                    f"Ancien propriétaire : {previous_owner or 'aucun'}\n"
+                                    f"Nouveau propriétaire : {current_owner}"
+                                ),
+                                guild_id=interaction.guild.id,
+                                guild_label=interaction.guild.name,
+                                actor_id=interaction.user.id,
+                                actor_label=interaction.user.display_name,
+                            )
+                        )
+
+                    ai_questionnaire_summary = (
+                        "- Question IA : "
+                        f"`/{configuration.command_name}` est propriétaire"
+                    )
+
         mutation_lines: list[str] = []
 
         if result.created_category_id is not None:
@@ -1522,7 +1679,8 @@ class WorkflowConfigurationReviewView(discord.ui.View):
                 f"- Exécution : <#{configuration.execution_channel_id}>\n"
                 f"- Rôle principal : <@&{configuration.primary_role_id}>\n"
                 f"- Préfixe questionnaire : "
-                f"`{configuration.questionnaire_role_prefix}`\n\n"
+                f"`{configuration.questionnaire_role_prefix}`\n"
+                f"{ai_questionnaire_summary}\n\n"
                 "**Mutations Discord**\n"
                 f"{mutation_summary}\n\n"
                 f"Utilise `/{self.admin_command_name} restart` "
@@ -1583,7 +1741,7 @@ async def _advance_after_resource(
     }
 
     if resource == "primary_role":
-        await _edit_review(
+        await _edit_ai_questionnaire_step(
             interaction,
             coordinator=coordinator,
             session=session,
@@ -1604,6 +1762,107 @@ async def _advance_after_resource(
         admin_command_name=admin_command_name,
     )
 
+
+async def _edit_ai_questionnaire_step(
+    interaction: discord.Interaction,
+    *,
+    coordinator: WorkflowConfigurationCoordinatorService,
+    session: WorkflowConfigurationSession,
+    admin_command_name: str,
+) -> None:
+    """Ask whether this workflow should own the guild-wide AI preference question."""
+
+    owner_service = session.ai_questionnaire_owner_service
+
+    if owner_service is None:
+        await _edit_review(
+            interaction,
+            coordinator=coordinator,
+            session=session,
+            admin_command_name=admin_command_name,
+        )
+        return
+
+    try:
+        inspection = await owner_service.inspect(
+            session.guild_id,
+        )
+    except Exception as error:
+        logger.exception(
+            "Unable to inspect AI questionnaire ownership for guild %s.",
+            session.guild_id,
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                "❌ Impossible de vérifier le propriétaire de la question IA.\n\n"
+                "Aucune mutation Discord ou SQLite n’a encore eu lieu."
+            ),
+            view=None,
+        )
+
+        if session.report_service is not None and interaction.guild is not None:
+            await session.report_service.emit(
+                ReportEvent(
+                    event_type="workflow.ai_questionnaire.inspect_failed",
+                    severity=ReportSeverity.ERROR,
+                    title="Échec d’inspection du questionnaire IA",
+                    summary=(
+                        "Claviger n’a pas pu préparer l’étape IA du workflow."
+                    ),
+                    details=f"{type(error).__name__}: {error}",
+                    guild_id=session.guild_id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+        return
+
+    session.current_ai_questionnaire_owner_key = inspection.owner_workflow_key
+
+    if not inspection.can_assign_owner:
+        session.ai_questionnaire_owner = None
+        await _edit_review(
+            interaction,
+            coordinator=coordinator,
+            session=session,
+            admin_command_name=admin_command_name,
+        )
+        return
+
+    owner_label = "aucun"
+
+    if inspection.owner_workflow_key is not None:
+        owner = next(
+            (
+                workflow
+                for workflow in inspection.workflows
+                if workflow.workflow_key == inspection.owner_workflow_key
+            ),
+            None,
+        )
+        owner_label = (
+            f"/{owner.command_name}"
+            if owner is not None
+            else inspection.owner_workflow_key
+        )
+
+    await interaction.response.edit_message(
+        content=(
+            "**Option IA de ce workflow**\n\n"
+            "Ce workflow doit-il être l’unique workflow qui pose la question "
+            "de préférence IA aux membres ?\n\n"
+            f"Propriétaire actuel : **{owner_label}**.\n"
+            "Choisir **Oui** déplacera l’attribution vers ce workflow après "
+            "son enregistrement. Choisir **Non** ne modifie pas l’attribution actuelle."
+        ),
+        view=WorkflowAIQuestionnaireChoiceView(
+            coordinator=coordinator,
+            session=session,
+            admin_command_name=admin_command_name,
+        ),
+    )
 
 async def _edit_review(
     interaction: discord.Interaction,
@@ -1634,7 +1893,8 @@ async def _edit_review(
             f"- Rôle principal : "
             f"{session.describe_resource('primary_role')}\n"
             f"- Préfixe questionnaire : "
-            f"`{session.questionnaire_role_prefix}`\n\n"
+            f"`{session.questionnaire_role_prefix}`\n"
+            f"- Question IA : {_ai_questionnaire_review_label(session)}\n\n"
             "**Aucune mutation Discord ou SQLite n'a encore eu lieu.**"
         ),
         view=WorkflowConfigurationReviewView(
@@ -1707,6 +1967,7 @@ async def run_workflow_configuration(
     coordinator: WorkflowConfigurationCoordinatorService,
     admin_command_name: str,
     report_service: ReportService | None = None,
+    ai_questionnaire_owner_service=None,
 ) -> None:
     """Open the Discord frontend over the shared workflow backend contract."""
 
@@ -1740,6 +2001,7 @@ async def run_workflow_configuration(
         actor_id=interaction.user.id,
         discovery=discovery,
         report_service=report_service,
+        ai_questionnaire_owner_service=ai_questionnaire_owner_service,
     )
 
     if discovery.workflow_candidates:

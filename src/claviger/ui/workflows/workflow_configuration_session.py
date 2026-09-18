@@ -10,6 +10,9 @@ from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
 )
 from claviger.reporting.service import ReportService
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
+)
 
 WorkflowUiResource = Literal[
     "category",
@@ -32,6 +35,13 @@ class WorkflowConfigurationSession:
     actor_id: int
     discovery: WorkflowStructureDiscoveryResult
     report_service: ReportService | None = None
+    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None
+
+    # This choice is frontend-local until final confirmation. It does not
+    # reintroduce workflow-local AI persistence: True means that, after the
+    # workflow row exists, it should become the guild's unique questionnaire owner.
+    ai_questionnaire_owner: bool | None = None
+    current_ai_questionnaire_owner_key: str | None = None
 
     # The UI stores only the identity of the structural candidate selected by
     # the human. Candidate recognition itself belongs exclusively to discovery.
