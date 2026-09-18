@@ -159,6 +159,190 @@ class CatalogEntryRepository:
             for row in entry_rows
         )
 
+    async def sync_discovered_catalog(
+        self,
+        *,
+        guild_id: int,
+        catalog_key: str,
+        entries: tuple[CatalogEntry, ...],
+    ) -> None:
+        """Refresh one catalog from a conservative live Discord discovery."""
+
+        if guild_id <= 0:
+            raise ValueError("Discord guild ID must be greater than zero.")
+
+        normalized_key = catalog_key.strip()
+
+        if not normalized_key:
+            raise ValueError("Catalog key cannot be empty.")
+
+        discovered_role_ids = tuple(
+            target.role_id
+            for entry in entries
+            for target in entry.targets
+        )
+
+        self._ensure_database_exists()
+
+        try:
+            async with self.database.connect() as connection:
+                await connection.execute("BEGIN IMMEDIATE")
+
+                if discovered_role_ids:
+                    placeholders = ", ".join(
+                        "?"
+                        for _ in discovered_role_ids
+                    )
+                    await connection.execute(
+                        f"""
+                        UPDATE guild_catalog_entry_targets
+                        SET
+                            discord_present = 0,
+                            role_manageable = 0,
+                            channel_present = 0,
+                            mapping_valid = 0
+                        WHERE guild_id = ?
+                          AND catalog_key = ?
+                          AND role_id NOT IN ({placeholders})
+                        """,
+                        (
+                            guild_id,
+                            normalized_key,
+                            *discovered_role_ids,
+                        ),
+                    )
+                else:
+                    await connection.execute(
+                        """
+                        UPDATE guild_catalog_entry_targets
+                        SET
+                            discord_present = 0,
+                            role_manageable = 0,
+                            channel_present = 0,
+                            mapping_valid = 0
+                        WHERE guild_id = ?
+                          AND catalog_key = ?
+                        """,
+                        (
+                            guild_id,
+                            normalized_key,
+                        ),
+                    )
+
+                for entry in entries:
+                    await connection.execute(
+                        """
+                        INSERT INTO guild_catalog_entries (
+                            guild_id,
+                            catalog_key,
+                            entry_key,
+                            label,
+                            description,
+                            emoji,
+                            sort_order,
+                            enabled
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (
+                            guild_id,
+                            catalog_key,
+                            entry_key
+                        )
+                        DO NOTHING
+                        """,
+                        (
+                            guild_id,
+                            normalized_key,
+                            entry.entry_key,
+                            entry.label,
+                            entry.description,
+                            entry.emoji,
+                            entry.sort_order,
+                            entry.enabled,
+                        ),
+                    )
+
+                    for target in entry.targets:
+                        await connection.execute(
+                            """
+                            DELETE FROM guild_catalog_entry_targets
+                            WHERE guild_id = ?
+                              AND catalog_key = ?
+                              AND entry_key = ?
+                              AND variant = ?
+                              AND role_id <> ?
+                            """,
+                            (
+                                guild_id,
+                                normalized_key,
+                                entry.entry_key,
+                                target.variant,
+                                target.role_id,
+                            ),
+                        )
+
+                        await connection.execute(
+                            """
+                            INSERT INTO guild_catalog_entry_targets (
+                                guild_id,
+                                catalog_key,
+                                entry_key,
+                                role_id,
+                                role_name,
+                                channel_id,
+                                channel_name,
+                                variant,
+                                enabled,
+                                discord_present,
+                                role_manageable,
+                                channel_present,
+                                mapping_valid,
+                                matches_policy
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT (
+                                guild_id,
+                                role_id
+                            )
+                            DO UPDATE SET
+                                catalog_key = excluded.catalog_key,
+                                entry_key = excluded.entry_key,
+                                role_name = excluded.role_name,
+                                channel_id = excluded.channel_id,
+                                channel_name = excluded.channel_name,
+                                variant = excluded.variant,
+                                discord_present = excluded.discord_present,
+                                role_manageable = excluded.role_manageable,
+                                channel_present = excluded.channel_present,
+                                mapping_valid = excluded.mapping_valid,
+                                matches_policy = excluded.matches_policy
+                            """,
+                            (
+                                guild_id,
+                                normalized_key,
+                                entry.entry_key,
+                                target.role_id,
+                                target.role_name,
+                                target.channel_id,
+                                target.channel_name,
+                                target.variant,
+                                target.enabled,
+                                target.discord_present,
+                                target.role_manageable,
+                                target.channel_present,
+                                target.mapping_valid,
+                                target.matches_policy,
+                            ),
+                        )
+
+                await connection.commit()
+
+        except aiosqlite.Error as error:
+            raise DatabaseUnavailableError(
+                f"Unable to synchronize catalog {normalized_key!r} "
+                f"for guild {guild_id}."
+            ) from error
+
     def _ensure_database_exists(
         self,
     ) -> None:
