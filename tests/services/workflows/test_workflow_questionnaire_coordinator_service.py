@@ -20,9 +20,6 @@ from claviger.models.workflows.workflow_role_execution_result_model import (
 from claviger.repositories.catalogs.catalog_entry_repository import (
     CatalogEntryRepository,
 )
-from claviger.services.catalogs.catalog_entry_synchronization_service import (
-    CatalogEntrySynchronizationService,
-)
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )
@@ -31,6 +28,9 @@ from claviger.repositories.runtime.guild_ai_questionnaire_owner_repository impor
 )
 from claviger.repositories.workflows.workflow_definition_repository import (
     WorkflowDefinitionRepository,
+)
+from claviger.services.catalogs.catalog_entry_synchronization_service import (
+    CatalogEntrySynchronizationService,
 )
 from claviger.services.workflows.workflow_questionnaire_coordinator_service import (
     WorkflowQuestionnaireCoordinatorService,
