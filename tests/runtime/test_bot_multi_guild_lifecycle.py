@@ -526,6 +526,16 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
         return_value=[],
     )
 
+    list_workflows = AsyncMock(
+        return_value=(),
+    )
+
+    monkeypatch.setattr(
+        bot.workflow_definition_repository,
+        "list_for_guild",
+        list_workflows,
+    )
+
     monkeypatch.setattr(
         bot.discord_identity_service,
         "resolve_guild",
@@ -576,9 +586,7 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
     assert guild_b_initial_state.readiness is not None
     assert guild_b_initial_state.readiness.is_ready is False
 
-    # Specialized runtime commands no longer exist. Until generic commands are
-    # rebuilt from persisted workflow definitions, both command trees expose
-    # only the shared command and the dynamic administrative group.
+    # This scenario returns no persisted workflow for either guild.
     assert _guild_command_names(
         bot,
         123,
@@ -698,4 +706,5 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
 
     assert resolve_guild.await_count == 4
     assert readiness_inspect.await_count == 4
+    assert list_workflows.await_count == 2
     assert sync.await_count == 4

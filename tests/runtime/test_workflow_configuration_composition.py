@@ -98,3 +98,41 @@ def test_bot_composes_shared_workflow_configuration_pipeline(
         bot.workflow_structure_provisioning_service.inspection_service
         is bot.workflow_configuration_inspection_service
     )
+
+
+
+def test_bot_composes_generic_questionnaire_runtime(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """Keep generic questionnaire planning and execution in the application graph."""
+
+    _patch_runtime_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+
+    assert bot.catalog_entry_repository is not None
+    assert bot.role_manager_service is not None
+    assert bot.workflow_questionnaire_planner_service is not None
+    assert bot.workflow_role_planner_service is not None
+    assert bot.workflow_role_executor_service is not None
+    assert bot.workflow_questionnaire_coordinator_service is not None
+
+    coordinator = bot.workflow_questionnaire_coordinator_service
+
+    assert coordinator.workflow_repository is bot.workflow_definition_repository
+    assert coordinator.catalog_entry_repository is bot.catalog_entry_repository
+    assert coordinator.ai_repository is bot.guild_ai_configuration_repository
+    assert (
+        coordinator.owner_repository
+        is bot.guild_ai_questionnaire_owner_repository
+    )
+    assert (
+        coordinator.questionnaire_planner
+        is bot.workflow_questionnaire_planner_service
+    )
+    assert coordinator.role_planner is bot.workflow_role_planner_service
+    assert coordinator.role_executor is bot.workflow_role_executor_service

@@ -553,6 +553,15 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
         sync,
     )
 
+    list_workflows = AsyncMock(
+        return_value=(),
+    )
+    monkeypatch.setattr(
+        bot.workflow_definition_repository,
+        "list_for_guild",
+        list_workflows,
+    )
+
     runtime_state = await bot._configure_guild(
         application_identity,
         999,
@@ -568,6 +577,10 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
     )
 
     readiness_inspect.assert_awaited_once_with(
+        999,
+    )
+
+    list_workflows.assert_awaited_once_with(
         999,
     )
 
@@ -660,6 +673,15 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         sync,
     )
 
+    list_workflows = AsyncMock(
+        return_value=(),
+    )
+    monkeypatch.setattr(
+        bot.workflow_definition_repository,
+        "list_for_guild",
+        list_workflows,
+    )
+
     await bot.setup_hook()
 
     resolve_application.assert_awaited_once_with(
@@ -719,8 +741,7 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         )
     }
 
-    # Specialized runtime commands are gone. Generic workflow commands will be
-    # registered from persisted workflow definitions in the next runtime slice.
+    # No persisted workflow was returned by the runtime repository in this test.
     assert set(commands) == {
         "say",
         "experimentum",
