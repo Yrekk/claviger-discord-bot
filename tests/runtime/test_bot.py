@@ -1625,6 +1625,15 @@ async def test_restart_guild_configuration_skips_sync_when_tree_is_unchanged(
         sync,
     )
 
+    list_workflows = AsyncMock(
+        return_value=(),
+    )
+    monkeypatch.setattr(
+        bot.workflow_definition_repository,
+        "list_for_guild",
+        list_workflows,
+    )
+
     await bot.setup_hook()
 
     sync.assert_not_awaited()
@@ -1633,6 +1642,9 @@ async def test_restart_guild_configuration_skips_sync_when_tree_is_unchanged(
         123,
     )
 
+    list_workflows.assert_awaited_once_with(
+        123,
+    )
     sync.assert_not_awaited()
 
     assert bot.guild_runtime_states[123].command_tree_signature == "same-tree"
@@ -1710,6 +1722,15 @@ async def test_restart_guild_configuration_resyncs_when_tree_changes(
         sync,
     )
 
+    list_workflows = AsyncMock(
+        return_value=(),
+    )
+    monkeypatch.setattr(
+        bot.workflow_definition_repository,
+        "list_for_guild",
+        list_workflows,
+    )
+
     await bot.setup_hook()
 
     sync.assert_not_awaited()
@@ -1718,6 +1739,9 @@ async def test_restart_guild_configuration_resyncs_when_tree_changes(
         123,
     )
 
+    list_workflows.assert_awaited_once_with(
+        123,
+    )
     sync.assert_awaited_once()
 
     assert bot.guild_runtime_states[123].command_tree_signature == "new-tree"
