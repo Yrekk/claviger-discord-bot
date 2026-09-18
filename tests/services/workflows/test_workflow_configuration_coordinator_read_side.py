@@ -38,10 +38,6 @@ def _service() -> tuple[
     repository = MagicMock(
         spec=WorkflowConfigurationRepository,
     )
-    repository.get_ai_preference_role_id = AsyncMock(
-        return_value=301,
-    )
-
     discovery_service = MagicMock(
         spec=WorkflowStructureDiscoveryService,
     )
@@ -98,17 +94,3 @@ async def test_discover_resources_delegates_to_authoritative_discovery() -> None
     assert result.can_create_roles is True
 
 
-async def test_get_ai_preference_role_id_delegates_to_repository() -> None:
-    """Expose the shared persisted AI role through the coordinator boundary."""
-
-    service, repository, _ = _service()
-
-    role_id = await service.get_ai_preference_role_id(
-        123,
-    )
-
-    repository.get_ai_preference_role_id.assert_awaited_once_with(
-        123,
-    )
-
-    assert role_id == 301

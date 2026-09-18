@@ -51,10 +51,6 @@ def _discovery() -> WorkflowStructureDiscoveryResult:
                 role_id=300,
                 role_name="Membre",
             ),
-            WorkflowRoleCandidate(
-                role_id=301,
-                role_name="Préférence IA",
-            ),
         ),
         can_create_channels=True,
         can_create_roles=True,
@@ -169,14 +165,3 @@ def test_to_draft_rejects_incomplete_structure() -> None:
         session.to_draft()
 
 
-def test_ai_summary_reuses_persisted_guild_role() -> None:
-    """Explain guild-wide AI role reuse without duplicating UI selection."""
-
-    session = _session()
-
-    session.ai_enabled = True
-    session.persisted_ai_preference_role_id = 301
-
-    assert session.describe_ai_preference_role() == (
-        "Activée — rôle existant `Préférence IA` (`301`)"
-    )

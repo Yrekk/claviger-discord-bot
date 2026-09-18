@@ -64,7 +64,6 @@ def _draft(
             "Membre",
         ),
         "questionnaire_role_prefix": "interest-",
-        "ai_enabled": False,
     }
 
     values.update(
@@ -107,7 +106,6 @@ def test_validate_normalizes_create_configuration() -> None:
     assert result.primary_role.name == "Membre"
 
     assert result.questionnaire_role_prefix == "interest-"
-    assert result.ai_enabled is False
 
 
 def test_validate_accepts_existing_discord_resources() -> None:
@@ -130,7 +128,6 @@ def test_validate_accepts_existing_discord_resources() -> None:
             primary_role=_existing(
                 300,
             ),
-            ai_enabled=True,
         )
     )
 
@@ -142,7 +139,6 @@ def test_validate_accepts_existing_discord_resources() -> None:
     assert result.execution_channel.resource_id == 201
     assert result.primary_role.resource_id == 300
 
-    assert result.ai_enabled is True
 
 
 def test_validate_preserves_explicit_command_description() -> None:

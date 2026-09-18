@@ -8,7 +8,6 @@ from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
 from claviger.repositories.workflows.workflow_configuration_repository import (
-    WorkflowConfigurationConflictError,
     WorkflowConfigurationRepository,
 )
 
@@ -39,10 +38,7 @@ async def _repository(
     )
 
 
-def _configuration(
-    *,
-    ai_preference_role_id: int | None = None,
-) -> ResolvedWorkflowConfiguration:
+def _configuration() -> ResolvedWorkflowConfiguration:
     """Create one deterministic resolved workflow configuration."""
 
     return ResolvedWorkflowConfiguration(
@@ -57,7 +53,6 @@ def _configuration(
         execution_channel_id=201,
         primary_role_id=300,
         questionnaire_role_prefix="interest-",
-        ai_preference_role_id=ai_preference_role_id,
     )
 
 
@@ -132,142 +127,7 @@ async def test_save_persists_generic_workflow_structure(
     assert execution_channel == (201,)
 
 
-async def test_save_creates_and_binds_ai_preference_context(
-    tmp_path: Path,
-) -> None:
-    """Persist AI support through the existing context-capability model."""
 
-    database, repository = await _repository(
-        tmp_path,
-    )
-
-    await repository.save(
-        _configuration(
-            ai_preference_role_id=301,
-        )
-    )
-
-    assert (
-        await repository.get_ai_preference_role_id(
-            123,
-        )
-        == 301
-    )
-
-    async with database.connect() as connection:
-        cursor = await connection.execute(
-            """
-            SELECT
-                definition.capability_key,
-                definition.role_id,
-                binding.interaction_mode
-            FROM guild_workflow_contexts AS binding
-
-            INNER JOIN guild_context_definitions AS definition
-                ON definition.guild_id = binding.guild_id
-               AND definition.context_key = binding.context_key
-
-            WHERE binding.guild_id = ?
-              AND binding.workflow_key = ?
-            """,
-            (
-                123,
-                "member",
-            ),
-        )
-
-        row = await cursor.fetchone()
-
-    assert row == (
-        "ai_preference",
-        301,
-        "editable",
-    )
-
-
-async def test_disabling_ai_unbinds_workflow_without_deleting_shared_context(
-    tmp_path: Path,
-) -> None:
-    """Disable AI locally while preserving the guild-wide capability definition."""
-
-    database, repository = await _repository(
-        tmp_path,
-    )
-
-    await repository.save(
-        _configuration(
-            ai_preference_role_id=301,
-        )
-    )
-
-    await repository.save(
-        _configuration(
-            ai_preference_role_id=None,
-        )
-    )
-
-    # The shared capability remains available for another workflow.
-    assert (
-        await repository.get_ai_preference_role_id(
-            123,
-        )
-        == 301
-    )
-
-    async with database.connect() as connection:
-        cursor = await connection.execute(
-            """
-            SELECT COUNT(*)
-            FROM guild_workflow_contexts
-            WHERE guild_id = ?
-              AND workflow_key = ?
-            """,
-            (
-                123,
-                "member",
-            ),
-        )
-
-        row = await cursor.fetchone()
-
-    assert row == (0,)
-
-
-async def test_save_rejects_replacing_shared_ai_preference_role(
-    tmp_path: Path,
-) -> None:
-    """Prevent one workflow from silently changing another workflow's AI role."""
-
-    _, repository = await _repository(
-        tmp_path,
-    )
-
-    await repository.save(
-        _configuration(
-            ai_preference_role_id=301,
-        )
-    )
-
-    with pytest.raises(
-        WorkflowConfigurationConflictError,
-        match="another role",
-    ):
-        await repository.save(
-            ResolvedWorkflowConfiguration(
-                guild_id=123,
-                workflow_key="adult",
-                title="Adulte",
-                description=None,
-                command_name="noctis",
-                command_description="Gère les accès adultes.",
-                category_id=400,
-                management_channel_id=401,
-                execution_channel_id=402,
-                primary_role_id=403,
-                questionnaire_role_prefix="access-",
-                ai_preference_role_id=999,
-            )
-        )
 
 
 async def test_save_is_idempotent_for_same_resolved_configuration(
@@ -279,9 +139,7 @@ async def test_save_is_idempotent_for_same_resolved_configuration(
         tmp_path,
     )
 
-    configuration = _configuration(
-        ai_preference_role_id=301,
-    )
+    configuration = _configuration()
 
     await repository.save(
         configuration,

@@ -493,9 +493,6 @@ async def test_run_workflow_configuration_prefers_detected_structures() -> None:
     coordinator.discover_resources = AsyncMock(
         return_value=discovery,
     )
-    coordinator.get_ai_preference_role_id = AsyncMock(
-        return_value=None,
-    )
 
     guild = SimpleNamespace(
         id=123,
@@ -547,9 +544,6 @@ async def test_run_workflow_configuration_uses_manual_start_when_no_pattern_exis
     coordinator = MagicMock()
     coordinator.discover_resources = AsyncMock(
         return_value=discovery,
-    )
-    coordinator.get_ai_preference_role_id = AsyncMock(
-        return_value=None,
     )
 
     guild = SimpleNamespace(

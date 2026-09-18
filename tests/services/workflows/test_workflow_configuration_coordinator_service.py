@@ -74,10 +74,6 @@ def _spec() -> WorkflowConfigurationSpec:
             300,
         ),
         questionnaire_role_prefix="interest-",
-        ai_enabled=True,
-        ai_preference_role=_existing(
-            301,
-        ),
     )
 
 
@@ -96,7 +92,6 @@ def _resolved() -> ResolvedWorkflowConfiguration:
         execution_channel_id=201,
         primary_role_id=300,
         questionnaire_role_prefix="interest-",
-        ai_preference_role_id=301,
     )
 
 
@@ -137,9 +132,6 @@ async def test_configure_runs_complete_workflow_pipeline() -> None:
 
     repository = MagicMock(
         spec=WorkflowConfigurationRepository,
-    )
-    repository.get_ai_preference_role_id = AsyncMock(
-        return_value=301,
     )
     repository.save = AsyncMock()
 
@@ -190,14 +182,9 @@ async def test_configure_runs_complete_workflow_pipeline() -> None:
         guild,
     )
 
-    repository.get_ai_preference_role_id.assert_awaited_once_with(
-        123,
-    )
-
     reconciliation_service.reconcile.assert_called_once_with(
         configuration=validated,
         discovery=discovery,
-        persisted_ai_preference_role_id=301,
     )
 
     provisioning_service.provision.assert_awaited_once_with(
@@ -235,15 +222,11 @@ async def test_configure_reports_persistence_failure_after_provisioning() -> Non
         ),
         created_role_ids=(
             300,
-            301,
         ),
     )
 
     repository = MagicMock(
         spec=WorkflowConfigurationRepository,
-    )
-    repository.get_ai_preference_role_id = AsyncMock(
-        return_value=301,
     )
     repository.save = AsyncMock(
         side_effect=RuntimeError(

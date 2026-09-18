@@ -210,8 +210,6 @@ def _configuration(
     management_channel: WorkflowResourceSelection,
     execution_channel: WorkflowResourceSelection,
     primary_role: WorkflowResourceSelection,
-    ai_enabled: bool = False,
-    ai_preference_role: WorkflowResourceSelection | None = None,
 ) -> WorkflowConfigurationSpec:
     """Create one reconciled workflow specification."""
 
@@ -227,8 +225,6 @@ def _configuration(
         execution_channel=execution_channel,
         primary_role=primary_role,
         questionnaire_role_prefix="interest-",
-        ai_enabled=ai_enabled,
-        ai_preference_role=ai_preference_role,
     )
 
 
@@ -293,12 +289,6 @@ async def test_provision_creates_complete_workflow_structure() -> None:
         300,
         "Membre",
     )
-
-    created_ai_role = _role(
-        301,
-        "Préférence IA",
-    )
-
     guild.create_category.return_value = created_category
 
     guild.create_text_channel.side_effect = [
@@ -308,7 +298,6 @@ async def test_provision_creates_complete_workflow_structure() -> None:
 
     guild.create_role.side_effect = [
         created_primary_role,
-        created_ai_role,
     ]
 
     service = _service()
@@ -328,10 +317,6 @@ async def test_provision_creates_complete_workflow_structure() -> None:
             primary_role=_create(
                 "Membre",
             ),
-            ai_enabled=True,
-            ai_preference_role=_create(
-                "Préférence IA",
-            ),
         ),
     )
 
@@ -339,7 +324,6 @@ async def test_provision_creates_complete_workflow_structure() -> None:
     assert result.configuration.management_channel_id == 200
     assert result.configuration.execution_channel_id == 201
     assert result.configuration.primary_role_id == 300
-    assert result.configuration.ai_preference_role_id == 301
 
     assert result.created_category_id == 100
     assert result.created_channel_ids == (
@@ -348,7 +332,6 @@ async def test_provision_creates_complete_workflow_structure() -> None:
     )
     assert result.created_role_ids == (
         300,
-        301,
     )
 
     management_call = guild.create_text_channel.await_args_list[0]

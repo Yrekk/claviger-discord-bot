@@ -11,12 +11,10 @@ from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowTextChannelCandidate,
 )
 from claviger.services.workflows.workflow_configuration_reconciliation_service import (
-    WorkflowAiPreferenceRoleRequiredError,
     WorkflowCategoryMismatchError,
     WorkflowConfigurationReconciliationError,
     WorkflowConfigurationReconciliationService,
     WorkflowMutationPermissionError,
-    WorkflowRoleCollisionError,
 )
 from claviger.services.workflows.workflow_configuration_validation_service import (
     WorkflowConfigurationValidationError,
@@ -75,8 +73,6 @@ def _draft(
             300,
         ),
         "questionnaire_role_prefix": "interest-",
-        "ai_enabled": False,
-        "ai_preference_role": None,
     }
 
     values.update(
@@ -376,110 +372,4 @@ def test_existing_primary_role_must_be_manageable() -> None:
                     ),
                 ),
             ),
-        )
-
-
-# ---------------------------------------------------------------------------
-# AI preference capability reconciliation
-# ---------------------------------------------------------------------------
-
-
-def test_reconcile_reuses_persisted_ai_preference_role() -> None:
-    """Reuse the guild-wide AI capability without asking the frontend again."""
-
-    service = WorkflowConfigurationReconciliationService()
-
-    result = service.reconcile(
-        configuration=_validate(
-            _draft(
-                ai_enabled=True,
-            )
-        ),
-        discovery=_discovery(),
-        persisted_ai_preference_role_id=301,
-    )
-
-    assert result.ai_preference_role == WorkflowResourceSelection(
-        mode="existing",
-        resource_id=301,
-    )
-
-
-def test_first_ai_workflow_requires_preference_role() -> None:
-    """Require one role identity when AI is enabled for the guild first time."""
-
-    service = WorkflowConfigurationReconciliationService()
-
-    with pytest.raises(
-        WorkflowAiPreferenceRoleRequiredError,
-    ):
-        service.reconcile(
-            configuration=_validate(
-                _draft(
-                    ai_enabled=True,
-                )
-            ),
-            discovery=_discovery(),
-            persisted_ai_preference_role_id=None,
-        )
-
-
-def test_first_ai_workflow_can_request_role_creation() -> None:
-    """Allow the first AI-enabled workflow to provision its capability role."""
-
-    service = WorkflowConfigurationReconciliationService()
-
-    result = service.reconcile(
-        configuration=_validate(
-            _draft(
-                ai_enabled=True,
-                ai_preference_role=_create(
-                    "Préférence IA",
-                ),
-            )
-        ),
-        discovery=_discovery(),
-    )
-
-    assert result.ai_preference_role == WorkflowResourceSelection(
-        mode="create",
-        name="Préférence IA",
-    )
-
-
-def test_primary_and_ai_roles_must_be_distinct() -> None:
-    """Prevent the membership role from also encoding AI preference."""
-
-    service = WorkflowConfigurationReconciliationService()
-
-    with pytest.raises(
-        WorkflowRoleCollisionError,
-    ):
-        service.reconcile(
-            configuration=_validate(
-                _draft(
-                    ai_enabled=True,
-                    ai_preference_role=_existing(
-                        300,
-                    ),
-                )
-            ),
-            discovery=_discovery(),
-        )
-
-
-def test_validation_rejects_ai_role_when_ai_is_disabled() -> None:
-    """Reject contradictory frontend configuration before reconciliation."""
-
-    with pytest.raises(
-        WorkflowConfigurationValidationError,
-        match="when AI is disabled",
-    ):
-        _validate(
-            _draft(
-                ai_enabled=False,
-                ai_preference_role=_existing(
-                    301,
-                ),
-            )
         )
