@@ -602,7 +602,10 @@ async def test_future_schema_is_rejected_without_any_mutation(tmp_path: Path) ->
     """An application upgrade must not downgrade a database from the future."""
 
     database = await _historical(tmp_path)
-    await _execute(database, "PRAGMA user_version = 12")
+    await _execute(
+        database,
+        f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION + 1}",
+    )
     before = _dump(database)
 
     with pytest.raises(schema_module.UnsupportedSchemaVersionError):

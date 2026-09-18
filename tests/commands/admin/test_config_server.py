@@ -426,7 +426,7 @@ async def test_config_server_reports_unexpected_failure() -> None:
 
     interaction.followup.send.assert_awaited_once_with(
         (
-            "❌ Échec de la configuration du serveur. "
+            "❌ La configuration ADMIN a échoué avant de devenir opérationnelle. "
             "Aucune déduction automatique supplémentaire n'a été faite."
         ),
         ephemeral=True,

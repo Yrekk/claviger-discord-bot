@@ -755,6 +755,7 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         "restart",
         "config-server",
         "config",
+        "workflow",
     }
 
     sync.assert_awaited_once()
