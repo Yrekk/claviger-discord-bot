@@ -1,6 +1,6 @@
 # Passation — V11 config-server validé, suite discovery/réservation
 
-**Date :** 17 septembre 2026  
+**Date :** 18 septembre 2026  
 **Dépôt :** `Yrekk/claviger-discord-bot`  
 **Branche de travail :** `feature/v11-ai-config-server`  
 **Dernier commit fonctionnel validé avant cette passation :** `12c95d51718bed22b9920fcbea69b155f3bccb72`  
@@ -102,7 +102,7 @@ Le rôle IA est une propriété globale de guild, pas une propriété de workflo
 
 ---
 
-## 3. Limites observées pendant le smoke — NON corrigées encore
+## 3. Limites observées pendant le smoke — implémentées, validation locale restante
 
 Le smoke a révélé la prochaine tranche nécessaire. Le sélecteur de rôle principal d'un workflow propose encore des rôles qui devraient être réservés.
 
@@ -112,7 +112,7 @@ Exemples observés :
 - rôle principal d'un workflow déjà configuré (`Membre`) proposé ;
 - rôle appartenant à un catalogue/préfixe déjà lié à un workflow (`interest-test`) proposé.
 
-Ce comportement est attendu avec l'implémentation actuelle : `WorkflowStructureDiscoveryService` reprend encore les rôles techniquement manipulables de `RoleDiscoveryService` sans appliquer les réservations métier V11.
+Ce comportement a motivé la tranche du 18 septembre. La feature filtre désormais les candidats à partir d'un read-model V11 partagé, tout en conservant `WorkflowStructureDiscoveryService` comme discovery Discord pure. Cette implémentation doit encore passer les tests locaux et le smoke from scratch avant d'être considérée validée.
 
 ### Règle cible validée
 
@@ -204,7 +204,7 @@ Les anciennes propriétés spécialisées (`member_role_name`, `adult_role_name`
 
 Le développeur dispose d'un autre serveur adapté à un test **from scratch**, sans rôle IA déjà existant.
 
-Ne pas faire ce smoke avant la tranche de filtrage/réservation, afin qu'il valide directement le parcours cible complet.
+Faire ce smoke uniquement après validation locale de la tranche de filtrage/réservation. Il doit alors valider directement le parcours cible complet.
 
 Scénario recommandé :
 
@@ -228,14 +228,12 @@ Tester ensuite le cas IA désactivée.
 
 Ordre recommandé à partir de cette passation :
 
-1. implémenter les réservations/filtrages de rôles pour la configuration de workflow ;
-2. ajouter la revalidation backend/preflight correspondante ;
-3. enrichir les structures détectées avec les workflows déjà liés, sans interdire leur réutilisation ;
-4. tests ciblés → Ruff → pytest complet ;
-5. smoke from scratch sur la seconde guild ;
-6. mettre à jour `role scan` ;
-7. mettre à jour `config scan` ;
-8. seulement ensuite poursuivre le moteur générique de catalogue/questionnaire et le binding runtime.
+1. valider localement la tranche actuelle : tests ciblés → Ruff → pytest complet ;
+2. corriger les éventuelles régressions sur la feature ;
+3. smoke from scratch sur la seconde guild ;
+4. mettre à jour `role scan` ;
+5. mettre à jour `config scan` ;
+6. seulement ensuite poursuivre le moteur générique de catalogue/questionnaire et le binding runtime.
 
 ---
 
@@ -331,3 +329,55 @@ Le projet utilise désormais `CLAVIGER_ENV` pour sélectionner l'environnement. 
 - conserver secrets et fichiers d'environnement de production hors Git et hors image Docker.
 
 La mise à jour de l'environnement du serveur fait partie du plan de déploiement V1.1 au même titre que le backup SQLite, la migration et le smoke post-déploiement.
+
+
+---
+
+## 12. Tranche du 18 septembre — implémentée sur feature, non encore validée localement
+
+**HEAD code au moment de cette mise à jour :** `99cbaa7e7f401ae86d28bc4c2b5ff05a600bbf3e`.
+
+### Contrat IA nettoyé
+
+La configuration d'un workflow ne possède plus de choix IA local :
+
+- retrait de `ai_enabled`, `ai_preference_role` et `ai_preference_role_id` des modèles de configuration workflow ;
+- retrait de la création/réconciliation du rôle IA dans le provisioning workflow ;
+- retrait de l'écriture/lecture du contexte historique `ai_preference` par `WorkflowConfigurationRepository` ;
+- retrait de l'étape IA dans la View workflow.
+
+La source de vérité IA reste donc uniquement la configuration globale V11 de guild portée par `guild_settings`.
+
+### Réservations de rôles
+
+Un nouveau `WorkflowConfigurationInspectionService` combine les workflows persistés et la configuration IA globale pour réserver :
+
+- les `primary_role_id` déjà utilisés par d'autres workflows ;
+- le `ai_role_id` global, même s'il est conservé pendant une désactivation ;
+- les namespaces de rôles correspondant aux préfixes de catalogues déjà liés.
+
+`RoleDiscoveryService` retire également de ses candidats **tous les rôles portés par le compte du bot**, et plus uniquement son rôle le plus haut.
+
+Le filtrage est appliqué au read-model présenté au frontend, puis revérifié dans le preflight du provisioning immédiatement avant toute mutation Discord.
+
+### Structures déjà utilisées
+
+Les structures détectées restent réutilisables. Elles sont enrichies avec les commandes déjà configurées quand la catégorie, le salon de gestion et un salon d'exécution correspondent au workflow persisté.
+
+L'UI affiche cette information dans le résumé et dans la description du sélecteur.
+
+### Sélecteur de rôle principal
+
+Le `RoleSelect` Discord natif ne permet pas de filtrer arbitrairement les rôles proposés. Il a donc été remplacé pour le rôle principal par un `discord.ui.Select` construit depuis les seuls candidats approuvés par le backend.
+
+Conséquence volontaire V1.1 : Discord limite ce select à 25 options ; la feature présente les 25 premiers candidats approuvés. Une ergonomie plus riche/modal-first reste un sujet V1.3. Le backend reste capable de refuser toute identité réservée même si un autre frontend tente de la soumettre directement.
+
+### Commits de la tranche
+
+- `ecdbcb4c409da4852fa93f0929de109b2c0a9e74` — retrait du contrat IA local aux workflows ;
+- `e35d8d20516c7a78419ce4efbb06bc3bfe435ea0` — alignement des tests sur ce contrat ;
+- `dcb51527b6c6102f0d2c357f87604fa9c8c74874` — réservations, inspection et annotation des structures ;
+- `b468fccd8d223f4b3086d385ec66cb6fb4e36a13` — couverture de non-régression ;
+- `99cbaa7e7f401ae86d28bc4c2b5ff05a600bbf3e` — rendu Discord limité aux rôles réellement approuvés.
+
+**Statut :** implémenté et poussé, mais pas encore validé par les tests locaux du développeur ni par le smoke Discord from scratch.
