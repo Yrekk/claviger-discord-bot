@@ -49,6 +49,7 @@ from claviger.policies.policy_resolver import PolicyResolver
 
 # Reporting
 from claviger.reporting.command_tree import ClavigerCommandTree
+from claviger.reporting.discord_bootstrap_dm import DiscordBootstrapDMReporter
 from claviger.reporting.discord_forum import DiscordForumReporter
 from claviger.reporting.python_logger import PythonLoggingReporter
 from claviger.reporting.reporter import Reporter
@@ -328,6 +329,10 @@ class ClavigerBot(discord.Client):
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
             DiscordForumReporter(
+                client=self,
+                repository=self.guild_admin_configuration_repository,
+            ),
+            DiscordBootstrapDMReporter(
                 client=self,
                 repository=self.guild_admin_configuration_repository,
             ),

@@ -17,6 +17,9 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
+from claviger.services.admin.admin_structure_provisioning_service import (
+    AdminStructureProvisioningPermissionError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -531,6 +534,44 @@ class AdminConfigurationStartView(discord.ui.View):
 # ---------------------------------------------------------------------------
 
 
+async def _emit_admin_configuration_failed(
+    interaction: discord.Interaction,
+    *,
+    report_service: ReportService | None,
+    summary: str,
+    error: Exception,
+) -> None:
+    """Report one ADMIN bootstrap failure through every available destination."""
+
+    guild = interaction.guild
+
+    if report_service is None or guild is None:
+        return
+
+    event = ReportEvent(
+        event_type="admin.configuration.failed",
+        severity=ReportSeverity.ERROR,
+        title="Configuration ADMIN impossible",
+        summary=summary,
+        details=f"{type(error).__name__}: {error}",
+        guild_id=guild.id,
+        guild_label=guild.name,
+        actor_id=interaction.user.id,
+        actor_label=interaction.user.display_name,
+    )
+
+    try:
+        await report_service.emit(
+            event,
+        )
+
+    except Exception:
+        logger.exception(
+            "Unable to emit ADMIN configuration failure report for guild %s.",
+            guild.id,
+        )
+
+
 async def _emit_admin_configuration_activated(
     interaction: discord.Interaction,
     *,
@@ -835,17 +876,52 @@ async def run_admin_configuration(
 
         raise RuntimeError(f"Unsupported ADMIN reconciliation decision: {decision!r}.")
 
-    except Exception:
+    except AdminStructureProvisioningPermissionError as error:
         logger.exception(
             "Interactive ADMIN configuration failed for guild %s.",
             guild.id,
         )
 
+        summary = (
+            "Claviger ne possède pas la permission Discord "
+            "**Gérer les salons** requise pour créer ou réparer "
+            "la structure ADMIN. Aucune ressource Discord n'a été créée."
+        )
+
+        await _emit_admin_configuration_failed(
+            interaction,
+            report_service=report_service,
+            summary=summary,
+            error=error,
+        )
+
         await interaction.followup.send(
-            (
-                "❌ Échec de la configuration du serveur. "
-                "Aucune déduction automatique supplémentaire n'a été faite."
-            ),
+            f"❌ {summary}",
+            ephemeral=True,
+        )
+
+        return False
+
+    except Exception as error:
+        logger.exception(
+            "Interactive ADMIN configuration failed for guild %s.",
+            guild.id,
+        )
+
+        summary = (
+            "La configuration ADMIN a échoué avant de devenir opérationnelle. "
+            "Aucune déduction automatique supplémentaire n'a été faite."
+        )
+
+        await _emit_admin_configuration_failed(
+            interaction,
+            report_service=report_service,
+            summary=summary,
+            error=error,
+        )
+
+        await interaction.followup.send(
+            f"❌ {summary}",
             ephemeral=True,
         )
 

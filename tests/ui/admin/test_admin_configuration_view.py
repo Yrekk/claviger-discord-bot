@@ -15,9 +15,13 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
+from claviger.services.admin.admin_structure_provisioning_service import (
+    AdminStructureProvisioningPermissionError,
+)
 from claviger.ui.admin.admin_configuration_view import (
     AdminCategorySelectionView,
     AdminRoutingSelectionView,
+    run_admin_configuration,
 )
 
 # ---------------------------------------------------------------------------
@@ -141,6 +145,9 @@ def _interaction(
     interaction.response.edit_message = AsyncMock()
 
     interaction.edit_original_response = AsyncMock()
+
+    interaction.followup = Mock()
+    interaction.followup.send = AsyncMock()
 
     return interaction
 
@@ -360,3 +367,43 @@ async def test_category_selection_prepares_choice_before_routing() -> None:
 
     # Human-readable category identity remains visible during the transition.
     assert "Claviger Admin" in kwargs["content"]
+
+
+
+@pytest.mark.asyncio
+async def test_run_admin_configuration_reports_missing_manage_channels_permission() -> None:
+    """Send actionable bootstrap feedback and a structured failure event."""
+
+    coordinator = _coordinator()
+    report_service = _report_service()
+    interaction = _interaction()
+
+    coordinator.configure.side_effect = AdminStructureProvisioningPermissionError(
+        "Claviger requires the Manage Channels permission for ADMIN provisioning."
+    )
+
+    result = await run_admin_configuration(
+        interaction,
+        coordinator=coordinator,
+        admin_command_name="experimentum",
+        report_service=report_service,
+    )
+
+    assert result is False
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "Gérer les salons" in message
+    assert "Aucune ressource Discord n'a été créée" in message
+
+    report_service.emit.assert_awaited_once()
+
+    event = report_service.emit.await_args.args[0]
+
+    assert event.event_type == "admin.configuration.failed"
+    assert event.severity == ReportSeverity.ERROR
+    assert "Gérer les salons" in event.summary
+    assert event.guild_id == 123
+    assert event.actor_id == 42
+    assert event.details is not None
+    assert "AdminStructureProvisioningPermissionError" in event.details
