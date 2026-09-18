@@ -367,11 +367,11 @@ async def test_on_ready_configures_every_available_cached_guild(
 
 
 @pytest.mark.asyncio
-async def test_guild_events_configure_join_and_force_available(
+async def test_guild_events_configure_join_and_available_without_forced_refresh(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Use normal configuration for joins and forced refresh for availability."""
+    """Use normal configuration for joins and availability events."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -406,9 +406,7 @@ async def test_guild_events_configure_join_and_force_available(
     assert configure.await_args_list[0].kwargs == {}
 
     assert configure.await_args_list[1].args == (999,)
-    assert configure.await_args_list[1].kwargs == {
-        "force": True,
-    }
+    assert configure.await_args_list[1].kwargs == {}
 
 
 @pytest.mark.asyncio
