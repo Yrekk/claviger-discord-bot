@@ -61,7 +61,6 @@ class _WorkflowProvisioningPreflight:
     execution_channel: discord.TextChannel | None
 
     primary_role: discord.Role | None
-    ai_preference_role: discord.Role | None
 
 
 class WorkflowStructureProvisioningService:
@@ -217,28 +216,6 @@ class WorkflowStructureProvisioningService:
                     "Workflow primary role could not be resolved."
                 )
 
-            ai_preference_role = preflight.ai_preference_role
-
-            if (
-                configuration.ai_enabled
-                and configuration.ai_preference_role is not None
-                and configuration.ai_preference_role.mode == "create"
-            ):
-                ai_preference_role = await self._create_role(
-                    guild=guild,
-                    selection=configuration.ai_preference_role,
-                    resource_label="AI preference role",
-                )
-
-                created_role_ids.append(
-                    ai_preference_role.id,
-                )
-
-            if configuration.ai_enabled and ai_preference_role is None:
-                raise WorkflowStructureProvisioningResourceError(
-                    "AI-enabled workflow has no resolved AI preference role."
-                )
-
             resolved_configuration = ResolvedWorkflowConfiguration(
                 guild_id=configuration.guild_id,
                 workflow_key=configuration.workflow_key,
@@ -251,9 +228,6 @@ class WorkflowStructureProvisioningService:
                 execution_channel_id=execution_channel.id,
                 primary_role_id=primary_role.id,
                 questionnaire_role_prefix=(configuration.questionnaire_role_prefix),
-                ai_preference_role_id=(
-                    ai_preference_role.id if ai_preference_role is not None else None
-                ),
             )
 
             return WorkflowStructureProvisioningResult(
@@ -335,19 +309,6 @@ class WorkflowStructureProvisioningService:
             require_private_writes=False,
         )
 
-        if configuration.ai_enabled and configuration.ai_preference_role is None:
-            raise WorkflowStructureProvisioningResourceError(
-                "AI-enabled workflow requires a reconciled AI preference role."
-            )
-
-        if (
-            not configuration.ai_enabled
-            and configuration.ai_preference_role is not None
-        ):
-            raise WorkflowStructureProvisioningResourceError(
-                "AI-disabled workflow cannot provision an AI preference role."
-            )
-
         role_hierarchy = await self._load_role_hierarchy_if_needed(
             guild=guild,
             configuration=configuration,
@@ -361,23 +322,11 @@ class WorkflowStructureProvisioningService:
             resource_label="primary role",
         )
 
-        ai_preference_role = None
-
-        if configuration.ai_preference_role is not None:
-            ai_preference_role = self._preflight_role(
-                guild=guild,
-                bot_member=bot_member,
-                selection=configuration.ai_preference_role,
-                hierarchy=role_hierarchy,
-                resource_label="AI preference role",
-            )
-
         return _WorkflowProvisioningPreflight(
             category=category,
             management_channel=management_channel,
             execution_channel=execution_channel,
             primary_role=primary_role,
-            ai_preference_role=ai_preference_role,
         )
 
     def _preflight_category(
@@ -549,11 +498,6 @@ class WorkflowStructureProvisioningService:
         selections = [
             configuration.primary_role,
         ]
-
-        if configuration.ai_preference_role is not None:
-            selections.append(
-                configuration.ai_preference_role,
-            )
 
         if not any(selection.mode == "existing" for selection in selections):
             return None

@@ -25,7 +25,6 @@ RESOURCE_LABELS: dict[
     "management_channel": "salon de gestion",
     "execution_channel": "salon d'exécution",
     "primary_role": "rôle principal",
-    "ai_preference_role": "rôle de préférence IA",
 }
 
 
@@ -1300,116 +1299,6 @@ class WorkflowResourceModeView(discord.ui.View):
 
 
 # ---------------------------------------------------------------------------
-# AI configuration
-# ---------------------------------------------------------------------------
-
-
-class _AiChoiceButton(discord.ui.Button):
-    """Enable or disable the shared AI preference context for this workflow."""
-
-    def __init__(
-        self,
-        *,
-        enabled: bool,
-    ) -> None:
-        super().__init__(
-            label=("Activer l'IA" if enabled else "Sans IA"),
-            style=(
-                discord.ButtonStyle.primary
-                if enabled
-                else discord.ButtonStyle.secondary
-            ),
-        )
-
-        self.enabled_choice = enabled
-
-    async def callback(
-        self,
-        interaction: discord.Interaction,
-    ) -> None:
-        """Apply the workflow-local AI choice and continue."""
-
-        view = self.view
-
-        if not isinstance(
-            view,
-            WorkflowAiChoiceView,
-        ):
-            raise RuntimeError("Workflow AI button is detached from its view.")
-
-        if await _reject_foreign_actor(
-            interaction,
-            session=view.session,
-        ):
-            return
-
-        view.session.ai_enabled = self.enabled_choice
-
-        if not self.enabled_choice:
-            view.session.ai_preference_role = None
-
-            await _edit_review(
-                interaction,
-                coordinator=view.coordinator,
-                session=view.session,
-                admin_command_name=view.admin_command_name,
-            )
-            return
-
-        if view.session.persisted_ai_preference_role_id is not None:
-            # Reconciliation will inject the existing guild-wide role. The UI
-            # deliberately does not create a second representation of it.
-            view.session.ai_preference_role = None
-
-            await _edit_review(
-                interaction,
-                coordinator=view.coordinator,
-                session=view.session,
-                admin_command_name=view.admin_command_name,
-            )
-            return
-
-        await _edit_resource_step(
-            interaction,
-            coordinator=view.coordinator,
-            session=view.session,
-            resource="ai_preference_role",
-            admin_command_name=view.admin_command_name,
-        )
-
-
-class WorkflowAiChoiceView(discord.ui.View):
-    """Choose whether the workflow exposes the shared AI preference context."""
-
-    def __init__(
-        self,
-        *,
-        coordinator: WorkflowConfigurationCoordinatorService,
-        session: WorkflowConfigurationSession,
-        admin_command_name: str,
-    ) -> None:
-        super().__init__(
-            timeout=300,
-        )
-
-        self.coordinator = coordinator
-        self.session = session
-        self.admin_command_name = admin_command_name
-
-        self.add_item(
-            _AiChoiceButton(
-                enabled=False,
-            )
-        )
-
-        self.add_item(
-            _AiChoiceButton(
-                enabled=True,
-            )
-        )
-
-
-# ---------------------------------------------------------------------------
 # Final review and backend handoff
 # ---------------------------------------------------------------------------
 
@@ -1518,10 +1407,7 @@ class WorkflowConfigurationReviewView(discord.ui.View):
                 f"- Exécution : <#{configuration.execution_channel_id}>\n"
                 f"- Rôle principal : <@&{configuration.primary_role_id}>\n"
                 f"- Préfixe questionnaire : "
-                f"`{configuration.questionnaire_role_prefix}`\n"
-                f"- IA : "
-                f"{'activée' if configuration.ai_preference_role_id else 'désactivée'}"
-                "\n\n"
+                f"`{configuration.questionnaire_role_prefix}`\n\n"
                 "**Mutations Discord**\n"
                 f"{mutation_summary}\n\n"
                 f"Utilise `/{self.admin_command_name} restart` "
@@ -1579,26 +1465,9 @@ async def _advance_after_resource(
         "management_channel": "execution_channel",
         "execution_channel": "primary_role",
         "primary_role": None,
-        "ai_preference_role": None,
     }
 
     if resource == "primary_role":
-        await interaction.response.edit_message(
-            content=(
-                "**Préférence IA**\n\n"
-                "Choisis si ce workflow doit exposer la préférence IA. "
-                "Si le serveur possède déjà le contexte `ai_preference`, "
-                "son rôle sera automatiquement réutilisé."
-            ),
-            view=WorkflowAiChoiceView(
-                coordinator=coordinator,
-                session=session,
-                admin_command_name=admin_command_name,
-            ),
-        )
-        return
-
-    if resource == "ai_preference_role":
         await _edit_review(
             interaction,
             coordinator=coordinator,
@@ -1650,8 +1519,7 @@ async def _edit_review(
             f"- Rôle principal : "
             f"{session.describe_resource('primary_role')}\n"
             f"- Préfixe questionnaire : "
-            f"`{session.questionnaire_role_prefix}`\n"
-            f"- IA : {session.describe_ai_preference_role()}\n\n"
+            f"`{session.questionnaire_role_prefix}`\n\n"
             "**Aucune mutation Discord ou SQLite n'a encore eu lieu.**"
         ),
         view=WorkflowConfigurationReviewView(
@@ -1736,10 +1604,6 @@ async def run_workflow_configuration(
             guild,
         )
 
-        ai_preference_role_id = await coordinator.get_ai_preference_role_id(
-            guild.id,
-        )
-
     except Exception:
         logger.exception(
             "Unable to prepare workflow configuration UI for guild %s.",
@@ -1759,7 +1623,6 @@ async def run_workflow_configuration(
         guild_id=guild.id,
         actor_id=interaction.user.id,
         discovery=discovery,
-        persisted_ai_preference_role_id=ai_preference_role_id,
     )
 
     if discovery.workflow_candidates:

@@ -51,16 +51,6 @@ class WorkflowConfigurationDraft:
     # become the role_prefix of the catalog bound to this workflow.
     questionnaire_role_prefix: str
 
-    # This is an interface-level choice, not a second persisted AI model.
-    # The coordinator translates True into the shared ai_preference context
-    # binding and False into the absence of that editable context.
-    ai_enabled: bool
-
-    # A guild that already owns the ai_preference capability does not need to
-    # provide this selection again. For a new capability, frontends may select
-    # an existing manageable role or request creation of one.
-    ai_preference_role: WorkflowResourceSelection | None = None
-
 
 @dataclass(frozen=True, slots=True)
 class WorkflowConfigurationSpec:
@@ -82,8 +72,3 @@ class WorkflowConfigurationSpec:
     primary_role: WorkflowResourceSelection
 
     questionnaire_role_prefix: str
-    ai_enabled: bool
-
-    # None is valid while reconciliation can reuse an already persisted
-    # guild-wide ai_preference role.
-    ai_preference_role: WorkflowResourceSelection | None = None

@@ -69,16 +69,6 @@ class WorkflowConfigurationCoordinatorService:
             guild,
         )
 
-    async def get_ai_preference_role_id(
-        self,
-        guild_id: int,
-    ) -> int | None:
-        """Return the guild-wide AI preference role already persisted, if any."""
-
-        return await self.repository.get_ai_preference_role_id(
-            guild_id,
-        )
-
     async def configure(
         self,
         *,
@@ -100,16 +90,9 @@ class WorkflowConfigurationCoordinatorService:
             guild,
         )
 
-        persisted_ai_preference_role_id = (
-            await self.repository.get_ai_preference_role_id(
-                guild.id,
-            )
-        )
-
         reconciled = self.reconciliation_service.reconcile(
             configuration=validated,
             discovery=discovery,
-            persisted_ai_preference_role_id=(persisted_ai_preference_role_id),
         )
 
         provisioning = await self.provisioning_service.provision(

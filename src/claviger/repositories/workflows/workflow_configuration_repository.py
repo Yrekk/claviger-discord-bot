@@ -8,11 +8,6 @@ from claviger.database.connection import (
 from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
-
-AI_CAPABILITY_KEY = "ai_preference"
-DEFAULT_AI_CONTEXT_KEY = "ai-preference"
-
-
 class WorkflowConfigurationConflictError(RuntimeError):
     """Raised when workflow configuration conflicts with persisted identities."""
 
@@ -25,43 +20,6 @@ class WorkflowConfigurationRepository:
         database: DatabaseConnection,
     ) -> None:
         self.database = database
-
-    async def get_ai_preference_role_id(
-        self,
-        guild_id: int,
-    ) -> int | None:
-        """Return the guild-wide role already implementing AI preference."""
-
-        self._ensure_database_exists()
-
-        try:
-            async with self.database.connect() as connection:
-                cursor = await connection.execute(
-                    """
-                    SELECT role_id
-                    FROM guild_context_definitions
-                    WHERE guild_id = ?
-                      AND capability_key = ?
-                    """,
-                    (
-                        guild_id,
-                        AI_CAPABILITY_KEY,
-                    ),
-                )
-
-                row = await cursor.fetchone()
-
-        except aiosqlite.Error as error:
-            raise DatabaseUnavailableError(
-                f"Unable to read AI preference context for guild {guild_id}."
-            ) from error
-
-        if row is None:
-            return None
-
-        return int(
-            row[0],
-        )
 
     async def save(
         self,
@@ -108,12 +66,6 @@ class WorkflowConfigurationRepository:
                     configuration=configuration,
                     catalog_key=catalog_key,
                 )
-
-                await self._configure_ai_context(
-                    connection,
-                    configuration=configuration,
-                )
-
                 await connection.commit()
 
         except WorkflowConfigurationConflictError:
@@ -334,132 +286,6 @@ class WorkflowConfigurationRepository:
             ),
         )
 
-    async def _configure_ai_context(
-        self,
-        connection: aiosqlite.Connection,
-        *,
-        configuration: ResolvedWorkflowConfiguration,
-    ) -> None:
-        """Bind or unbind the shared AI preference context for this workflow."""
-
-        cursor = await connection.execute(
-            """
-            SELECT
-                context_key,
-                role_id
-            FROM guild_context_definitions
-            WHERE guild_id = ?
-              AND capability_key = ?
-            """,
-            (
-                configuration.guild_id,
-                AI_CAPABILITY_KEY,
-            ),
-        )
-
-        existing = await cursor.fetchone()
-
-        if configuration.ai_preference_role_id is None:
-            # Disabling AI is workflow-local. The guild-wide context definition
-            # may still be used by another workflow and therefore remains.
-            if existing is not None:
-                await connection.execute(
-                    """
-                    DELETE FROM guild_workflow_contexts
-                    WHERE guild_id = ?
-                      AND workflow_key = ?
-                      AND context_key = ?
-                    """,
-                    (
-                        configuration.guild_id,
-                        configuration.workflow_key,
-                        existing[0],
-                    ),
-                )
-
-            return
-
-        if existing is None:
-            context_key = DEFAULT_AI_CONTEXT_KEY
-
-            await connection.execute(
-                """
-                INSERT INTO guild_context_definitions (
-                    guild_id,
-                    context_key,
-                    capability_key,
-                    value_type,
-                    role_id,
-                    label,
-                    description,
-                    sort_order,
-                    enabled
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    configuration.guild_id,
-                    context_key,
-                    AI_CAPABILITY_KEY,
-                    "boolean",
-                    configuration.ai_preference_role_id,
-                    "Préférence IA",
-                    (
-                        "Indique si le membre souhaite activer "
-                        "les variantes IA compatibles."
-                    ),
-                    0,
-                    1,
-                ),
-            )
-
-        else:
-            context_key = str(
-                existing[0],
-            )
-
-            persisted_role_id = int(
-                existing[1],
-            )
-
-            # ai_preference is intentionally guild-wide. Silently replacing its
-            # role would change every workflow already using the capability.
-            if persisted_role_id != configuration.ai_preference_role_id:
-                raise WorkflowConfigurationConflictError(
-                    "The guild already uses another role for AI preference."
-                )
-
-        await connection.execute(
-            """
-            INSERT INTO guild_workflow_contexts (
-                guild_id,
-                workflow_key,
-                context_key,
-                interaction_mode,
-                sort_order,
-                enabled
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-
-            ON CONFLICT (
-                guild_id,
-                workflow_key,
-                context_key
-            )
-            DO UPDATE SET
-                interaction_mode = excluded.interaction_mode,
-                enabled = excluded.enabled
-            """,
-            (
-                configuration.guild_id,
-                configuration.workflow_key,
-                context_key,
-                "editable",
-                0,
-                1,
-            ),
-        )
-
     @staticmethod
     def _validate_resolved_configuration(
         configuration: ResolvedWorkflowConfiguration,
@@ -478,12 +304,6 @@ class WorkflowConfigurationRepository:
             raise ValueError(
                 "Resolved workflow Discord IDs must all be greater than zero."
             )
-
-        if (
-            configuration.ai_preference_role_id is not None
-            and configuration.ai_preference_role_id <= 0
-        ):
-            raise ValueError("AI preference role ID must be greater than zero.")
 
         if configuration.management_channel_id == configuration.execution_channel_id:
             raise ValueError("Management and execution channels must be different.")

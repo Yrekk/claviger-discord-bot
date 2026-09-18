@@ -15,7 +15,6 @@ WorkflowUiResource = Literal[
     "management_channel",
     "execution_channel",
     "primary_role",
-    "ai_preference_role",
 ]
 
 WorkflowCandidateChannelResource = Literal[
@@ -31,7 +30,6 @@ class WorkflowConfigurationSession:
     guild_id: int
     actor_id: int
     discovery: WorkflowStructureDiscoveryResult
-    persisted_ai_preference_role_id: int | None = None
 
     # The UI stores only the identity of the structural candidate selected by
     # the human. Candidate recognition itself belongs exclusively to discovery.
@@ -50,9 +48,6 @@ class WorkflowConfigurationSession:
     management_channel: WorkflowResourceSelection | None = None
     execution_channel: WorkflowResourceSelection | None = None
     primary_role: WorkflowResourceSelection | None = None
-
-    ai_enabled: bool = False
-    ai_preference_role: WorkflowResourceSelection | None = None
 
     def set_resource(
         self,
@@ -246,8 +241,6 @@ class WorkflowConfigurationSession:
             execution_channel=self.execution_channel,
             primary_role=self.primary_role,
             questionnaire_role_prefix=self.questionnaire_role_prefix,
-            ai_enabled=self.ai_enabled,
-            ai_preference_role=self.ai_preference_role,
         )
 
     def describe_resource(
@@ -280,31 +273,6 @@ class WorkflowConfigurationSession:
             return f"ID `{resource_id}`"
 
         return f"`{name}` (`{resource_id}`)"
-
-    def describe_ai_preference_role(
-        self,
-    ) -> str:
-        """Return the effective AI preference role displayed in the review UI."""
-
-        if not self.ai_enabled:
-            return "Désactivée"
-
-        if self.persisted_ai_preference_role_id is not None:
-            role_id = self.persisted_ai_preference_role_id
-
-            role_name = self._find_role_name(
-                role_id,
-            )
-
-            if role_name is not None:
-                return f"Activée — rôle existant `{role_name}` (`{role_id}`)"
-
-            return f"Activée — rôle existant `{role_id}`"
-
-        if self.ai_preference_role is None:
-            return "Activée — rôle non configuré"
-
-        return f"Activée — {self.describe_resource('ai_preference_role')}"
 
     def _find_existing_name(
         self,

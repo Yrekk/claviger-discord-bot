@@ -130,27 +130,6 @@ class WorkflowConfigurationValidationService:
                 f"{MAX_ROLE_PREFIX_LENGTH} characters."
             )
 
-        if not isinstance(
-            draft.ai_enabled,
-            bool,
-        ):
-            raise WorkflowConfigurationValidationError(
-                "AI workflow option must be a boolean."
-            )
-
-        ai_preference_role = None
-
-        if draft.ai_preference_role is not None:
-            if not draft.ai_enabled:
-                raise WorkflowConfigurationValidationError(
-                    "AI preference role cannot be configured when AI is disabled."
-                )
-
-            ai_preference_role = self._validate_resource(
-                draft.ai_preference_role,
-                resource_label="AI preference role",
-            )
-
         return WorkflowConfigurationSpec(
             guild_id=draft.guild_id,
             workflow_key=workflow_key,
@@ -163,8 +142,6 @@ class WorkflowConfigurationValidationService:
             execution_channel=execution_channel,
             primary_role=primary_role,
             questionnaire_role_prefix=questionnaire_role_prefix,
-            ai_enabled=draft.ai_enabled,
-            ai_preference_role=ai_preference_role,
         )
 
     @staticmethod

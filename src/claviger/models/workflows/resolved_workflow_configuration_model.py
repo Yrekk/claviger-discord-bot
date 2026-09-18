@@ -23,8 +23,3 @@ class ResolvedWorkflowConfiguration:
 
     # Questionnaire discovery remains represented by the generic catalog model.
     questionnaire_role_prefix: str
-
-    # None means that this workflow does not expose the AI preference context.
-    # When present, the ID refers to the guild-wide role implementing the
-    # existing "ai_preference" capability.
-    ai_preference_role_id: int | None = None

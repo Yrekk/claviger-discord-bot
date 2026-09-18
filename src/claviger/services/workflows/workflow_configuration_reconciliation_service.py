@@ -28,18 +28,6 @@ class WorkflowCategoryMismatchError(WorkflowConfigurationReconciliationError):
     """Raised when selected workflow channels do not belong to its category."""
 
 
-class WorkflowAiPreferenceRoleRequiredError(WorkflowConfigurationReconciliationError):
-    """Raised when enabling AI requires an explicit first capability role."""
-
-
-class WorkflowAiPreferenceRoleConflictError(WorkflowConfigurationReconciliationError):
-    """Raised when a frontend tries to replace the guild-wide AI role."""
-
-
-class WorkflowRoleCollisionError(WorkflowConfigurationReconciliationError):
-    """Raised when one role receives incompatible workflow semantics."""
-
-
 class WorkflowConfigurationReconciliationService:
     """Reconcile one validated workflow specification with Discord discovery."""
 
@@ -48,7 +36,6 @@ class WorkflowConfigurationReconciliationService:
         *,
         configuration: WorkflowConfigurationSpec,
         discovery: WorkflowStructureDiscoveryResult,
-        persisted_ai_preference_role_id: int | None = None,
     ) -> WorkflowConfigurationSpec:
         """Return a Discord-compatible specification or reject it fail-closed."""
 
@@ -87,24 +74,12 @@ class WorkflowConfigurationReconciliationService:
             resource_label="primary role",
         )
 
-        ai_preference_role = self._reconcile_ai_preference_role(
-            configuration=configuration,
-            discovery=discovery,
-            persisted_ai_preference_role_id=(persisted_ai_preference_role_id),
-        )
-
-        self._reject_role_collision(
-            primary_role=primary_role,
-            ai_preference_role=ai_preference_role,
-        )
-
         return replace(
             configuration,
             category=category,
             management_channel=management_channel,
             execution_channel=execution_channel,
             primary_role=primary_role,
-            ai_preference_role=ai_preference_role,
         )
 
     def _reconcile_category(
@@ -226,90 +201,6 @@ class WorkflowConfigurationReconciliationService:
             )
 
         return selection
-
-    def _reconcile_ai_preference_role(
-        self,
-        *,
-        configuration: WorkflowConfigurationSpec,
-        discovery: WorkflowStructureDiscoveryResult,
-        persisted_ai_preference_role_id: int | None,
-    ) -> WorkflowResourceSelection | None:
-        """Resolve the guild-wide AI capability role for one workflow."""
-
-        if not configuration.ai_enabled:
-            return None
-
-        selected_role = configuration.ai_preference_role
-
-        if persisted_ai_preference_role_id is not None:
-            persisted_role = self._find_role(
-                discovery,
-                role_id=persisted_ai_preference_role_id,
-            )
-
-            if persisted_role is None:
-                raise WorkflowResourceUnavailableError(
-                    "The persisted AI preference role is no longer "
-                    "manageable by Claviger."
-                )
-
-            if selected_role is not None:
-                if (
-                    selected_role.mode != "existing"
-                    or selected_role.resource_id != persisted_ai_preference_role_id
-                ):
-                    raise WorkflowAiPreferenceRoleConflictError(
-                        "This guild already uses another role for AI preference."
-                    )
-
-            # Frontends do not need to ask for the role again once the capability
-            # has a stable guild-wide Discord identity.
-            return WorkflowResourceSelection(
-                mode="existing",
-                resource_id=persisted_ai_preference_role_id,
-            )
-
-        if selected_role is None:
-            raise WorkflowAiPreferenceRoleRequiredError(
-                "Enabling AI for the first time requires an AI preference role."
-            )
-
-        return self._reconcile_role(
-            selected_role,
-            discovery=discovery,
-            resource_label="AI preference role",
-        )
-
-    @staticmethod
-    def _reject_role_collision(
-        *,
-        primary_role: WorkflowResourceSelection,
-        ai_preference_role: WorkflowResourceSelection | None,
-    ) -> None:
-        """Keep membership and AI-preference semantics on distinct roles."""
-
-        if ai_preference_role is None:
-            return
-
-        if (
-            primary_role.mode == "existing"
-            and ai_preference_role.mode == "existing"
-            and primary_role.resource_id == ai_preference_role.resource_id
-        ):
-            raise WorkflowRoleCollisionError(
-                "Primary role and AI preference role must be different."
-            )
-
-        if (
-            primary_role.mode == "create"
-            and ai_preference_role.mode == "create"
-            and primary_role.name is not None
-            and ai_preference_role.name is not None
-            and primary_role.name.casefold() == ai_preference_role.name.casefold()
-        ):
-            raise WorkflowRoleCollisionError(
-                "Primary role and AI preference role must use different names."
-            )
 
     @staticmethod
     def _require_channel_mutation_permission(
