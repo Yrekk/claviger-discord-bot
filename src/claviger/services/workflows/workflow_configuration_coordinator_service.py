@@ -2,15 +2,15 @@ from dataclasses import replace
 
 import discord
 
+from claviger.models.workflows.workflow_configuration_inspection_model import (
+    WorkflowConfigurationInspection,
+)
 from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationDraft,
 )
 from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
-)
-from claviger.models.workflows.workflow_configuration_inspection_model import (
-    WorkflowConfigurationInspection,
 )
 from claviger.models.workflows.workflow_structure_provisioning_model import (
     WorkflowStructureProvisioningResult,

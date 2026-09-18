@@ -976,7 +976,9 @@ class _ExistingChannelSelect(discord.ui.ChannelSelect):
         ):
             return
 
-        selected_id = self.values[0].id
+        selected_id = int(
+            self.values[0],
+        )
 
         if self.resource == "category":
             candidate = next(
@@ -1045,18 +1047,28 @@ class _ExistingChannelSelect(discord.ui.ChannelSelect):
         )
 
 
-class _ExistingRoleSelect(discord.ui.RoleSelect):
-    """Select one existing role that discovery considers manageable."""
+class _ExistingRoleSelect(discord.ui.Select):
+    """Select one role from the backend-filtered workflow candidate list."""
 
     def __init__(
         self,
         *,
         resource: WorkflowUiResource,
+        session: WorkflowConfigurationSession,
     ) -> None:
+        roles = session.discovery.manageable_roles[:25]
+
         super().__init__(
             placeholder="Choisir un rôle existant",
             min_values=1,
             max_values=1,
+            options=[
+                discord.SelectOption(
+                    label=role.role_name[:100],
+                    value=str(role.role_id),
+                )
+                for role in roles
+            ],
         )
 
         self.resource = resource
@@ -1120,7 +1132,7 @@ class _ExistingRoleSelect(discord.ui.RoleSelect):
 
 
 class WorkflowExistingResourceView(discord.ui.View):
-    """Expose Discord-native selectors without a 25-option manual menu limit."""
+    """Expose selectors built from the backend-approved resource snapshot."""
 
     def __init__(
         self,
@@ -1154,6 +1166,7 @@ class WorkflowExistingResourceView(discord.ui.View):
             self.add_item(
                 _ExistingRoleSelect(
                     resource=resource,
+                    session=session,
                 )
             )
 

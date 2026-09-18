@@ -18,6 +18,7 @@ from claviger.ui.workflows.workflow_configuration_view import (
     WorkflowConfigurationStartView,
     WorkflowDetectedStructureChannelView,
     WorkflowDetectedStructureView,
+    WorkflowExistingResourceView,
     _detected_structures_content,
     _selected_structure_content,
     _structure_channel_choice_content,
@@ -514,6 +515,48 @@ def test_detected_structure_content_mentions_existing_workflow_binding() -> None
 
     assert "/membre" in content
     assert "déjà configuré" in content
+
+
+@pytest.mark.asyncio
+async def test_existing_role_select_only_exposes_filtered_candidates() -> None:
+    """Render only backend-approved primary-role candidates in Discord."""
+
+    discovery = _empty_discovery()
+    discovery = WorkflowStructureDiscoveryResult(
+        categories=discovery.categories,
+        text_channels=discovery.text_channels,
+        manageable_roles=(
+            WorkflowRoleCandidate(
+                role_id=302,
+                role_name="Libre",
+            ),
+        ),
+        can_create_channels=discovery.can_create_channels,
+        can_create_roles=discovery.can_create_roles,
+        workflow_candidates=discovery.workflow_candidates,
+    )
+    session = WorkflowConfigurationSession(
+        guild_id=123,
+        actor_id=42,
+        discovery=discovery,
+    )
+
+    view = WorkflowExistingResourceView(
+        coordinator=MagicMock(),
+        session=session,
+        resource="primary_role",
+        admin_command_name="application",
+    )
+
+    select = view.children[0]
+
+    assert isinstance(
+        select,
+        discord.ui.Select,
+    )
+    assert tuple(option.value for option in select.options) == (
+        "302",
+    )
 
 
 # ---------------------------------------------------------------------------
