@@ -10,7 +10,9 @@ from claviger.models.workflows.workflow_questionnaire_model import (
 from claviger.models.workflows.workflow_role_execution_result_model import (
     WorkflowRoleExecutionResult,
 )
-from claviger.repositories.catalogs.catalog_entry_repository import CatalogEntryRepository
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
+)
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )

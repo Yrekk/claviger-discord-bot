@@ -17,7 +17,9 @@ from claviger.models.workflows.workflow_questionnaire_model import (
 from claviger.models.workflows.workflow_role_execution_result_model import (
     WorkflowRoleExecutionResult,
 )
-from claviger.repositories.catalogs.catalog_entry_repository import CatalogEntryRepository
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
+)
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )
@@ -79,7 +81,7 @@ def _workflow() -> WorkflowDefinition:
 
 
 async def test_coordinator_rebuilds_questionnaire_before_submission_execution() -> None:
-    """Submission always uses fresh persistence/member state instead of stale UI state."""
+    """Rebuild fresh persistence and member state before execution."""
 
     workflow_repository = MagicMock(spec=WorkflowDefinitionRepository)
     workflow_repository.get = AsyncMock(return_value=_workflow())

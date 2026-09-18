@@ -1,6 +1,9 @@
 from collections.abc import Mapping
 
-from claviger.models.catalogs.catalog_entry_model import CatalogEntry, CatalogEntryTarget
+from claviger.models.catalogs.catalog_entry_model import (
+    CatalogEntry,
+    CatalogEntryTarget,
+)
 from claviger.models.workflows.workflow_definition_model import WorkflowDefinition
 from claviger.models.workflows.workflow_questionnaire_model import (
     WorkflowQuestionnaire,
@@ -10,7 +13,7 @@ from claviger.models.workflows.workflow_questionnaire_model import (
 
 
 class WorkflowQuestionnairePlanningError(ValueError):
-    """Base error raised while converting persisted workflow state into a questionnaire."""
+    """Base error raised while building one generic workflow questionnaire."""
 
 
 class WorkflowQuestionnaireTargetConflictError(WorkflowQuestionnairePlanningError):

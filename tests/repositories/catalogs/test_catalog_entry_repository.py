@@ -8,7 +8,9 @@ from claviger.models.catalogs.catalog_entry_model import (
     CatalogEntry,
     CatalogEntryTarget,
 )
-from claviger.repositories.catalogs.catalog_entry_repository import CatalogEntryRepository
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
+)
 
 pytestmark = pytest.mark.asyncio
 

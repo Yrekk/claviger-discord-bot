@@ -19,7 +19,7 @@ class WorkflowRolePlannerService:
         submission: WorkflowQuestionnaireSubmission,
         member_role_ids: set[int],
     ) -> WorkflowRolePlan:
-        """Build exact add/remove operations for a validated questionnaire submission."""
+        """Build exact role operations for a validated questionnaire submission."""
 
         current_catalogs = {
             catalog.catalog_key: catalog

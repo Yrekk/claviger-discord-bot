@@ -2,6 +2,7 @@ from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
 from claviger.models.catalogs.catalog_entry_model import (
     CatalogEntry,
     CatalogEntryTarget,
+    CatalogTargetVariant,
 )
 from claviger.models.workflows.workflow_definition_model import (
     WorkflowCatalogBinding,
@@ -14,7 +15,7 @@ from claviger.services.workflows.workflow_questionnaire_planner_service import (
 
 def _target(
     role_id: int,
-    variant: str,
+    variant: CatalogTargetVariant,
     *,
     available: bool = True,
 ) -> CatalogEntryTarget:
@@ -26,7 +27,7 @@ def _target(
         role_name=f"role-{role_id}",
         channel_id=role_id + 1000,
         channel_name=f"channel-{role_id}",
-        variant=variant,  # type: ignore[arg-type]
+        variant=variant,
         enabled=available,
         discord_present=True,
         role_manageable=True,
@@ -90,16 +91,15 @@ def _workflow() -> WorkflowDefinition:
 
 
 def test_questionnaire_uses_member_ai_state_and_restores_logical_selection() -> None:
-    """Pick the matching variant while preserving a logical selection across variants."""
+    """Pick the matching variant while preserving the logical selection."""
 
     planner = WorkflowQuestionnairePlannerService()
     no_ai = _target(501, "no_ai")
     ai = _target(502, "ai")
-    base = CatalogEntryTarget(
-        **{
-            **_target(503, "base").__dict__,
-        }
-    ) if False else _target(503, "base")
+    base = _target(
+        503,
+        "base",
+    )
 
     result = planner.build(
         workflow=_workflow(),
