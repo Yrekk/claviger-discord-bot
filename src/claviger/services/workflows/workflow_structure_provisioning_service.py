@@ -183,6 +183,7 @@ class WorkflowStructureProvisioningService:
                     ),
                     category=category,
                     overwrites=self._build_execution_overwrites(
+                        guild=guild,
                         bot_member=bot_member,
                     ),
                     reason=PROVISIONING_REASON,
@@ -198,7 +199,8 @@ class WorkflowStructureProvisioningService:
                 )
 
             if configuration.execution_channel.mode == "existing":
-                if await self._ensure_bot_channel_access(
+                if await self._repair_execution_channel(
+                    guild=guild,
                     channel=execution_channel,
                     bot_member=bot_member,
                 ):
@@ -304,7 +306,7 @@ class WorkflowStructureProvisioningService:
             category=category,
             category_selection=configuration.category,
             resource_label="management channel",
-            require_private_writes=True,
+            expected_everyone_send_override=False,
         )
 
         execution_channel = self._preflight_channel(
@@ -314,7 +316,7 @@ class WorkflowStructureProvisioningService:
             category=category,
             category_selection=configuration.category,
             resource_label="execution channel",
-            require_private_writes=False,
+            expected_everyone_send_override=True,
         )
 
         role_hierarchy = await self._load_role_hierarchy_if_needed(
@@ -391,7 +393,7 @@ class WorkflowStructureProvisioningService:
         category: discord.CategoryChannel | None,
         category_selection: WorkflowResourceSelection,
         resource_label: str,
-        require_private_writes: bool,
+        expected_everyone_send_override: bool,
     ) -> discord.TextChannel | None:
         """Resolve or authorize creation of one workflow text channel."""
 
@@ -438,16 +440,16 @@ class WorkflowStructureProvisioningService:
             bot_member,
         )
 
-        requires_repair = (
-            not bot_permissions.view_channel or not bot_permissions.send_messages
+        everyone_overwrite = channel.overwrites_for(
+            guild.default_role,
         )
 
-        if require_private_writes:
-            everyone_permissions = channel.permissions_for(
-                guild.default_role,
-            )
-
-            requires_repair = requires_repair or everyone_permissions.send_messages
+        requires_repair = (
+            not bot_permissions.view_channel
+            or not bot_permissions.send_messages
+            or everyone_overwrite.send_messages
+            is not expected_everyone_send_override
+        )
 
         if requires_repair:
             self._require_manage_channels(
@@ -603,16 +605,46 @@ class WorkflowStructureProvisioningService:
 
         changed = False
 
-        everyone_permissions = channel.permissions_for(
+        overwrite = channel.overwrites_for(
             guild.default_role,
         )
 
-        if everyone_permissions.send_messages:
-            overwrite = channel.overwrites_for(
+        if overwrite.send_messages is not False:
+            overwrite.send_messages = False
+
+            await channel.set_permissions(
                 guild.default_role,
+                overwrite=overwrite,
+                reason=PROVISIONING_REASON,
             )
 
-            overwrite.send_messages = False
+            changed = True
+
+        return (
+            await self._ensure_bot_channel_access(
+                channel=channel,
+                bot_member=bot_member,
+            )
+            or changed
+        )
+
+    async def _repair_execution_channel(
+        self,
+        *,
+        guild: discord.Guild,
+        channel: discord.TextChannel,
+        bot_member: discord.Member,
+    ) -> bool:
+        """Mark the execution channel writable for everyone and restore bot access."""
+
+        changed = False
+
+        overwrite = channel.overwrites_for(
+            guild.default_role,
+        )
+
+        if overwrite.send_messages is not True:
+            overwrite.send_messages = True
 
             await channel.set_permissions(
                 guild.default_role,
@@ -686,14 +718,18 @@ class WorkflowStructureProvisioningService:
     @staticmethod
     def _build_execution_overwrites(
         *,
+        guild: discord.Guild,
         bot_member: discord.Member,
     ) -> dict[
         discord.Role | discord.Member,
         discord.PermissionOverwrite,
     ]:
-        """Keep member permissions inherited while guaranteeing bot access."""
+        """Build explicit execution-channel markers and guarantee bot access."""
 
         return {
+            guild.default_role: discord.PermissionOverwrite(
+                send_messages=True,
+            ),
             bot_member: discord.PermissionOverwrite(
                 view_channel=True,
                 send_messages=True,

@@ -111,6 +111,7 @@ def _text_channel(
     default_role: MagicMock,
     bot_member: MagicMock,
     everyone_can_send: bool = True,
+    everyone_send_override: bool | None = None,
     bot_can_view: bool = True,
     bot_can_send: bool = True,
 ) -> MagicMock:
@@ -142,7 +143,24 @@ def _text_channel(
         return _permissions()
 
     channel.permissions_for.side_effect = permissions_for
-    channel.overwrites_for.return_value = discord.PermissionOverwrite()
+
+    everyone_overwrite = discord.PermissionOverwrite(
+        send_messages=everyone_send_override,
+    )
+    bot_overwrite = discord.PermissionOverwrite()
+
+    def overwrites_for(
+        target: object,
+    ) -> discord.PermissionOverwrite:
+        if target is default_role:
+            return everyone_overwrite
+
+        if target is bot_member:
+            return bot_overwrite
+
+        return discord.PermissionOverwrite()
+
+    channel.overwrites_for.side_effect = overwrites_for
     channel.set_permissions = AsyncMock()
 
     return channel
@@ -369,8 +387,8 @@ async def test_provision_creates_complete_workflow_structure() -> None:
 
     execution_overwrites = execution_call.kwargs["overwrites"]
 
-    # Execution-channel member behavior continues to inherit from its category.
-    assert guild.default_role not in execution_overwrites
+    # The explicit True marker is part of the discovery contract.
+    assert execution_overwrites[guild.default_role].send_messages is True
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +413,7 @@ async def test_provision_repairs_existing_workflow_permissions() -> None:
         default_role=guild.default_role,
         bot_member=guild.me,
         everyone_can_send=True,
+        everyone_send_override=None,
         bot_can_send=False,
     )
 
@@ -403,6 +422,7 @@ async def test_provision_repairs_existing_workflow_permissions() -> None:
         category_id=100,
         default_role=guild.default_role,
         bot_member=guild.me,
+        everyone_send_override=None,
         bot_can_view=False,
         bot_can_send=False,
     )
@@ -458,8 +478,15 @@ async def test_provision_repairs_existing_workflow_permissions() -> None:
     # Management repair denies ordinary writes and restores bot access.
     assert management_channel.set_permissions.await_count == 2
 
-    # Execution repair changes only bot access.
-    execution_channel.set_permissions.assert_awaited_once()
+    # Execution repair writes the structural @everyone=True marker and bot access.
+    assert execution_channel.set_permissions.await_count == 2
+
+    execution_everyone_call = execution_channel.set_permissions.await_args_list[0]
+    assert execution_everyone_call.args[0] is guild.default_role
+    assert (
+        execution_everyone_call.kwargs["overwrite"].send_messages
+        is True
+    )
 
 
 # ---------------------------------------------------------------------------

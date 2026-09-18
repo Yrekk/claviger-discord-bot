@@ -11,6 +11,7 @@ from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
     WorkflowTextChannelCandidate,
 )
+from claviger.ui.workflows import workflow_configuration_view as workflow_view_module
 from claviger.ui.workflows.workflow_configuration_session import (
     WorkflowConfigurationSession,
 )
@@ -557,6 +558,75 @@ async def test_existing_role_select_only_exposes_filtered_candidates() -> None:
     assert tuple(option.value for option in select.options) == (
         "302",
     )
+
+
+@pytest.mark.asyncio
+async def test_existing_role_select_converts_string_value_to_role_id(
+    monkeypatch,
+) -> None:
+    """Discord string option values must become integer role identities."""
+
+    discovery = _empty_discovery()
+    discovery = WorkflowStructureDiscoveryResult(
+        categories=discovery.categories,
+        text_channels=discovery.text_channels,
+        manageable_roles=(
+            WorkflowRoleCandidate(
+                role_id=302,
+                role_name="Gamer",
+            ),
+        ),
+        can_create_channels=discovery.can_create_channels,
+        can_create_roles=discovery.can_create_roles,
+        workflow_candidates=discovery.workflow_candidates,
+    )
+
+    session = WorkflowConfigurationSession(
+        guild_id=123,
+        actor_id=42,
+        discovery=discovery,
+    )
+
+    view = WorkflowExistingResourceView(
+        coordinator=MagicMock(),
+        session=session,
+        resource="primary_role",
+        admin_command_name="application",
+    )
+
+    advance = AsyncMock()
+    monkeypatch.setattr(
+        workflow_view_module,
+        "_advance_after_resource",
+        advance,
+    )
+
+    select = view.children[0]
+    select._values = [
+        "302",
+    ]
+
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(
+            id=123,
+        ),
+        user=SimpleNamespace(
+            id=42,
+        ),
+        response=SimpleNamespace(
+            send_message=AsyncMock(),
+        ),
+    )
+
+    await select.callback(
+        interaction,
+    )
+
+    assert session.primary_role is not None
+    assert session.primary_role.mode == "existing"
+    assert session.primary_role.resource_id == 302
+
+    advance.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

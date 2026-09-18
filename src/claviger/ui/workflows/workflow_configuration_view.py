@@ -1113,7 +1113,16 @@ class _ExistingRoleSelect(discord.ui.Select):
         ):
             return
 
-        selected_id = self.values[0].id
+        try:
+            selected_id = int(
+                self.values[0],
+            )
+        except (TypeError, ValueError):
+            await interaction.response.send_message(
+                "La sélection de rôle reçue est invalide.",
+                ephemeral=True,
+            )
+            return
 
         candidate = next(
             (
