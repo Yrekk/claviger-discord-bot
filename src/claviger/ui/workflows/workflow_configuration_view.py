@@ -7,6 +7,9 @@ from claviger.models.workflows.workflow_configuration_model import (
 )
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
+)
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
@@ -1484,6 +1487,7 @@ class WorkflowAIQuestionnaireChoiceView(discord.ui.View):
             admin_command_name=self.admin_command_name,
         )
 
+
 class WorkflowConfigurationReviewView(discord.ui.View):
     """Require explicit confirmation before Discord or SQLite mutation begins."""
 
@@ -1864,6 +1868,7 @@ async def _edit_ai_questionnaire_step(
         ),
     )
 
+
 async def _edit_review(
     interaction: discord.Interaction,
     *,
@@ -1967,7 +1972,7 @@ async def run_workflow_configuration(
     coordinator: WorkflowConfigurationCoordinatorService,
     admin_command_name: str,
     report_service: ReportService | None = None,
-    ai_questionnaire_owner_service=None,
+    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
 ) -> None:
     """Open the Discord frontend over the shared workflow backend contract."""
 
