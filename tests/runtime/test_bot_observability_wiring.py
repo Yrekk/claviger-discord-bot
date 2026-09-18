@@ -2,6 +2,9 @@ from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
 from claviger.reporting.command_tree import ClavigerCommandTree
 from claviger.reporting.discord_bootstrap_dm import DiscordBootstrapDMReporter
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
+)
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
@@ -36,6 +39,10 @@ def test_bot_wires_command_tree_and_configuration_inspection(
     assert isinstance(
         bot.guild_configuration_inspection_service,
         GuildConfigurationInspectionService,
+    )
+    assert isinstance(
+        bot.guild_ai_questionnaire_owner_service,
+        GuildAIQuestionnaireOwnerService,
     )
     assert any(
         isinstance(

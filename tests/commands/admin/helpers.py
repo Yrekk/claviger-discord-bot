@@ -30,6 +30,9 @@ from claviger.services.runtime.database_ownership_service import (
 from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
     GuildAIConfigurationCoordinatorService,
 )
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
+)
 from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
@@ -100,6 +103,7 @@ def create_test_group(
     workflow_configuration_coordinator_service: (
         WorkflowConfigurationCoordinatorService | None
     ) = None,
+    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
     *,
     command_name: str = "claviger",
     application_name: str = "Claviger",
@@ -221,6 +225,7 @@ def create_test_group(
         admin_configuration_coordinator_service=admin_configuration_coordinator_service,
         ai_configuration_coordinator_service=ai_configuration_coordinator_service,
         workflow_configuration_coordinator_service=workflow_configuration_coordinator_service,
+        ai_questionnaire_owner_service=ai_questionnaire_owner_service,
         database_schema=database_schema,
         database_status_service=database_status_service,
         database_ownership_service=database_ownership_service,
