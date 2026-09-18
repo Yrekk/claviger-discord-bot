@@ -13,6 +13,9 @@ from discord.http import Route
 # Commands
 from claviger.commands.admin.claviger_command import create_claviger_group
 from claviger.commands.general.say_command import create_say_command
+from claviger.commands.workflows.generic_workflow_command import (
+    create_generic_workflow_command,
+)
 
 # Config
 from claviger.config import (
@@ -42,6 +45,7 @@ from claviger.models.runtime.guild_configuration_readiness_model import (
 )
 from claviger.models.runtime.guild_runtime_state_model import GuildRuntimeState
 from claviger.models.runtime.runtime_restart_model import RuntimeRestartRequest
+from claviger.models.workflows.workflow_definition_model import WorkflowDefinition
 
 # Policies
 from claviger.policies.default_policy import SUCCUMBRAE_FALLBACK_POLICY
@@ -58,6 +62,9 @@ from claviger.reporting.service import ReportService
 # Repositories
 from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
+)
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
 )
 from claviger.repositories.runtime.database_ownership_repository import (
     DatabaseOwnershipRepository,
@@ -93,6 +100,7 @@ from claviger.services.admin.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
 from claviger.services.roles.role_discovery import RoleDiscoveryService
+from claviger.services.roles.role_manager_service import RoleManager
 from claviger.services.runtime.authorization import AuthorizationService
 from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
@@ -130,6 +138,18 @@ from claviger.services.workflows.workflow_configuration_reconciliation_service i
 )
 from claviger.services.workflows.workflow_configuration_validation_service import (
     WorkflowConfigurationValidationService,
+)
+from claviger.services.workflows.workflow_questionnaire_coordinator_service import (
+    WorkflowQuestionnaireCoordinatorService,
+)
+from claviger.services.workflows.workflow_questionnaire_planner_service import (
+    WorkflowQuestionnairePlannerService,
+)
+from claviger.services.workflows.workflow_role_executor_service import (
+    WorkflowRoleExecutorService,
+)
+from claviger.services.workflows.workflow_role_planner_service import (
+    WorkflowRolePlannerService,
 )
 from claviger.services.workflows.workflow_structure_discovery_service import (
     WorkflowStructureDiscoveryService,
@@ -183,6 +203,7 @@ class ClavigerBot(discord.Client):
 
         # Generic Discord services
         self.role_discovery_service = RoleDiscoveryService()
+        self.role_manager_service = RoleManager()
         self.authorization_service = AuthorizationService()
         self.say_service = SayService()
 
@@ -270,6 +291,9 @@ class ClavigerBot(discord.Client):
         self.workflow_definition_repository = WorkflowDefinitionRepository(
             self.database,
         )
+        self.catalog_entry_repository = CatalogEntryRepository(
+            self.database,
+        )
         self.guild_ai_questionnaire_owner_repository = (
             GuildAIQuestionnaireOwnerRepository(
                 self.database,
@@ -313,6 +337,26 @@ class ClavigerBot(discord.Client):
                     self.workflow_configuration_reconciliation_service
                 ),
                 provisioning_service=self.workflow_structure_provisioning_service,
+            )
+        )
+
+        # Generic workflow questionnaire runtime
+        self.workflow_questionnaire_planner_service = (
+            WorkflowQuestionnairePlannerService()
+        )
+        self.workflow_role_planner_service = WorkflowRolePlannerService()
+        self.workflow_role_executor_service = WorkflowRoleExecutorService(
+            self.role_manager_service,
+        )
+        self.workflow_questionnaire_coordinator_service = (
+            WorkflowQuestionnaireCoordinatorService(
+                workflow_repository=self.workflow_definition_repository,
+                catalog_entry_repository=self.catalog_entry_repository,
+                ai_repository=self.guild_ai_configuration_repository,
+                owner_repository=self.guild_ai_questionnaire_owner_repository,
+                questionnaire_planner=self.workflow_questionnaire_planner_service,
+                role_planner=self.workflow_role_planner_service,
+                role_executor=self.workflow_role_executor_service,
             )
         )
 
@@ -498,6 +542,7 @@ class ClavigerBot(discord.Client):
         database_operational: bool,
         guild_ready: bool,
         admin_command_channel_id: int | None,
+        workflow_definitions: tuple[WorkflowDefinition, ...] = (),
     ) -> None:
         """Build the local Discord command tree for one guild."""
 
@@ -521,9 +566,33 @@ class ClavigerBot(discord.Client):
             guild=guild,
         )
 
-        # Specialized /membre and /noctis commands were intentionally removed.
-        # Generic runtime workflow commands will be registered from persisted
-        # guild_workflows once that runtime layer is implemented.
+        reserved_command_names = {
+            "say",
+            application_identity.admin_command_name,
+        }
+
+        for workflow in workflow_definitions:
+            if not workflow.enabled:
+                continue
+
+            if workflow.command_name in reserved_command_names:
+                logger.error(
+                    "Workflow %s uses reserved command name %s on guild %s.",
+                    workflow.workflow_key,
+                    workflow.command_name,
+                    guild_identity.guild_id,
+                )
+                continue
+
+            self.tree.add_command(
+                create_generic_workflow_command(
+                    workflow=workflow,
+                    coordinator=self.workflow_questionnaire_coordinator_service,
+                    report_service=self.report_service,
+                ),
+                guild=guild,
+            )
+
         self.tree.add_command(
             create_claviger_group(
                 self.role_discovery_service,
@@ -700,6 +769,15 @@ class ClavigerBot(discord.Client):
             else None
         )
 
+        workflow_definitions: tuple[WorkflowDefinition, ...] = ()
+
+        if database_operational and guild_ready:
+            workflow_definitions = (
+                await self.workflow_definition_repository.list_for_guild(
+                    guild_identity.guild_id,
+                )
+            )
+
         step_started = perf_counter()
 
         self._register_guild_commands(
@@ -709,6 +787,7 @@ class ClavigerBot(discord.Client):
             database_operational=database_operational,
             guild_ready=guild_ready,
             admin_command_channel_id=admin_command_channel_id,
+            workflow_definitions=workflow_definitions,
         )
 
         logger.debug(
