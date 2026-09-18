@@ -61,8 +61,15 @@ class RoleDiscoveryService:
                 "Claviger's highest role could not be found in the guild roles."
             )
 
+        bot_member_role_ids = {
+            role.id
+            for role in bot_member.roles
+        }
+
         candidate_roles = [
-            role for role in roles if (role.id != bot_role.id and not role.is_default())
+            role
+            for role in roles
+            if role.id not in bot_member_role_ids and not role.is_default()
         ]
 
         trusted_roles = [

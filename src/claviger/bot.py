@@ -71,6 +71,9 @@ from claviger.repositories.runtime.guild_policy_repository import GuildPolicyRep
 from claviger.repositories.workflows.workflow_configuration_repository import (
     WorkflowConfigurationRepository,
 )
+from claviger.repositories.workflows.workflow_definition_repository import (
+    WorkflowDefinitionRepository,
+)
 
 # Services
 from claviger.services.admin.admin_configuration_coordinator_service import (
@@ -111,6 +114,9 @@ from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstra
 from claviger.services.say_service import SayService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
+)
+from claviger.services.workflows.workflow_configuration_inspection_service import (
+    WorkflowConfigurationInspectionService,
 )
 from claviger.services.workflows.workflow_configuration_reconciliation_service import (
     WorkflowConfigurationReconciliationService,
@@ -254,6 +260,15 @@ class ClavigerBot(discord.Client):
         self.workflow_configuration_repository = WorkflowConfigurationRepository(
             self.database,
         )
+        self.workflow_definition_repository = WorkflowDefinitionRepository(
+            self.database,
+        )
+        self.workflow_configuration_inspection_service = (
+            WorkflowConfigurationInspectionService(
+                workflow_repository=self.workflow_definition_repository,
+                ai_repository=self.guild_ai_configuration_repository,
+            )
+        )
         self.workflow_configuration_validation_service = (
             WorkflowConfigurationValidationService()
         )
@@ -266,6 +281,7 @@ class ClavigerBot(discord.Client):
         self.workflow_structure_provisioning_service = (
             WorkflowStructureProvisioningService(
                 role_discovery_service=self.role_discovery_service,
+                inspection_service=self.workflow_configuration_inspection_service,
             )
         )
         self.workflow_configuration_coordinator_service = (
@@ -273,6 +289,7 @@ class ClavigerBot(discord.Client):
                 repository=self.workflow_configuration_repository,
                 validation_service=self.workflow_configuration_validation_service,
                 discovery_service=self.workflow_structure_discovery_service,
+                inspection_service=self.workflow_configuration_inspection_service,
                 reconciliation_service=(
                     self.workflow_configuration_reconciliation_service
                 ),

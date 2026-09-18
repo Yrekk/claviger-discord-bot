@@ -83,6 +83,8 @@ class WorkflowDefinitionRepository:
                         policy_key,
                         channel_mode,
                         category_id,
+                        management_channel_id,
+                        primary_role_id,
                         sort_order,
                         enabled
                     FROM guild_workflows
@@ -144,6 +146,8 @@ class WorkflowDefinitionRepository:
                         policy_key,
                         channel_mode,
                         category_id,
+                        management_channel_id,
+                        primary_role_id,
                         sort_order,
                         enabled
                     FROM guild_workflows
@@ -211,6 +215,20 @@ class WorkflowDefinitionRepository:
             if row["category_id"] is not None
             else None
         )
+        management_channel_id = (
+            int(
+                row["management_channel_id"],
+            )
+            if row["management_channel_id"] is not None
+            else None
+        )
+        primary_role_id = (
+            int(
+                row["primary_role_id"],
+            )
+            if row["primary_role_id"] is not None
+            else None
+        )
 
         return WorkflowDefinition(
             guild_id=guild_id,
@@ -231,6 +249,8 @@ class WorkflowDefinitionRepository:
             channel_ids=channel_ids,
             catalogs=catalogs,
             category_id=category_id,
+            management_channel_id=management_channel_id,
+            primary_role_id=primary_role_id,
             contexts=contexts,
         )
 

@@ -62,4 +62,6 @@ class WorkflowDefinition:
     catalogs: tuple[WorkflowCatalogBinding, ...]
 
     category_id: int | None = None
+    management_channel_id: int | None = None
+    primary_role_id: int | None = None
     contexts: tuple[WorkflowContextBinding, ...] = ()

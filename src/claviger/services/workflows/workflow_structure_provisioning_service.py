@@ -5,6 +5,9 @@ import discord
 from claviger.models.workflows.resolved_workflow_configuration_model import (
     ResolvedWorkflowConfiguration,
 )
+from claviger.models.workflows.workflow_configuration_inspection_model import (
+    WorkflowConfigurationInspection,
+)
 from claviger.models.workflows.workflow_configuration_model import (
     WorkflowConfigurationSpec,
     WorkflowResourceSelection,
@@ -15,6 +18,9 @@ from claviger.models.workflows.workflow_structure_provisioning_model import (
 from claviger.services.roles.role_discovery import (
     RoleDiscoveryService,
     RoleHierarchy,
+)
+from claviger.services.workflows.workflow_configuration_inspection_service import (
+    WorkflowConfigurationInspectionService,
 )
 
 PROVISIONING_REASON = "Claviger workflow structure provisioning"
@@ -70,8 +76,10 @@ class WorkflowStructureProvisioningService:
         self,
         *,
         role_discovery_service: RoleDiscoveryService,
+        inspection_service: WorkflowConfigurationInspectionService,
     ) -> None:
         self.role_discovery_service = role_discovery_service
+        self.inspection_service = inspection_service
 
     async def provision(
         self,
@@ -313,12 +321,17 @@ class WorkflowStructureProvisioningService:
             guild=guild,
             configuration=configuration,
         )
+        inspection = await self.inspection_service.inspect(
+            guild.id,
+            current_workflow_key=configuration.workflow_key,
+        )
 
         primary_role = self._preflight_role(
             guild=guild,
             bot_member=bot_member,
             selection=configuration.primary_role,
             hierarchy=role_hierarchy,
+            inspection=inspection,
             resource_label="primary role",
         )
 
@@ -450,11 +463,27 @@ class WorkflowStructureProvisioningService:
         bot_member: discord.Member,
         selection: WorkflowResourceSelection,
         hierarchy: RoleHierarchy | None,
+        inspection: WorkflowConfigurationInspection,
         resource_label: str,
     ) -> discord.Role | None:
-        """Resolve or authorize creation of one workflow role."""
+        """Resolve or authorize one role while enforcing V11 reservations."""
 
         if selection.mode == "create":
+            role_name = self._require_creation_name(
+                selection,
+                resource_label=resource_label,
+            )
+
+            if self.inspection_service.is_role_reserved(
+                inspection,
+                role_id=None,
+                role_name=role_name,
+            ):
+                raise WorkflowStructureProvisioningResourceError(
+                    f"Reconciled {resource_label} name is reserved by another "
+                    "workflow or catalog."
+                )
+
             self._require_manage_roles(
                 bot_member,
             )
@@ -483,6 +512,16 @@ class WorkflowStructureProvisioningService:
         if role is None:
             raise WorkflowStructureProvisioningResourceError(
                 f"Reconciled {resource_label} is no longer manageable."
+            )
+
+        if self.inspection_service.is_role_reserved(
+            inspection,
+            role_id=role.id,
+            role_name=role.name,
+        ):
+            raise WorkflowStructureProvisioningResourceError(
+                f"Reconciled {resource_label} is now reserved by another "
+                "workflow, the guild AI role or a bound catalog."
             )
 
         return role

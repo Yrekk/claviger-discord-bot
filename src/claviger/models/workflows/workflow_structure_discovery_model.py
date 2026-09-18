@@ -81,6 +81,11 @@ class WorkflowStructureCandidate:
     protected_channels: tuple[WorkflowTextChannelCandidate, ...]
     interactive_channels: tuple[WorkflowTextChannelCandidate, ...]
 
+    # Persistence enrichment may annotate an otherwise reusable Discord
+    # structure with commands already bound to it. Discovery itself never
+    # decides whether sharing is allowed.
+    configured_command_names: tuple[str, ...] = ()
+
     @property
     def requires_protected_channel_choice(self) -> bool:
         """Return whether several protected channels require a human choice."""
