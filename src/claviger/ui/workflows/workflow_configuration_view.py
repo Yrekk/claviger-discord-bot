@@ -5,8 +5,13 @@ import discord
 from claviger.models.workflows.workflow_configuration_model import (
     WorkflowResourceSelection,
 )
+from claviger.reporting.event import ReportEvent, ReportSeverity
+from claviger.reporting.service import ReportService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
+)
+from claviger.services.workflows.workflow_configuration_validation_service import (
+    WorkflowConfigurationValidationError,
 )
 from claviger.ui.workflows.workflow_configuration_session import (
     WorkflowCandidateChannelResource,
@@ -55,6 +60,19 @@ async def _reject_foreign_actor(
         return True
 
     return False
+
+
+def _normalize_command_name(
+    value: str,
+) -> str:
+    """Normalize the slash users naturally type before backend validation."""
+
+    normalized = value.strip()
+
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+
+    return normalized
 
 
 def _optional_text(
@@ -292,7 +310,9 @@ class WorkflowMetadataModal(discord.ui.Modal):
         self.session.description = _optional_text(
             self.description_input.value,
         )
-        self.session.command_name = self.command_name_input.value.strip()
+        self.session.command_name = _normalize_command_name(
+            self.command_name_input.value,
+        )
         self.session.command_description = _optional_text(
             self.command_description_input.value,
         )
@@ -1337,6 +1357,37 @@ class WorkflowResourceModeView(discord.ui.View):
 # ---------------------------------------------------------------------------
 
 
+async def _emit_workflow_configuration_failed(
+    interaction: discord.Interaction,
+    *,
+    session: WorkflowConfigurationSession,
+    error: Exception,
+) -> None:
+    """Emit one genuine backend failure through the configured report pipeline."""
+
+    report_service = session.report_service
+    guild = interaction.guild
+
+    if report_service is None or guild is None:
+        return
+
+    await report_service.emit(
+        ReportEvent(
+            event_type="workflow.configuration.failed",
+            severity=ReportSeverity.ERROR,
+            title="Échec de configuration d'un workflow",
+            summary=(
+                "Claviger n'a pas pu enregistrer ou provisionner le workflow."
+            ),
+            details=f"{type(error).__name__}: {error}",
+            guild_id=guild.id,
+            guild_label=guild.name,
+            actor_id=interaction.user.id,
+            actor_label=interaction.user.display_name,
+        )
+    )
+
+
 class WorkflowConfigurationReviewView(discord.ui.View):
     """Require explicit confirmation before Discord or SQLite mutation begins."""
 
@@ -1383,17 +1434,38 @@ class WorkflowConfigurationReviewView(discord.ui.View):
                 draft=self.session.to_draft(),
             )
 
-        except Exception:
+        except WorkflowConfigurationValidationError as error:
+            logger.info(
+                "Workflow configuration rejected by validation for guild %s: %s",
+                self.session.guild_id,
+                error,
+            )
+
+            await interaction.edit_original_response(
+                content=(
+                    "❌ La configuration contient une valeur invalide.\n\n"
+                    f"{error}"
+                ),
+                view=None,
+            )
+            return
+
+        except Exception as error:
             logger.exception(
                 "Interactive workflow configuration failed for guild %s.",
                 self.session.guild_id,
             )
 
+            await _emit_workflow_configuration_failed(
+                interaction,
+                session=self.session,
+                error=error,
+            )
+
             await interaction.edit_original_response(
                 content=(
                     "❌ La configuration du workflow a échoué.\n\n"
-                    "Le backend a refusé ou interrompu l'opération. "
-                    "Consulte les logs et les rapports avant de recommencer."
+                    "Un incident backend a été signalé dans le reporting ADMIN."
                 ),
                 view=None,
             )
@@ -1625,6 +1697,7 @@ async def run_workflow_configuration(
     *,
     coordinator: WorkflowConfigurationCoordinatorService,
     admin_command_name: str,
+    report_service: ReportService | None = None,
 ) -> None:
     """Open the Discord frontend over the shared workflow backend contract."""
 
@@ -1657,6 +1730,7 @@ async def run_workflow_configuration(
         guild_id=guild.id,
         actor_id=interaction.user.id,
         discovery=discovery,
+        report_service=report_service,
     )
 
     if discovery.workflow_candidates:

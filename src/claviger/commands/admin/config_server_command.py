@@ -120,6 +120,7 @@ def create_config_server_command(
                 source_interaction,
                 coordinator=workflow_coordinator,
                 admin_command_name=admin_command_name,
+                report_service=report_service,
             )
 
         # The Discord command does not interpret AI states itself. The dedicated

@@ -9,6 +9,7 @@ from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureCandidate,
     WorkflowStructureDiscoveryResult,
 )
+from claviger.reporting.service import ReportService
 
 WorkflowUiResource = Literal[
     "category",
@@ -30,6 +31,7 @@ class WorkflowConfigurationSession:
     guild_id: int
     actor_id: int
     discovery: WorkflowStructureDiscoveryResult
+    report_service: ReportService | None = None
 
     # The UI stores only the identity of the structural candidate selected by
     # the human. Candidate recognition itself belongs exclusively to discovery.
