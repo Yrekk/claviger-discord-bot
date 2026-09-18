@@ -5,7 +5,7 @@
 **Branche feature active :** `feature/v11-ai-config-server`  
 **Dernier commit fonctionnel validé avant documentation :** `12c95d51718bed22b9920fcbea69b155f3bccb72`  
 **Branche d'intégration cible :** `refactor/generic-workflows-v11`  
-**Schéma SQLite courant :** V11  
+**Schéma SQLite courant :** V12  
 **`develop` :** ne pas toucher avant fermeture V1.1.
 
 Pour une reprise après coupure de session, lire d'abord :
@@ -104,6 +104,30 @@ Smoke réel validé sur playground migré : l'étape IA est bien affichée, un r
 
 Le rôle IA appartient à la guild, pas à un workflow.
 
+## Ownership du questionnaire IA
+
+La préférence IA utilisateur ne doit être posée que par **un seul workflow par guild**.
+
+Le schéma V12 ajoute :
+
+```text
+guild_ai_questionnaire_owner
+guild_id PRIMARY KEY
+workflow_key FOREIGN KEY → guild_workflows
+```
+
+Cette table est l'unique source de vérité pour déterminer quel workflow a le droit de demander/modifier la préférence IA.
+
+Commande prévue et implémentée sur la feature :
+
+```text
+/<application> workflow ai-questionnaire
+```
+
+Elle permet d'assigner le premier propriétaire puis de déplacer atomiquement l'ownership vers un autre workflow.
+
+Les autres workflows ne posent jamais la question IA ; ils consomment l'état du rôle IA pour choisir leurs variantes `base` / `no_ai` / `ai`.
+
 ---
 
 # 2. Prochaine tranche immédiate — réservations de rôles et structures annotées
@@ -167,24 +191,31 @@ La discovery Discord doit rester structurelle. La corrélation avec SQLite doit 
 
 # 3. Smoke from scratch sur seconde guild
 
-Un autre serveur est disponible sans rôle IA déjà configuré.
+Le smoke a déjà validé :
 
-Faire ce smoke après la tranche précédente.
+- échec ADMIN sans permission `Manage Channels` ;
+- fallback incident en MP tant qu'ADMIN n'existe pas ;
+- récupération après ajout des permissions ;
+- création des salons/forums ADMIN ;
+- passage vers IA globale ;
+- chemin IA désactivée ;
+- wizard workflow sans choix IA local.
 
-Scénario :
+Suite du smoke après migration V11 → V12 :
 
 ```text
-guild neuve
-→ ADMIN
-→ IA non configurée
-→ activation IA
-→ aucun rôle IA existant
-→ création/sélection d'un rôle valide
-→ workflow
-→ vérifier le filtrage des rôles réservés
+migrer la BDD DEV vers schéma 12
+→ relancer config-server
+→ activer IA
+→ créer/sélectionner le rôle IA global
+→ créer un nouveau workflow
+→ /<application> workflow ai-questionnaire
+→ choisir ce workflow comme propriétaire
+→ relancer la commande et déplacer l'ownership vers un autre workflow
+→ vérifier qu'une seule ligne d'ownership existe toujours
 ```
 
-Tester également le chemin IA désactivée.
+Puis reprendre le smoke du moteur questionnaire générique lorsqu'il sera construit.
 
 ---
 

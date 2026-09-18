@@ -381,3 +381,64 @@ Conséquence volontaire V1.1 : Discord limite ce select à 25 options ; la featu
 - `99cbaa7e7f401ae86d28bc4c2b5ff05a600bbf3e` — rendu Discord limité aux rôles réellement approuvés.
 
 **Statut :** implémenté et poussé, mais pas encore validé par les tests locaux du développeur ni par le smoke Discord from scratch.
+
+
+---
+
+## 13. Ownership unique du questionnaire IA — implémenté, validation locale restante
+
+Un point métier a été clarifié pendant le smoke from scratch : **un seul workflow par guild doit pouvoir demander à l'utilisateur sa préférence IA**.
+
+Les autres workflows ne reposent jamais cette question. Ils consomment uniquement l'état global du membre :
+
+- rôle IA présent → variantes `ai` et entrées `ai_only` ;
+- rôle IA absent → variantes `no_ai` et entrées `no_ai_only` ;
+- variantes `base` indépendantes de la préférence.
+
+La source de vérité de cet ownership est désormais une table dédiée, ajoutée par le **schéma SQLite 12** :
+
+```text
+guild_ai_questionnaire_owner
+├── guild_id       PRIMARY KEY
+└── workflow_key   NOT NULL
+    FOREIGN KEY (guild_id, workflow_key)
+    → guild_workflows(guild_id, workflow_key)
+```
+
+Cette forme garantit structurellement **zéro ou un propriétaire par guild**. Le changement de propriétaire est un `UPSERT` atomique sur l'unique ligne de guild ; aucun trigger ne modifie silencieusement plusieurs workflows.
+
+Une commande d'administration est ajoutée :
+
+```text
+/<application> workflow ai-questionnaire
+```
+
+Comportement :
+
+- aucun propriétaire → proposer les workflows actifs ;
+- propriétaire existant → afficher celui-ci puis demander explicitement si l'administrateur veut le déplacer ;
+- lors du déplacement → proposer uniquement les autres workflows ;
+- le rôle IA global doit être activé et configuré avant attribution de l'ownership.
+
+Le runtime générique devra utiliser cette table comme autorité pour savoir **quel workflow peut modifier** la préférence IA. Les autres workflows liront seulement l'état du rôle IA du membre pour choisir leurs variantes.
+
+### Correctifs issus du smoke
+
+Le frontend Discord normalise désormais une commande saisie avec un slash initial :
+
+```text
+/gamer → gamer
+```
+
+Un seul slash initial est retiré ; le backend conserve ensuite sa validation stricte.
+
+Les erreurs de validation utilisateur restent un feedback UI et ne polluent pas le forum `errors`. Les véritables incidents backend de configuration de workflow émettent désormais `workflow.configuration.failed` via `ReportService`, donc vers le forum ADMIN `errors` lorsque le routage ADMIN est opérationnel.
+
+### Commits
+
+- `41d52d78a4eb3d2e58b57886f7ce376533bcbbfb` — schéma 12 + repository/service d'ownership ;
+- `3a6e0808e28aaadabb84ea978911efc477e4c1a5` — commande interactive d'ownership ;
+- `4a11a89229a53ec979b36b3261e09565de7a3552` — normalisation du slash + reporting workflow ;
+- `2f0d25c1f737ccac55b7c3bb34dcde9f5b4947e1` — couverture de tests.
+
+**Statut :** code poussé, validation locale et reprise du smoke encore à faire.
