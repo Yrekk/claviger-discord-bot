@@ -13,6 +13,9 @@ from claviger.models.workflows.workflow_role_execution_result_model import (
 from claviger.repositories.catalogs.catalog_entry_repository import (
     CatalogEntryRepository,
 )
+from claviger.services.catalogs.catalog_entry_synchronization_service import (
+    CatalogEntrySynchronizationService,
+)
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )
@@ -49,6 +52,7 @@ class WorkflowQuestionnaireCoordinatorService:
         *,
         workflow_repository: WorkflowDefinitionRepository,
         catalog_entry_repository: CatalogEntryRepository,
+        catalog_sync_service: CatalogEntrySynchronizationService,
         ai_repository: GuildAIConfigurationRepository,
         owner_repository: GuildAIQuestionnaireOwnerRepository,
         questionnaire_planner: WorkflowQuestionnairePlannerService,
@@ -57,6 +61,7 @@ class WorkflowQuestionnaireCoordinatorService:
     ) -> None:
         self.workflow_repository = workflow_repository
         self.catalog_entry_repository = catalog_entry_repository
+        self.catalog_sync_service = catalog_sync_service
         self.ai_repository = ai_repository
         self.owner_repository = owner_repository
         self.questionnaire_planner = questionnaire_planner
@@ -79,6 +84,7 @@ class WorkflowQuestionnaireCoordinatorService:
         )
         entries_by_catalog = await self._load_catalog_entries(
             workflow,
+            guild=guild,
         )
         ai_configuration = await self.ai_repository.get(
             guild.id,
@@ -165,6 +171,8 @@ class WorkflowQuestionnaireCoordinatorService:
     async def _load_catalog_entries(
         self,
         workflow: WorkflowDefinition,
+        *,
+        guild: discord.Guild,
     ) -> dict[str, tuple[CatalogEntry, ...]]:
         entries_by_catalog: dict[str, tuple[CatalogEntry, ...]] = {}
 
@@ -173,9 +181,9 @@ class WorkflowQuestionnaireCoordinatorService:
                 continue
 
             entries_by_catalog[binding.catalog.catalog_key] = (
-                await self.catalog_entry_repository.list_for_catalog(
-                    guild_id=workflow.guild_id,
-                    catalog_key=binding.catalog.catalog_key,
+                await self.catalog_sync_service.synchronize(
+                    guild=guild,
+                    catalog=binding.catalog,
                 )
             )
 

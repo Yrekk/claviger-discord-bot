@@ -115,6 +115,9 @@ def test_bot_composes_generic_questionnaire_runtime(
     bot = ClavigerBot()
 
     assert bot.catalog_entry_repository is not None
+    assert bot.catalog_entry_synchronization_service is not None
+    assert bot.role_channel_discovery_service is not None
+    assert bot.catalog_variant_classifier is not None
     assert bot.role_manager_service is not None
     assert bot.workflow_questionnaire_planner_service is not None
     assert bot.workflow_role_planner_service is not None
@@ -125,6 +128,10 @@ def test_bot_composes_generic_questionnaire_runtime(
 
     assert coordinator.workflow_repository is bot.workflow_definition_repository
     assert coordinator.catalog_entry_repository is bot.catalog_entry_repository
+    assert (
+        coordinator.catalog_sync_service
+        is bot.catalog_entry_synchronization_service
+    )
     assert coordinator.ai_repository is bot.guild_ai_configuration_repository
     assert (
         coordinator.owner_repository

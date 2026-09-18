@@ -99,6 +99,15 @@ from claviger.services.admin.admin_structure_discovery_service import (
 from claviger.services.admin.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
+from claviger.services.catalogs.catalog_entry_synchronization_service import (
+    CatalogEntrySynchronizationService,
+)
+from claviger.services.catalogs.catalog_variant_classifier import (
+    CatalogVariantClassifier,
+)
+from claviger.services.catalogs.role_channel_discovery_service import (
+    RoleChannelDiscoveryService,
+)
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.services.roles.role_manager_service import RoleManager
 from claviger.services.runtime.authorization import AuthorizationService
@@ -203,6 +212,8 @@ class ClavigerBot(discord.Client):
 
         # Generic Discord services
         self.role_discovery_service = RoleDiscoveryService()
+        self.role_channel_discovery_service = RoleChannelDiscoveryService()
+        self.catalog_variant_classifier = CatalogVariantClassifier()
         self.role_manager_service = RoleManager()
         self.authorization_service = AuthorizationService()
         self.say_service = SayService()
@@ -294,6 +305,13 @@ class ClavigerBot(discord.Client):
         self.catalog_entry_repository = CatalogEntryRepository(
             self.database,
         )
+        self.catalog_entry_synchronization_service = (
+            CatalogEntrySynchronizationService(
+                repository=self.catalog_entry_repository,
+                discovery_service=self.role_channel_discovery_service,
+                variant_classifier=self.catalog_variant_classifier,
+            )
+        )
         self.guild_ai_questionnaire_owner_repository = (
             GuildAIQuestionnaireOwnerRepository(
                 self.database,
@@ -352,6 +370,7 @@ class ClavigerBot(discord.Client):
             WorkflowQuestionnaireCoordinatorService(
                 workflow_repository=self.workflow_definition_repository,
                 catalog_entry_repository=self.catalog_entry_repository,
+                catalog_sync_service=self.catalog_entry_synchronization_service,
                 ai_repository=self.guild_ai_configuration_repository,
                 owner_repository=self.guild_ai_questionnaire_owner_repository,
                 questionnaire_planner=self.workflow_questionnaire_planner_service,

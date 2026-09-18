@@ -20,6 +20,9 @@ from claviger.models.workflows.workflow_role_execution_result_model import (
 from claviger.repositories.catalogs.catalog_entry_repository import (
     CatalogEntryRepository,
 )
+from claviger.services.catalogs.catalog_entry_synchronization_service import (
+    CatalogEntrySynchronizationService,
+)
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )
@@ -87,7 +90,8 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
     workflow_repository.get = AsyncMock(return_value=_workflow())
 
     catalog_repository = MagicMock(spec=CatalogEntryRepository)
-    catalog_repository.list_for_catalog = AsyncMock(return_value=())
+    catalog_sync_service = MagicMock(spec=CatalogEntrySynchronizationService)
+    catalog_sync_service.synchronize = AsyncMock(return_value=())
 
     ai_repository = MagicMock(spec=GuildAIConfigurationRepository)
     ai_repository.get = AsyncMock(
@@ -134,6 +138,7 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
     coordinator = WorkflowQuestionnaireCoordinatorService(
         workflow_repository=workflow_repository,
         catalog_entry_repository=catalog_repository,
+        catalog_sync_service=catalog_sync_service,
         ai_repository=ai_repository,
         owner_repository=owner_repository,
         questionnaire_planner=questionnaire_planner,
@@ -167,5 +172,6 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
         guild_id=123,
         workflow_key="noctis",
     )
+    catalog_sync_service.synchronize.assert_awaited_once()
     role_planner.build_plan.assert_called_once()
     role_executor.execute.assert_awaited_once()
