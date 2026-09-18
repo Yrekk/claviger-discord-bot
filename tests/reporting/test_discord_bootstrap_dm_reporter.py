@@ -122,20 +122,19 @@ async def test_bootstrap_dm_skips_when_admin_routing_is_complete() -> None:
         repository=repository,
     )
 
-    with pytest.raises(
-        ReporterUnavailableError,
-        match="disabled once ADMIN routing is complete",
-    ):
-        await reporter.report(
-            _event(),
-        )
+    await reporter.report(
+        _event(),
+    )
 
+    repository.get.assert_awaited_once_with(
+        123,
+    )
     client.get_user.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_dm_rejects_non_incident_and_actorless_events() -> None:
-    """Avoid noisy or impossible direct-message routing."""
+async def test_bootstrap_dm_silently_ignores_info_events() -> None:
+    """Treat normal INFO traffic as non-applicable without warning noise."""
 
     client = _client()
     repository = _repository()
@@ -144,15 +143,26 @@ async def test_bootstrap_dm_rejects_non_incident_and_actorless_events() -> None:
         repository=repository,
     )
 
-    with pytest.raises(
-        ReporterUnavailableError,
-        match="reserved for incidents",
-    ):
-        await reporter.report(
-            _event(
-                severity=ReportSeverity.INFO,
-            )
+    await reporter.report(
+        _event(
+            severity=ReportSeverity.INFO,
         )
+    )
+
+    repository.get.assert_not_awaited()
+    client.get_user.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_dm_rejects_actorless_incidents() -> None:
+    """Keep genuinely unroutable bootstrap incidents observable."""
+
+    client = _client()
+    repository = _repository()
+    reporter = DiscordBootstrapDMReporter(
+        client=client,
+        repository=repository,
+    )
 
     with pytest.raises(
         ReporterUnavailableError,

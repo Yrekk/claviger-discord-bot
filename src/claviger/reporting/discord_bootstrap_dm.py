@@ -35,9 +35,9 @@ class DiscordBootstrapDMReporter:
         """Send one bootstrap incident directly to the actor who triggered it."""
 
         if event.severity == ReportSeverity.INFO:
-            raise ReporterUnavailableError(
-                "Bootstrap DM reporting is reserved for incidents."
-            )
+            # INFO is normal operational traffic for the ADMIN activity forum,
+            # not a bootstrap incident. This reporter is simply not applicable.
+            return
 
         if event.guild_id is None:
             raise ReporterUnavailableError(
@@ -59,9 +59,9 @@ class DiscordBootstrapDMReporter:
             configuration = None
 
         if configuration is not None and configuration.is_complete:
-            raise ReporterUnavailableError(
-                "Bootstrap DM reporting is disabled once ADMIN routing is complete."
-            )
+            # Normal ADMIN reporting has taken over. Silently decline instead
+            # of producing one warning for every successfully routed incident.
+            return
 
         user = self.client.get_user(
             event.actor_id,

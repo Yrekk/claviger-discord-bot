@@ -624,13 +624,18 @@ class ClavigerBot(discord.Client):
                     )
                 )
 
-        return await self._configure_guild(
-            application_identity,
-            guild_id,
-            database_status=database_status,
-            database_operational=database_operational,
-            previous_command_tree_signature=previous_command_tree_signature,
-        )
+            # Keep the guild lock until identity/readiness resolution, local
+            # tree construction, optional Discord sync and runtime-state
+            # persistence have all completed. Gateway lifecycle events may
+            # overlap during startup; releasing the lock before this await lets
+            # the same guild enter a second synchronization concurrently.
+            return await self._configure_guild(
+                application_identity,
+                guild_id,
+                database_status=database_status,
+                database_operational=database_operational,
+                previous_command_tree_signature=previous_command_tree_signature,
+            )
 
     async def _configure_guild(
         self,
@@ -917,9 +922,11 @@ class ClavigerBot(discord.Client):
         """Reconfigure a guild that becomes available again."""
 
         try:
+            # on_guild_unavailable already invalidates the cached runtime state.
+            # A startup guild_available event can overlap with on_ready, so do
+            # not force a second configuration when a valid state was just built.
             await self._configure_runtime_guild(
                 guild.id,
-                force=True,
             )
 
         except Exception:

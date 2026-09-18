@@ -1,4 +1,5 @@
 # Standard library
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -1699,3 +1700,145 @@ async def test_restart_guild_configuration_resyncs_when_tree_changes(
     sync.assert_awaited_once()
 
     assert bot.guild_runtime_states[123].command_tree_signature == "new-tree"
+
+
+
+@pytest.mark.asyncio
+async def test_guild_available_does_not_duplicate_in_flight_configuration(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Serialize overlapping ready/available work into one guild configuration."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+    bot.application_identity = _create_application_identity()
+    bot.database_status = _ready_database_status()
+    bot.database_operational = True
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    runtime_state = GuildRuntimeState(
+        identity=_create_guild_identity(
+            guild_id=123,
+        ),
+        readiness=None,
+        command_tree_signature="tree-after-sync",
+    )
+
+    async def configure_once(*args, **kwargs):
+        started.set()
+        await release.wait()
+        bot.guild_runtime_states[123] = runtime_state
+        return runtime_state
+
+    configure = AsyncMock(
+        side_effect=configure_once,
+    )
+
+    monkeypatch.setattr(
+        bot,
+        "_configure_guild",
+        configure,
+    )
+
+    first = asyncio.create_task(
+        bot._configure_runtime_guild(
+            123,
+        )
+    )
+
+    await started.wait()
+
+    available = asyncio.create_task(
+        bot.on_guild_available(
+            SimpleNamespace(
+                id=123,
+            )
+        )
+    )
+
+    # Give the gateway callback a scheduling opportunity while the first
+    # configuration still owns the guild lock.
+    await asyncio.sleep(0)
+
+    assert configure.await_count == 1
+
+    release.set()
+
+    assert await first == runtime_state
+    await available
+
+    assert configure.await_count == 1
+    assert bot.guild_runtime_states[123] == runtime_state
+
+
+@pytest.mark.asyncio
+async def test_guild_available_reconfigures_after_unavailable_invalidates_state(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Rebuild a guild after a real unavailable event removes its runtime state."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+    bot.application_identity = _create_application_identity()
+    bot.database_status = _ready_database_status()
+    bot.database_operational = True
+
+    old_state = GuildRuntimeState(
+        identity=_create_guild_identity(
+            guild_id=123,
+        ),
+        readiness=None,
+        command_tree_signature="old-tree",
+    )
+    bot.guild_runtime_states[123] = old_state
+
+    guild = SimpleNamespace(
+        id=123,
+    )
+
+    await bot.on_guild_unavailable(
+        guild,
+    )
+
+    assert 123 not in bot.guild_runtime_states
+
+    new_state = GuildRuntimeState(
+        identity=_create_guild_identity(
+            guild_id=123,
+        ),
+        readiness=None,
+        command_tree_signature="new-tree",
+    )
+
+    async def configure_after_return(*args, **kwargs):
+        bot.guild_runtime_states[123] = new_state
+        return new_state
+
+    configure = AsyncMock(
+        side_effect=configure_after_return,
+    )
+
+    monkeypatch.setattr(
+        bot,
+        "_configure_guild",
+        configure,
+    )
+
+    await bot.on_guild_available(
+        guild,
+    )
+
+    configure.assert_awaited_once()
+    assert bot.guild_runtime_states[123] == new_state
