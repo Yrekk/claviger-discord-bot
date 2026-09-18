@@ -13,6 +13,7 @@ from claviger.commands.admin.restart_command import (
     create_restart_command,
 )
 from claviger.commands.admin.roles import create_roles_group
+from claviger.commands.admin.workflow import create_workflow_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
@@ -28,6 +29,9 @@ from claviger.services.runtime.database_ownership_service import (
 )
 from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
     GuildAIConfigurationCoordinatorService,
+)
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
 )
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
@@ -90,6 +94,7 @@ def create_claviger_group(
     admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
     ai_configuration_coordinator_service: GuildAIConfigurationCoordinatorService,
     workflow_configuration_coordinator_service: WorkflowConfigurationCoordinatorService,
+    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
     guild_configuration_inspection_service: (
         GuildConfigurationInspectionService | None
     ) = None,
@@ -187,6 +192,15 @@ def create_claviger_group(
         role_discovery_service,
         report_service,
     )
+
+    if ai_questionnaire_owner_service is not None:
+        workflow_group = create_workflow_group(
+            ai_questionnaire_owner_service,
+            report_service,
+        )
+        admin_group.add_command(
+            workflow_group,
+        )
 
     admin_group.add_command(
         roles_group,

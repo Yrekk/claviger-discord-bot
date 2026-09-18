@@ -65,6 +65,9 @@ from claviger.repositories.runtime.database_ownership_repository import (
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
     GuildAIConfigurationRepository,
 )
+from claviger.repositories.runtime.guild_ai_questionnaire_owner_repository import (
+    GuildAIQuestionnaireOwnerRepository,
+)
 from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
 )
@@ -101,6 +104,9 @@ from claviger.services.runtime.guild_ai_configuration_coordinator_service import
 )
 from claviger.services.runtime.guild_ai_configuration_service import (
     GuildAIConfigurationService,
+)
+from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
+    GuildAIQuestionnaireOwnerService,
 )
 from claviger.services.runtime.guild_ai_role_provisioning_service import (
     GuildAIRoleProvisioningService,
@@ -263,6 +269,18 @@ class ClavigerBot(discord.Client):
         )
         self.workflow_definition_repository = WorkflowDefinitionRepository(
             self.database,
+        )
+        self.guild_ai_questionnaire_owner_repository = (
+            GuildAIQuestionnaireOwnerRepository(
+                self.database,
+            )
+        )
+        self.guild_ai_questionnaire_owner_service = (
+            GuildAIQuestionnaireOwnerService(
+                repository=self.guild_ai_questionnaire_owner_repository,
+                ai_repository=self.guild_ai_configuration_repository,
+                workflow_repository=self.workflow_definition_repository,
+            )
         )
         self.workflow_configuration_inspection_service = (
             WorkflowConfigurationInspectionService(
@@ -522,6 +540,9 @@ class ClavigerBot(discord.Client):
                 ),
                 workflow_configuration_coordinator_service=(
                     self.workflow_configuration_coordinator_service
+                ),
+                ai_questionnaire_owner_service=(
+                    self.guild_ai_questionnaire_owner_service
                 ),
                 guild_configuration_inspection_service=(
                     self.guild_configuration_inspection_service
