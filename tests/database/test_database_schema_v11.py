@@ -104,13 +104,16 @@ async def _unexpected(*args, **kwargs):
 
 
 @pytest.mark.parametrize("version", range(1, 11))
-async def test_all_supported_versions_reach_v11(tmp_path: Path, version: int) -> None:
-    """Keep each supported upgrade path and retire specialized V1 storage."""
+async def test_all_supported_versions_reach_current_schema(
+    tmp_path: Path,
+    version: int,
+) -> None:
+    """Keep each supported upgrade path through V11 conversion to current schema."""
 
     database = await _historical(tmp_path, version)
     await DatabaseSchema(database).migrate()
 
-    assert await DatabaseSchema(database).get_version() == CURRENT_SCHEMA_VERSION == 11
+    assert await DatabaseSchema(database).get_version() == CURRENT_SCHEMA_VERSION
 
     names = {
         row[0]
@@ -140,7 +143,7 @@ async def test_fresh_database_never_probes_or_recovers_legacy_data(
     database = DatabaseConnection(tmp_path / "new.db")
     await DatabaseSchema(database).initialize()
 
-    assert await DatabaseSchema(database).get_version() == 11
+    assert await DatabaseSchema(database).get_version() == CURRENT_SCHEMA_VERSION
     assert await _rows(database, "SELECT * FROM guild_settings") == []
     assert await _rows(database, "SELECT * FROM guild_catalogs") == []
 
@@ -554,7 +557,7 @@ async def test_failure_after_source_removal_restores_everything(
     monkeypatch.setattr(schema_module, "migrate_v11_data", original)
     await DatabaseSchema(database).migrate()
 
-    assert await DatabaseSchema(database).get_version() == 11
+    assert await DatabaseSchema(database).get_version() == CURRENT_SCHEMA_VERSION
 
 
 @pytest.mark.parametrize(

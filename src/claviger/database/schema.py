@@ -5,7 +5,7 @@ import aiosqlite
 from claviger.database.connection import DatabaseConnection
 from claviger.database.migration_v11 import MIGRATION_11_STATEMENTS, migrate_v11_data
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 
 
 class UnsupportedSchemaVersionError(RuntimeError):
@@ -417,6 +417,27 @@ MIGRATIONS: dict[int, Sequence[str]] = {
         """,
     ),
     11: MIGRATION_11_STATEMENTS,
+    12: (
+        """
+        CREATE TABLE guild_ai_questionnaire_owner (
+            guild_id INTEGER PRIMARY KEY
+                CHECK (guild_id > 0),
+
+            workflow_key TEXT NOT NULL,
+
+            FOREIGN KEY (
+                guild_id,
+                workflow_key
+            )
+            REFERENCES guild_workflows (
+                guild_id,
+                workflow_key
+            )
+            ON UPDATE CASCADE
+            ON DELETE CASCADE
+        )
+        """,
+    ),
 }
 
 
