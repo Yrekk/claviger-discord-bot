@@ -12,7 +12,9 @@ from claviger.models.catalogs.role_channel_discovery_model import (
     DiscordRoleSnapshot,
     GuildRoleChannelSnapshot,
 )
-from claviger.repositories.catalogs.catalog_entry_repository import CatalogEntryRepository
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
+)
 from claviger.services.catalogs.catalog_entry_synchronization_service import (
     CatalogEntrySynchronizationService,
 )

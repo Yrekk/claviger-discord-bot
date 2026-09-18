@@ -12,7 +12,9 @@ from claviger.models.catalogs.role_channel_discovery_model import (
     DiscordRoleSnapshot,
     GuildRoleChannelSnapshot,
 )
-from claviger.repositories.catalogs.catalog_entry_repository import CatalogEntryRepository
+from claviger.repositories.catalogs.catalog_entry_repository import (
+    CatalogEntryRepository,
+)
 from claviger.services.catalogs.catalog_variant_classifier import (
     CatalogVariantClassifier,
 )
@@ -48,6 +50,11 @@ class CatalogEntrySynchronizationService:
         catalog: CatalogDefinition,
     ) -> tuple[CatalogEntry, ...]:
         """Synchronize valid role/channel targets, then reload canonical rows."""
+
+        if catalog.guild_id != guild.id:
+            raise CatalogEntrySynchronizationError(
+                "Catalog definition belongs to another Discord guild."
+            )
 
         snapshot = self.discovery_service.build_snapshot(
             guild,
@@ -227,6 +234,16 @@ class CatalogEntrySynchronizationService:
                         ),
                     ),
                 )
+            )
+
+        entry_keys = [
+            entry_key
+            for entry_key, _ in groups
+        ]
+
+        if len(entry_keys) != len(set(entry_keys)):
+            raise CatalogEntrySynchronizationError(
+                "Catalog singleton and AI variants collide on one logical key."
             )
 
         channels_by_id = {
