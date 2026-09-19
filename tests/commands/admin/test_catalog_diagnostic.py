@@ -2,7 +2,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from claviger.commands.admin.catalog_command import create_catalog_group
+from claviger.commands.admin.catalog_command import (
+    _format_catalog_diagnostic,
+    create_catalog_group,
+)
 from claviger.models.runtime.workflow_catalog_diagnostic_model import (
     CatalogMetadataIssue,
     GuildCatalogDiagnosticResult,
@@ -18,7 +21,7 @@ from .helpers import create_interaction
 
 
 @pytest.mark.asyncio
-async def test_catalog_scan_separates_workflows_and_reports_questionnaire_gaps() -> None:
+async def test_catalog_scan_separates_workflows_and_reports_gaps() -> None:
     """Render workflow structure and missing questionnaire metadata clearly."""
 
     diagnostic_service = Mock(spec=WorkflowCatalogDiagnosticService)
@@ -108,7 +111,10 @@ async def test_catalog_scan_separates_workflows_and_reports_questionnaire_gaps()
     assert "- Catégorie : GAMING" in message
     assert "- Rôle principal : Gamer" in message
     assert "#discussion-gamer" in message
-    assert "- État catalogue : ⚠️ MÉTADONNÉES INCOMPLÈTES + SYNCHRONISATION REQUISE" in message
+    assert (
+        "- État catalogue : ⚠️ MÉTADONNÉES INCOMPLÈTES "
+        "+ SYNCHRONISATION REQUISE"
+    ) in message
     assert "- Pattern : gamer-" in message
     assert "**⚠️ Problèmes détectés**" in message
     assert "strategie : label, description manquant(s)" in message
@@ -117,8 +123,7 @@ async def test_catalog_scan_separates_workflows_and_reports_questionnaire_gaps()
     assert "- Métadonnées questionnaire complètes : 1 / 2" in message
 
 
-
-def test_catalog_scan_formats_structure_errors_separately_from_catalog_health() -> None:
+def test_catalog_scan_formats_structure_errors_separately() -> None:
     """Keep workflow structure failures distinct from catalog readiness."""
 
     result = GuildCatalogDiagnosticResult(
@@ -156,10 +161,7 @@ def test_catalog_scan_formats_structure_errors_separately_from_catalog_health() 
     )
 
     message = "\n".join(
-        __import__(
-            "claviger.commands.admin.catalog_command",
-            fromlist=["_format_catalog_diagnostic"],
-        )._format_catalog_diagnostic(
+        _format_catalog_diagnostic(
             result,
         )
     )
