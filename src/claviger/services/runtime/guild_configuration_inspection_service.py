@@ -5,14 +5,26 @@ from claviger.models.runtime.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
 from claviger.policies.policy_resolver import PolicyResolver
+from claviger.repositories.runtime.guild_ai_configuration_repository import (
+    GuildAIConfigurationRepository,
+)
+from claviger.repositories.runtime.guild_ai_questionnaire_owner_repository import (
+    GuildAIQuestionnaireOwnerRepository,
+)
 from claviger.repositories.runtime.guild_configuration_metrics_repository import (
     GuildConfigurationMetricsRepository,
+)
+from claviger.repositories.workflows.workflow_definition_repository import (
+    WorkflowDefinitionRepository,
 )
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
 from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
+)
+from claviger.services.workflows.workflow_structure_discovery_service import (
+    WorkflowStructureDiscoveryService,
 )
 
 
@@ -27,6 +39,10 @@ class GuildConfigurationInspectionService:
         admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
         policy_resolver: PolicyResolver,
         metrics_repository: GuildConfigurationMetricsRepository,
+        workflow_repository: WorkflowDefinitionRepository | None = None,
+        workflow_discovery_service: WorkflowStructureDiscoveryService | None = None,
+        ai_repository: GuildAIConfigurationRepository | None = None,
+        ai_owner_repository: GuildAIQuestionnaireOwnerRepository | None = None,
     ) -> None:
         self.database_status_service = database_status_service
         self.database_ownership_service = database_ownership_service
@@ -35,6 +51,10 @@ class GuildConfigurationInspectionService:
         )
         self.policy_resolver = policy_resolver
         self.metrics_repository = metrics_repository
+        self.workflow_repository = workflow_repository
+        self.workflow_discovery_service = workflow_discovery_service
+        self.ai_repository = ai_repository
+        self.ai_owner_repository = ai_owner_repository
 
     async def inspect(
         self,
@@ -57,6 +77,10 @@ class GuildConfigurationInspectionService:
         admin = None
         policy = None
         metrics = None
+        workflows = None
+        workflow_discovery = None
+        ai_configuration = None
+        ai_questionnaire_owner_workflow_key = None
 
         if database_status.state == DatabaseState.READY:
             owner_application_id = (
@@ -74,6 +98,30 @@ class GuildConfigurationInspectionService:
                     guild.id,
                 )
 
+                if self.workflow_repository is not None:
+                    workflows = await self.workflow_repository.list_for_guild(
+                        guild.id,
+                    )
+
+                if self.workflow_discovery_service is not None:
+                    workflow_discovery = (
+                        await self.workflow_discovery_service.discover(
+                            guild,
+                        )
+                    )
+
+                if self.ai_repository is not None:
+                    ai_configuration = await self.ai_repository.get(
+                        guild.id,
+                    )
+
+                if self.ai_owner_repository is not None:
+                    ai_questionnaire_owner_workflow_key = (
+                        await self.ai_owner_repository.get(
+                            guild.id,
+                        )
+                    )
+
         return GuildConfigurationInspectionResult(
             guild_id=guild.id,
             application_id=application_id,
@@ -82,4 +130,10 @@ class GuildConfigurationInspectionService:
             admin=admin,
             policy=policy,
             metrics=metrics,
+            workflows=workflows,
+            workflow_discovery=workflow_discovery,
+            ai_configuration=ai_configuration,
+            ai_questionnaire_owner_workflow_key=(
+                ai_questionnaire_owner_workflow_key
+            ),
         )
