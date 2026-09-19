@@ -37,13 +37,13 @@ from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
+from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.runtime.guild_role_diagnostic_service import (
     GuildRoleDiagnosticService,
 )
 from claviger.services.runtime.workflow_catalog_diagnostic_service import (
     WorkflowCatalogDiagnosticService,
 )
-from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )

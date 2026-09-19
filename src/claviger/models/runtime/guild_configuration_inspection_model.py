@@ -4,11 +4,11 @@ from claviger.database.status import DatabaseStatus
 from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
 )
-from claviger.models.runtime.guild_configuration_metrics_model import (
-    GuildConfigurationMetrics,
-)
 from claviger.models.runtime.guild_ai_configuration_model import (
     GuildAIConfiguration,
+)
+from claviger.models.runtime.guild_configuration_metrics_model import (
+    GuildConfigurationMetrics,
 )
 from claviger.models.runtime.guild_policy_inspection_model import (
     GuildPolicyInspection,
