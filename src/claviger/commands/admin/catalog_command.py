@@ -2,14 +2,14 @@ import discord
 from discord import app_commands
 
 from claviger.commands.admin.diagnostic_output import send_ephemeral_diagnostic
-from claviger.services.catalogs.catalog_administration_service import (
-    CatalogAdministrationService,
-)
 from claviger.models.runtime.workflow_catalog_diagnostic_model import (
     GuildCatalogDiagnosticResult,
 )
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.services.catalogs.catalog_administration_service import (
+    CatalogAdministrationService,
+)
 from claviger.services.runtime.workflow_catalog_diagnostic_service import (
     WorkflowCatalogDiagnosticService,
 )

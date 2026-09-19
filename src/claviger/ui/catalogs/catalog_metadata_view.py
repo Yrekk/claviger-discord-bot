@@ -150,7 +150,7 @@ class CatalogMetadataModal(discord.ui.Modal):
                     self.emoji_input.value,
                 ),
             )
-        except (ValueError, RuntimeError) as error:
+        except ValueError as error:
             await interaction.followup.send(
                 f"Impossible d'enregistrer ces métadonnées : {error}",
                 ephemeral=True,

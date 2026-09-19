@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock, Mock
 
-import discord
 import pytest
 
 from claviger.commands.admin.catalog_command import create_catalog_group
