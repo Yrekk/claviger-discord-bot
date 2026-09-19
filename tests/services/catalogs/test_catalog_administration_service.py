@@ -138,7 +138,7 @@ async def test_next_incomplete_returns_human_metadata_candidate() -> None:
     )
 
 
-async def test_update_metadata_only_calls_metadata_repository_then_returns_next() -> None:
+async def test_update_metadata_only_updates_metadata_then_returns_next() -> None:
     workflow_repository = Mock(spec=WorkflowDefinitionRepository)
     workflow_repository.list_for_guild = AsyncMock(
         return_value=(

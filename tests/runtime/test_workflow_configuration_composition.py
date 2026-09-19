@@ -116,6 +116,7 @@ def test_bot_composes_generic_questionnaire_runtime(
 
     assert bot.catalog_entry_repository is not None
     assert bot.catalog_entry_synchronization_service is not None
+    assert bot.catalog_administration_service is not None
     assert bot.role_channel_discovery_service is not None
     assert bot.catalog_variant_classifier is not None
     assert bot.role_manager_service is not None
@@ -123,6 +124,15 @@ def test_bot_composes_generic_questionnaire_runtime(
     assert bot.workflow_role_planner_service is not None
     assert bot.workflow_role_executor_service is not None
     assert bot.workflow_questionnaire_coordinator_service is not None
+
+    catalog_admin = bot.catalog_administration_service
+
+    assert catalog_admin.workflow_repository is bot.workflow_definition_repository
+    assert catalog_admin.entry_repository is bot.catalog_entry_repository
+    assert (
+        catalog_admin.synchronization_service
+        is bot.catalog_entry_synchronization_service
+    )
 
     coordinator = bot.workflow_questionnaire_coordinator_service
 
