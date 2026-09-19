@@ -343,6 +343,121 @@ class CatalogEntryRepository:
                 f"for guild {guild_id}."
             ) from error
 
+    async def update_metadata(
+        self,
+        *,
+        guild_id: int,
+        catalog_key: str,
+        entry_key: str,
+        label: str,
+        description: str,
+        emoji: str | None,
+    ) -> CatalogEntry:
+        """Update only human metadata for one logical catalog entry."""
+
+        if guild_id <= 0:
+            raise ValueError("Discord guild ID must be greater than zero.")
+
+        normalized_catalog_key = catalog_key.strip()
+        normalized_entry_key = entry_key.strip()
+        normalized_label = label.strip()
+        normalized_description = description.strip()
+        normalized_emoji = emoji.strip() if emoji is not None else None
+
+        if not normalized_catalog_key:
+            raise ValueError("Catalog key cannot be empty.")
+
+        if not normalized_entry_key:
+            raise ValueError("Catalog entry key cannot be empty.")
+
+        if not normalized_label:
+            raise ValueError("Catalog entry label cannot be empty.")
+
+        if not normalized_description:
+            raise ValueError("Catalog entry description cannot be empty.")
+
+        if normalized_emoji == "":
+            normalized_emoji = None
+
+        self._ensure_database_exists()
+
+        try:
+            async with self.database.connect() as connection:
+                await connection.execute("BEGIN IMMEDIATE")
+
+                cursor = await connection.execute(
+                    """
+                    SELECT 1
+                    FROM guild_catalog_entries
+                    WHERE guild_id = ?
+                      AND catalog_key = ?
+                      AND entry_key = ?
+                    """,
+                    (
+                        guild_id,
+                        normalized_catalog_key,
+                        normalized_entry_key,
+                    ),
+                )
+                existing = await cursor.fetchone()
+
+                if existing is None:
+                    await connection.rollback()
+                    raise ValueError(
+                        "Catalog entry does not exist for this guild/catalog."
+                    )
+
+                await connection.execute(
+                    """
+                    UPDATE guild_catalog_entries
+                    SET
+                        label = ?,
+                        description = ?,
+                        emoji = ?
+                    WHERE guild_id = ?
+                      AND catalog_key = ?
+                      AND entry_key = ?
+                    """,
+                    (
+                        normalized_label,
+                        normalized_description,
+                        normalized_emoji,
+                        guild_id,
+                        normalized_catalog_key,
+                        normalized_entry_key,
+                    ),
+                )
+
+                await connection.commit()
+
+        except aiosqlite.Error as error:
+            raise DatabaseUnavailableError(
+                "Unable to update catalog entry metadata "
+                f"{normalized_catalog_key!r}/{normalized_entry_key!r} "
+                f"for guild {guild_id}."
+            ) from error
+
+        entries = await self.list_for_catalog(
+            guild_id=guild_id,
+            catalog_key=normalized_catalog_key,
+        )
+
+        entry = next(
+            (
+                candidate
+                for candidate in entries
+                if candidate.entry_key == normalized_entry_key
+            ),
+            None,
+        )
+
+        if entry is None:
+            raise DatabaseUnavailableError(
+                "Catalog entry disappeared immediately after metadata update."
+            )
+
+        return entry
+
     def _ensure_database_exists(
         self,
     ) -> None:
