@@ -142,6 +142,10 @@ class WorkflowCatalogDiagnosticService:
                 structure_issues.append(
                     "rôle principal absent de Discord"
                 )
+            elif not primary_role_snapshot.role_manageable:
+                structure_issues.append(
+                    "rôle principal non manipulable"
+                )
 
             primary_role_explicit_channel_names = (
                 tuple(
@@ -407,6 +411,7 @@ class WorkflowCatalogDiagnosticService:
                     catalogs=tuple(
                         catalog_results,
                     ),
+                    enabled=workflow.enabled,
                 )
             )
 

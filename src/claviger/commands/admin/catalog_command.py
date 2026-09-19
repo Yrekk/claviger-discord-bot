@@ -57,11 +57,12 @@ def _format_catalog_diagnostic(
                 for catalog in workflow.catalogs
             )
         )
-        workflow_state = (
-            "⚠️ À CORRIGER"
-            if workflow_has_issues
-            else "✅ READY"
-        )
+        if not workflow.enabled:
+            workflow_state = "⏸ DÉSACTIVÉ"
+        elif workflow_has_issues:
+            workflow_state = "⚠️ À CORRIGER"
+        else:
+            workflow_state = "✅ READY"
 
         lines.extend(
             [

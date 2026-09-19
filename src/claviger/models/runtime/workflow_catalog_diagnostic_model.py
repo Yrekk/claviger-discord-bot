@@ -59,6 +59,8 @@ class WorkflowCatalogDiagnostic:
 
     catalogs: tuple[WorkflowCatalogSectionDiagnostic, ...]
 
+    enabled: bool = True
+
 
 @dataclass(frozen=True, slots=True)
 class GuildCatalogDiagnosticResult:
