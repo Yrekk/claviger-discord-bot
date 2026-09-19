@@ -1,6 +1,7 @@
 from discord import app_commands
 
 from claviger.commands.admin.admin_command_group import GuildAdminCommandGroup
+from claviger.commands.admin.catalog_command import create_catalog_group
 from claviger.commands.admin.config_command import create_config_group
 from claviger.commands.admin.config_server_command import (
     create_config_server_command,
@@ -35,6 +36,12 @@ from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
 )
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
+)
+from claviger.services.runtime.guild_role_diagnostic_service import (
+    GuildRoleDiagnosticService,
+)
+from claviger.services.runtime.workflow_catalog_diagnostic_service import (
+    WorkflowCatalogDiagnosticService,
 )
 from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
@@ -98,6 +105,8 @@ def create_claviger_group(
     guild_configuration_inspection_service: (
         GuildConfigurationInspectionService | None
     ) = None,
+    role_diagnostic_service: GuildRoleDiagnosticService | None = None,
+    catalog_diagnostic_service: WorkflowCatalogDiagnosticService | None = None,
     command_name: str,
     application_name: str,
     application_id: int,
@@ -192,7 +201,17 @@ def create_claviger_group(
     roles_group = create_roles_group(
         role_discovery_service,
         report_service,
+        diagnostic_service=role_diagnostic_service,
     )
+
+    if catalog_diagnostic_service is not None:
+        catalog_group = create_catalog_group(
+            catalog_diagnostic_service,
+            report_service,
+        )
+        admin_group.add_command(
+            catalog_group,
+        )
 
     if ai_questionnaire_owner_service is not None:
         workflow_group = create_workflow_group(

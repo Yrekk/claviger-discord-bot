@@ -134,7 +134,13 @@ from claviger.services.runtime.guild_configuration_inspection_service import (
 from claviger.services.runtime.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
+from claviger.services.runtime.guild_role_diagnostic_service import (
+    GuildRoleDiagnosticService,
+)
 from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
+from claviger.services.runtime.workflow_catalog_diagnostic_service import (
+    WorkflowCatalogDiagnosticService,
+)
 from claviger.services.say_service import SayService
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
@@ -379,6 +385,23 @@ class ClavigerBot(discord.Client):
             )
         )
 
+        # Read-only ADMIN diagnostics
+        self.guild_role_diagnostic_service = GuildRoleDiagnosticService(
+            role_discovery_service=self.role_discovery_service,
+            role_channel_discovery_service=self.role_channel_discovery_service,
+            workflow_repository=self.workflow_definition_repository,
+            catalog_entry_repository=self.catalog_entry_repository,
+            ai_repository=self.guild_ai_configuration_repository,
+        )
+        self.workflow_catalog_diagnostic_service = (
+            WorkflowCatalogDiagnosticService(
+                workflow_repository=self.workflow_definition_repository,
+                catalog_entry_repository=self.catalog_entry_repository,
+                owner_repository=self.guild_ai_questionnaire_owner_repository,
+                discovery_service=self.role_channel_discovery_service,
+            )
+        )
+
         # Temporary policy compatibility remains only for server inspection and
         # historical bootstrap. It no longer composes specialized workflows.
         policy_fallback_guild_id = get_discord_guild_id()
@@ -403,6 +426,12 @@ class ClavigerBot(discord.Client):
                 ),
                 policy_resolver=self.policy_resolver,
                 metrics_repository=self.guild_configuration_metrics_repository,
+                workflow_repository=self.workflow_definition_repository,
+                workflow_discovery_service=self.workflow_structure_discovery_service,
+                ai_repository=self.guild_ai_configuration_repository,
+                ai_owner_repository=(
+                    self.guild_ai_questionnaire_owner_repository
+                ),
             )
         )
 
@@ -634,6 +663,10 @@ class ClavigerBot(discord.Client):
                 ),
                 guild_configuration_inspection_service=(
                     self.guild_configuration_inspection_service
+                ),
+                role_diagnostic_service=self.guild_role_diagnostic_service,
+                catalog_diagnostic_service=(
+                    self.workflow_catalog_diagnostic_service
                 ),
                 command_name=application_identity.admin_command_name,
                 application_name=application_identity.application_name,
