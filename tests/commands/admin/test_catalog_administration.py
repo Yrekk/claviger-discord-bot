@@ -32,6 +32,12 @@ def _services():
         administration_service=administration_service,
     )
 
+    assert {command.name for command in group.commands} == {
+        "scan",
+        "sync",
+        "next",
+    }
+
     return group, administration_service, report_service
 
 
@@ -112,6 +118,9 @@ async def test_catalog_next_reports_when_everything_is_complete() -> None:
     group, administration_service, _ = _services()
     administration_service.next_incomplete = AsyncMock(
         return_value=None,
+    )
+    administration_service.count_entries = AsyncMock(
+        return_value=1,
     )
 
     command = group.get_command(

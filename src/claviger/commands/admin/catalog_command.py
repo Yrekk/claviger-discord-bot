@@ -376,9 +376,31 @@ def create_catalog_group(
                 ephemeral=True,
             )
 
-            summaries = await administration_service.synchronize_all(
-                interaction.guild,
-            )
+            try:
+                summaries = await administration_service.synchronize_all(
+                    interaction.guild,
+                )
+            except Exception as error:
+                await report_service.emit(
+                    ReportEvent(
+                        event_type="catalog.sync.failed",
+                        severity=ReportSeverity.ERROR,
+                        title="Échec de synchronisation catalogue",
+                        summary=(
+                            "La synchronisation des catalogues n'a pas pu démarrer."
+                        ),
+                        details=f"{type(error).__name__}: {error}",
+                        guild_id=interaction.guild.id,
+                        guild_label=interaction.guild.name,
+                        actor_id=interaction.user.id,
+                        actor_label=interaction.user.display_name,
+                    )
+                )
+                await interaction.followup.send(
+                    "Impossible de synchroniser les catalogues.",
+                    ephemeral=True,
+                )
+                return
 
             if not summaries:
                 await interaction.followup.send(
@@ -389,6 +411,10 @@ def create_catalog_group(
 
             lines = [
                 "**Synchronisation des catalogues**",
+                (
+                    "- Les métadonnées humaines existantes "
+                    "ne sont jamais écrasées par ce scan."
+                ),
             ]
             failed = False
 

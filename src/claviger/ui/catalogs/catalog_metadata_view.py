@@ -298,11 +298,24 @@ async def open_next_catalog_metadata(
     )
 
     if candidate is None:
-        await interaction.response.send_message(
-            (
+        entry_count = await service.count_entries(
+            interaction.guild.id,
+        )
+
+        if entry_count == 0:
+            content = (
+                "ℹ️ Aucune entrée technique active n'est enregistrée. "
+                "Lance d'abord `catalog sync` pour découvrir les rôles "
+                "et salons du serveur."
+            )
+        else:
+            content = (
                 "✅ Toutes les entrées actives possèdent déjà un label "
                 "et une description."
-            ),
+            )
+
+        await interaction.response.send_message(
+            content,
             ephemeral=True,
         )
         return False

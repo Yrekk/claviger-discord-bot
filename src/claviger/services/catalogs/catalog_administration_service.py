@@ -110,6 +110,30 @@ class CatalogAdministrationService:
 
         return None
 
+    async def count_entries(
+        self,
+        guild_id: int,
+    ) -> int:
+        """Count enabled entries across active workflow catalogs."""
+
+        catalogs = await self._list_active_catalogs(
+            guild_id,
+        )
+        count = 0
+
+        for catalog in catalogs:
+            entries = await self.entry_repository.list_for_catalog(
+                guild_id=guild_id,
+                catalog_key=catalog.catalog_key,
+            )
+            count += sum(
+                1
+                for entry in entries
+                if entry.enabled
+            )
+
+        return count
+
     async def count_incomplete(
         self,
         guild_id: int,

@@ -227,3 +227,44 @@ async def test_synchronize_all_uses_existing_generic_sync_backend() -> None:
     assert summaries[0].entry_count == 1
     assert summaries[0].incomplete_metadata_count == 1
     assert summaries[0].succeeded is True
+
+
+
+async def test_count_entries_ignores_disabled_entries() -> None:
+    workflow_repository = Mock(spec=WorkflowDefinitionRepository)
+    workflow_repository.list_for_guild = AsyncMock(
+        return_value=(
+            _workflow(),
+        )
+    )
+
+    disabled = CatalogEntry(
+        guild_id=123,
+        catalog_key="interest",
+        entry_key="disabled",
+        label=None,
+        description=None,
+        emoji=None,
+        sort_order=10,
+        enabled=False,
+        targets=(),
+    )
+
+    entry_repository = Mock(spec=CatalogEntryRepository)
+    entry_repository.list_for_catalog = AsyncMock(
+        return_value=(
+            _entry(),
+            disabled,
+        )
+    )
+    sync_service = Mock(spec=CatalogEntrySynchronizationService)
+
+    service = CatalogAdministrationService(
+        workflow_repository=workflow_repository,
+        entry_repository=entry_repository,
+        synchronization_service=sync_service,
+    )
+
+    assert await service.count_entries(
+        123,
+    ) == 1
