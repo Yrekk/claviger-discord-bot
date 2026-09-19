@@ -86,6 +86,76 @@ Les principaux écarts identifiés sont :
 6. certains drifts, notamment le **rôle IA global disparu**, peuvent dégrader le comportement avant qu'un diagnostic administratif soit lancé ;
 7. le runtime ne possède pas encore de stratégie explicite de **recovery après perte de DB**, ni de distinction forte entre première installation et DB de production disparue.
 
+## 3.1 Décisions actées après lecture de l'audit
+
+Les décisions suivantes sont désormais retenues pour la suite de la tranche :
+
+### Mode minimal
+
+Le **mode minimal** n'est pas seulement un mode maintenance temporaire de V1.1.
+Il constitue la cible de survie dégradée de Claviger :
+
+```text
+mode normal
+→ fonctionnalités métier complètes
+
+incident sérieux mais runtime encore sûr
+→ mode minimal
+→ application encore vivante
+→ mutations métier normales désactivées
+→ diagnostic / recovery disponibles
+
+incident rendant même le mode minimal non fiable
+→ hard stop
+```
+
+La conception V1.1 doit préparer cette séparation sans implémenter prématurément
+les fonctionnalités IA de V2.0.
+
+À terme, en **V2.0**, l'IA conversationnelle devra pouvoir continuer à répondre
+en mode minimal, mais uniquement :
+
+- à l'owner ;
+- aux membres possédant un rôle de secours explicitement dédié.
+
+Ce chemin minimal devra dépendre du moins possible de la chaîne métier normale
+et ne devra jamais contourner les règles de sécurité de la DB principale.
+
+### Snapshot Last Known Good
+
+Le snapshot est confirmé comme **fallback applicatif** lorsqu'une DB principale
+rencontre un problème.
+
+Il reste toutefois secondaire :
+
+```text
+SQLite = source de vérité
+snapshot = dernier état cohérent connu / fallback de recovery
+```
+
+Le snapshot ne doit pas devenir une deuxième DB maîtresse et ne suffit pas, à
+lui seul, à autoriser les mutations persistantes normales.
+
+### Backup opérationnel SQLite
+
+Un système de backup automatisé fait désormais partie de cette tranche.
+
+Cible retenue :
+
+- stockage durable sur le NAS, dans un emplacement dédié aux sauvegardes DB ;
+- sauvegarde nocturne vers **23 h** ;
+- **deux sauvegardes validées maximum** conservées en rotation ;
+- création d'une nouvelle sauvegarde cohérente SQLite ;
+- validation de la sauvegarde avant promotion ;
+- confirmation de la copie NAS ;
+- suppression de la plus ancienne **uniquement après succès complet** ;
+- si la nouvelle sauvegarde échoue, les deux sauvegardes précédentes sont
+  conservées intactes.
+
+Les backups pré-migration et pré-déploiement restent obligatoires. Le même
+moteur de sauvegarde doit être réutilisé ; la relation exacte entre ces backups
+ponctuels et la rotation nocturne sera décidée lors de l'implémentation.
+
 ---
 
 # 4. Base SQLite — disponibilité et état
@@ -188,9 +258,16 @@ DB tombe
 → commandes métier globalement désactivées
 ```
 
-### Priorité
+### Décision retenue
 
-**P1 — à décider : dégradation par opération ou état applicatif dynamique.**
+Le runtime doit viser une **dégradation explicite vers un mode minimal** plutôt
+qu'une simple succession d'erreurs indépendantes, tant que ce mode peut rester
+sûr.
+
+Pour la V1.1, cela signifie au minimum préparer un état runtime clairement
+identifiable et fermer les mutations métier normales. La capacité IA
+conversationnelle réservée à l'owner et au rôle de secours appartient à la
+cible V2.0, pas à cette tranche fonctionnelle.
 
 ---
 
@@ -361,18 +438,24 @@ confirme que ce comportement est intentionnel dans l'état actuel.
 
 ✅ Sécurité : fail-closed fort.
 
-📌 UX recovery : à décider.
+### Décision retenue
 
-Deux stratégies possibles, à arbitrer plus tard :
+Lorsqu'il est techniquement possible de rester vivant sans faire confiance à la
+DB concernée, Claviger doit privilégier le **mode minimal** au hard stop complet.
 
-1. conserver le mismatch comme **hard stop applicatif** ;
-2. démarrer un mode maintenance extrêmement limité permettant seulement un diagnostic explicite.
+Un ownership mismatch reste cependant **fail-closed pour la DB** :
 
-Il ne faut surtout pas proposer de rebind automatique sur mismatch.
+- aucune mutation métier normale ;
+- aucun rebind automatique ;
+- aucune prise de possession silencieuse ;
+- uniquement les surfaces de diagnostic/recovery explicitement sûres.
+
+Si le runtime ne peut pas garantir ce périmètre minimal, le hard stop reste
+préférable.
 
 ### Priorité
 
-**P1 — décision, pas nécessairement correction.**
+**P1 — adapter le startup à ce contrat sans affaiblir l'ownership.**
 
 ---
 
@@ -976,7 +1059,7 @@ preflight mutation
 
 ❌ aucun test snapshot n'est présent dans l'arborescence auditée.
 
-La décision de roadmap reste donc entièrement à implémenter :
+La décision d'architecture est désormais confirmée :
 
 ```text
 SQLite = source de vérité
@@ -1023,21 +1106,50 @@ timestamp
 
 ## État actuel
 
-❌ Aucun workflow runtime audité ne fournit de backup SQLite avant migration ou déploiement.
+❌ Aucun workflow runtime audité ne fournit encore de backup SQLite avant
+migration, déploiement ou selon une planification nocturne.
 
-Ce besoin doit rester distinct du snapshot applicatif.
+Ce besoin reste distinct du snapshot applicatif.
 
-## Cible
+## Décision retenue
+
+Le hardening V1.1 doit fournir un **moteur de sauvegarde SQLite fiable et
+réutilisable**.
+
+Politique nocturne cible :
 
 ```text
-avant migration / déploiement
-→ backup du fichier SQLite
-→ validation du backup
-→ opération
-→ rollback opérationnel possible
+23 h
+→ produire une sauvegarde SQLite cohérente
+→ contrôler qu'elle est lisible / valide
+→ confirmer sa copie sur le NAS
+→ conserver les deux sauvegardes validées les plus récentes
+→ supprimer l'ancienne seulement après succès complet
 ```
 
-Le lieu naturel de ce mécanisme semble être la chaîne Linux / Docker / `deploy/succumbrae`, pas le moteur questionnaire.
+Exemple de rotation :
+
+```text
+avant 23 h : J-2 + J-1
+après succès : J-1 + J
+```
+
+Si la création, la validation ou la copie NAS échoue :
+
+```text
+J-2 + J-1 restent conservées
+```
+
+Il n'est pas utile d'accumuler des dizaines de versions d'une DB qui peut rester
+stable plusieurs jours.
+
+Le même moteur doit servir aux backups **pré-migration** et **pré-déploiement**.
+Ces sauvegardes ponctuelles restent obligatoires ; leur interaction exacte avec
+la rotation nocturne sera fixée pendant l'implémentation.
+
+Le stockage durable cible est un dossier dédié sur le NAS. L'intégration Linux /
+Docker devra garantir qu'un backup annoncé comme réussi est réellement présent
+et validé avant toute rotation destructive.
 
 ### Priorité
 
@@ -1091,15 +1203,16 @@ Le lieu naturel de ce mécanisme semble être la chaîne Linux / Docker / `deplo
 
 L'ordre ci-dessous est une proposition de séquençage, pas encore une décision d'implémentation.
 
-## Tranche H1 — sécurité DB
+## Tranche H1 — sécurité DB et mode minimal
 
 Objectif :
 
 - distinguer disponibilité et intégrité ;
 - définir le comportement face à une DB suspecte/corrompue ;
-- décider comment distinguer première installation et DB attendue disparue ;
+- distinguer première installation et DB attendue disparue ;
+- introduire le contrat runtime normal / minimal / hard stop ;
 - conserver le fail-closed ;
-- définir la place de l'ownership mismatch.
+- appliquer ce contrat à l'ownership mismatch sans aucun rebind automatique.
 
 Gate :
 
@@ -1143,15 +1256,19 @@ Gate :
 
 ---
 
-## Tranche H4 — snapshot Last Known Good
+## Tranche H4 — snapshot Last Known Good et backups
 
 Objectif :
 
-- format versionné ;
+- format snapshot versionné ;
 - écriture atomique ;
 - politique de mise à jour ;
 - lecture recovery sans DB ;
-- preuve qu'il ne devient pas source de vérité.
+- preuve qu'il ne devient pas source de vérité ;
+- moteur de backup SQLite cohérent ;
+- rotation nocturne de deux sauvegardes à 23 h ;
+- stockage NAS ;
+- backup explicite pré-migration / pré-déploiement.
 
 Gate :
 
@@ -1249,4 +1366,8 @@ Les risques les plus importants à fermer avant Succumbrae sont :
 6. backup opérationnel de déploiement
 ```
 
-La première implémentation de cette branche ne doit commencer qu'après validation de cet inventaire et choix de la tranche H1.
+L'inventaire a été lu et accepté comme base de travail le 19 septembre 2026.
+
+La prochaine implémentation prévue est la **tranche H1 — sécurité DB et mode
+minimal**, en conservant les décisions de snapshot et de backup ci-dessus comme
+contrats de la branche.

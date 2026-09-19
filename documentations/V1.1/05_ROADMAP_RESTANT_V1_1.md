@@ -2,11 +2,13 @@
 
 ## Checkpoint de reprise — 19 septembre 2026
 
-**Feature active :** `feature/v11-ai-config-server`  
-**Checkpoint fonctionnel avant documentation :** `f74a4c9ef7e12cbda45b339ceed5fc91abfd1364`  
-**Branche d'intégration cible :** `refactor/generic-workflows-v11`  
+**Feature active :** `feature/v11-hardening-recovery`  
+**Base fonctionnelle intégrée dans `develop` :** `6ba15319901932945c3ae66ad3313121f746ac6e`  
 **Schéma SQLite courant :** V12  
-**`develop` :** ne pas toucher avant fermeture V1.1.
+**Audit hardening :** `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md`
+
+Les branches de refactor/workflow précédentes sont désormais incluses dans
+`develop`. La branche active de hardening est issue de ce `develop` à jour.
 
 Le code du HEAD reste la source de vérité.
 
@@ -419,6 +421,12 @@ questionnaire.
 
 # 5. Robustesse / recovery / snapshots
 
+**Tranche active :** `feature/v11-hardening-recovery`.
+
+L'audit initial est terminé et sert de matrice de travail :
+
+`08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md`
+
 Après validation fonctionnelle :
 
 - rôle ou salon supprimé ;
@@ -455,6 +463,44 @@ snapshot applicatif de recovery
 ≠
 backup opérationnel avant migration/déploiement
 ```
+
+## Mode minimal — décision actée
+
+Claviger doit pouvoir rester vivant en **mode minimal** lorsqu'une panne sérieuse
+rend le runtime normal indisponible mais qu'un fonctionnement réduit reste sûr.
+
+Pour V1.1 :
+
+- workflows métier et mutations normales désactivés en mode minimal ;
+- diagnostic et recovery conservés lorsqu'ils peuvent fonctionner sans faire
+  confiance à l'état défaillant ;
+- ownership DB toujours fail-closed ;
+- aucun rebind automatique en cas de mismatch.
+
+Cette architecture prépare la V2.0 : à terme, l'IA conversationnelle devra
+pouvoir rester accessible en mode minimal uniquement à l'owner et à un rôle de
+secours dédié.
+
+## Backups SQLite — décision actée
+
+Le moteur de backup fait partie de cette tranche.
+
+Politique cible :
+
+```text
+tous les jours vers 23 h
+→ backup SQLite cohérent
+→ validation
+→ copie NAS confirmée
+→ rotation
+→ 2 sauvegardes validées conservées
+```
+
+La sauvegarde la plus ancienne n'est supprimée qu'après succès complet de la
+nouvelle. En cas d'échec, les deux sauvegardes précédentes restent intactes.
+
+Le même mécanisme devra servir aux backups obligatoires pré-migration et
+pré-déploiement.
 
 ---
 
@@ -511,12 +557,10 @@ Ne pas déployer directement depuis `main`.
 
 # 8. Smoke final V1.1 et promotion
 
-Ordre de promotion :
+Ordre de promotion restant :
 
 ```text
-feature/*
-    ↓
-refactor/generic-workflows-v11
+feature/v11-hardening-recovery
     ↓
 develop
     ↓
@@ -529,6 +573,9 @@ smoke 100 %
 main
 ```
 
+Les anciennes branches `refactor/generic-workflows-v11` et
+`feature/v11-ai-config-server` sont déjà incluses dans `develop`.
+
 Aucun merge sans acceptation explicite du développeur.
 
 ---
@@ -537,14 +584,14 @@ Aucun merge sans acceptation explicite du développeur.
 
 ```text
 1. ✅ Métadonnées catalogue — validées
-2. Smoke questionnaire Laboratorium — en cours
-3. Smoke questionnaire seconde guild
-4. Robustesse / recovery / snapshots
+2. ✅ Smoke questionnaire Laboratorium — validé par le développeur
+3. Smoke complémentaire non-admin / seconde guild
+4. 🔧 Hardening / recovery / snapshots / backups — branche active
 5. Audit final
 6. CI/CD + validation Linux
 7. Smoke final V1.1
 8. Documentation finale
-9. Feature → refactor → develop
+9. Feature hardening → develop
 10. Deploy/succumbrae
 11. Validation production → main
 ```

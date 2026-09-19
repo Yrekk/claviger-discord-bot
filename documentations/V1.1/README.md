@@ -6,24 +6,42 @@ Ce dossier contient les documents de continuité fonctionnelle et architecturale
 
 Pour reprendre le projet après une coupure de session, lire d'abord :
 
-1. `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` ;
+1. `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` ;
 2. `05_ROADMAP_RESTANT_V1_1.md` ;
-3. le HEAD réel de la branche feature indiquée dans la passation.
+3. `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` pour l'historique
+   de la tranche précédente ;
+4. le HEAD réel de `feature/v11-hardening-recovery`.
 
 Le code courant et les décisions les plus récentes priment sur les documents historiques.
 
 ## État actuel
 
-Au checkpoint du 17 septembre 2026 :
+Au checkpoint du 19 septembre 2026 :
 
-- schéma SQLite V11 ;
-- migration V10 → V11 validée sur playground représentatif ;
-- `guild_settings` final limité à `guild_id`, `ai_enabled`, `ai_role_id` ;
-- ancien contexte `ai_preference` retiré ;
-- restart Discord corrigé et smoké ;
-- flux `config-server` validé jusqu'à `ADMIN → IA → workflows` ;
-- configuration du rôle IA global validée ;
-- prochaine tranche : réservations/filtrage des rôles workflow + annotation des structures déjà utilisées.
+- schéma SQLite V12 ;
+- runtime multi-guild et workflows génériques intégrés dans `develop` ;
+- configuration ADMIN / IA / workflows génériques validée ;
+- catalogues génériques et variantes `base` / `no_ai` / `ai` validés ;
+- questionnaire générique smoké sur Laboratorium ;
+- contrat IA confirmé comme **additif** : `no_ai` reste le socle, `ai`
+  s'ajoute lorsque l'IA est activée ;
+- branche active : `feature/v11-hardening-recovery` ;
+- audit initial hardening/recovery terminé ;
+- prochaine tranche : **H1 — sécurité DB et mode minimal**.
+
+Décisions de continuité déjà actées :
+
+- SQLite reste la source de vérité ;
+- le snapshot Last Known Good sert de fallback/recovery ;
+- le mode minimal doit garder Claviger partiellement opérationnel lorsqu'il
+  reste possible de le faire en sécurité ;
+- en V2.0, l'IA conversationnelle minimale sera limitée à l'owner et à un rôle
+  de secours dédié ;
+- backup SQLite automatisé vers le NAS vers 23 h ;
+- rotation de **deux sauvegardes validées** seulement ;
+- suppression de l'ancienne uniquement après création, validation et copie
+  réussies de la nouvelle ;
+- backup obligatoire avant migration et déploiement.
 
 ## Documents
 
@@ -34,6 +52,9 @@ Au checkpoint du 17 septembre 2026 :
 - `04_Prompt_Reorganisation_Arborescence_Fin_V1_1.md` : historique de la réorganisation ;
 - `05_ROADMAP_RESTANT_V1_1.md` : roadmap actuelle ;
 - `06_Migration_V11_Contrat_et_Passation.md` : contrat initial de la tranche migration V11 ;
-- `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` : **passation opérationnelle courante**.
+- `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` : passation de la tranche configuration/workflows ;
+- `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` : **audit et contrat de reprise courant pour le hardening**.
 
-La branche d'intégration V1.1 reste `refactor/generic-workflows-v11`. `develop` ne doit pas être touchée avant fermeture et validation explicite de la V1.1.
+Les branches de configuration/workflows précédentes ont été intégrées dans
+`develop`. La branche active est `feature/v11-hardening-recovery`, créée
+depuis le `develop` à jour.
