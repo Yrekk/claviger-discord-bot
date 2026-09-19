@@ -134,10 +134,10 @@ from claviger.services.runtime.guild_configuration_inspection_service import (
 from claviger.services.runtime.guild_configuration_readiness_service import (
     GuildConfigurationReadinessService,
 )
+from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.runtime.guild_role_diagnostic_service import (
     GuildRoleDiagnosticService,
 )
-from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
 from claviger.services.runtime.workflow_catalog_diagnostic_service import (
     WorkflowCatalogDiagnosticService,
 )

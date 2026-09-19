@@ -60,10 +60,6 @@ class GuildRoleDiagnosticService:
             role.id: role
             for role in guild.roles
         }
-        role_snapshots_by_id = {
-            role.role_id: role
-            for role in snapshot.roles
-        }
         channels_by_id = {
             channel.channel_id: channel.channel_name
             for channel in snapshot.channels

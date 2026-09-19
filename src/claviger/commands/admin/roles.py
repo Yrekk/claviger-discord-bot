@@ -215,7 +215,7 @@ def create_roles_group(
 
         lines = [
             f"**Rôle de l'application :** {hierarchy.bot_role.name} "
-            f"({hierarchy.bot_role.id})",
+            f"(`{hierarchy.bot_role.id}`)",
             "",
             f"**Rôles de confiance ({len(hierarchy.trusted_roles)})**",
             *_format_roles(hierarchy.trusted_roles),

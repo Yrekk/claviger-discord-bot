@@ -778,6 +778,7 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
         "config-server",
         "config",
         "workflow",
+        "catalog",
     }
 
     sync.assert_awaited_once()
