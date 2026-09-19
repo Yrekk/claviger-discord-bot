@@ -204,7 +204,7 @@ class WorkflowStructureDiscoveryService:
                 if channel.category_id == category.category_id
             )
 
-            logger.warning(
+            logger.debug(
                 "Workflow discovery category=%r id=%s channels=%s",
                 category.category_name,
                 category.category_id,

@@ -183,7 +183,6 @@ class WorkflowCatalogDiagnosticService:
                     if role.role_name.startswith(
                         catalog.role_prefix,
                     )
-                    and role.role_name != catalog.role_prefix
                 )
 
                 linked_channel_names = tuple(
@@ -243,6 +242,11 @@ class WorkflowCatalogDiagnosticService:
                         for channel_id in role.explicit_channel_ids
                         if channel_id in live_channels_by_id
                     )
+
+                    if role.role_name == catalog.role_prefix:
+                        reasons.add(
+                            "pattern sans clé d'entrée"
+                        )
 
                     if not role.role_manageable:
                         reasons.add(

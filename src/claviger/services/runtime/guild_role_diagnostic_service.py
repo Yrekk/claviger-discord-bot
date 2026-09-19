@@ -151,7 +151,6 @@ class GuildRoleDiagnosticService:
                 )
                 for prefix, label in prefix_bindings
                 if role_snapshot.role_name.startswith(prefix)
-                and role_snapshot.role_name != prefix
             )
 
             if not matching_bindings:
@@ -174,6 +173,14 @@ class GuildRoleDiagnosticService:
             if len(matched_prefixes) > 1:
                 reasons.append(
                     "correspond à plusieurs patterns de workflow"
+                )
+
+            if any(
+                role_snapshot.role_name == prefix
+                for prefix in matched_prefixes
+            ):
+                reasons.append(
+                    "pattern sans clé d'entrée"
                 )
 
             if not role_snapshot.role_manageable:
