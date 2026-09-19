@@ -351,7 +351,7 @@ les contrôles owner / rôles de confiance restent indépendants.
 
 # Configuration ADMIN par serveur
 
-Elle ne reçoit pas automatiquement `/membre`, `/noctis` ou les groupes d'administration complets simplement parce qu'une autre guild utilise déjà la même application.
+Elle ne reçoit pas automatiquement les commandes de workflows persistés d'une autre guild ni les groupes d'administration complets simplement parce qu'une autre guild utilise déjà la même application.
 
 Le nom du groupe administratif est dérivé dynamiquement de l'application.
 
