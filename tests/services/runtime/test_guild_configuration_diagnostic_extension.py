@@ -3,7 +3,11 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-from claviger.database.status import DatabaseState, DatabaseStatus, DatabaseStatusService
+from claviger.database.status import (
+    DatabaseState,
+    DatabaseStatus,
+    DatabaseStatusService,
+)
 from claviger.models.runtime.guild_ai_configuration_model import GuildAIConfiguration
 from claviger.policies.policy_resolver import PolicyResolver
 from claviger.repositories.runtime.guild_ai_configuration_repository import (
