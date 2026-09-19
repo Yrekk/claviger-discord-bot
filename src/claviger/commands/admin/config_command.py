@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 
+from claviger.commands.admin.diagnostic_output import send_ephemeral_diagnostic
 from claviger.database.status import DatabaseState
 from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
@@ -268,6 +269,195 @@ def _format_metrics_lines(
     ]
 
 
+def _format_ai_lines(
+    result: GuildConfigurationInspectionResult,
+    guild: discord.Guild,
+) -> list[str]:
+    configuration = result.ai_configuration
+
+    if result.workflows is None:
+        return []
+
+    if configuration is None:
+        state = "non configurée"
+        role_label = "aucun"
+    elif configuration.ai_enabled is None:
+        state = "non configurée"
+        role_label = "aucun"
+    elif configuration.ai_enabled is False:
+        state = "désactivée"
+        role = (
+            guild.get_role(
+                configuration.ai_role_id,
+            )
+            if configuration.ai_role_id is not None
+            else None
+        )
+        role_label = (
+            f"{role.name} (conservé)"
+            if role is not None
+            else "aucun"
+        )
+    else:
+        state = "activée"
+        role = (
+            guild.get_role(
+                configuration.ai_role_id,
+            )
+            if configuration.ai_role_id is not None
+            else None
+        )
+
+        if configuration.ai_role_id is None:
+            role_label = "❌ aucun rôle configuré"
+        elif role is None:
+            role_label = "❌ rôle configuré introuvable"
+        else:
+            role_label = role.name
+
+    owner_key = result.ai_questionnaire_owner_workflow_key
+    owner_label = "aucun"
+
+    if owner_key is not None:
+        owner_workflow = next(
+            (
+                workflow
+                for workflow in result.workflows
+                if workflow.workflow_key == owner_key
+            ),
+            None,
+        )
+
+        owner_label = (
+            f"/{owner_workflow.command_name}"
+            if owner_workflow is not None
+            else f"{owner_key} (workflow introuvable)"
+        )
+
+    return [
+        "**IA globale**",
+        f"- État : {state}",
+        f"- Rôle IA : {role_label}",
+        f"- Workflow propriétaire de la question IA : {owner_label}",
+    ]
+
+
+def _format_workflow_lines(
+    result: GuildConfigurationInspectionResult,
+) -> list[str]:
+    workflows = result.workflows
+    discovery = result.workflow_discovery
+
+    if workflows is None:
+        return []
+
+    categories_by_id = (
+        {
+            category.category_id: category.category_name
+            for category in discovery.categories
+        }
+        if discovery is not None
+        else {}
+    )
+
+    lines = [
+        f"**Workflows configurés ({len(workflows)})**",
+    ]
+
+    if not workflows:
+        lines.append(
+            "- Aucun"
+        )
+
+    for workflow in workflows:
+        category_name = (
+            categories_by_id.get(
+                workflow.category_id,
+            )
+            if workflow.category_id is not None
+            else None
+        )
+
+        lines.extend(
+            [
+                "=============",
+                f"- **{workflow.title}** — /{workflow.command_name}",
+                (
+                    f"  Catégorie : {category_name}"
+                    if category_name is not None
+                    else "  Catégorie : ❌ absente ou non configurée"
+                ),
+            ]
+        )
+
+    if discovery is None:
+        return lines
+
+    unconfigured_candidates = []
+
+    for candidate in discovery.workflow_candidates:
+        protected_ids = {
+            channel.channel_id
+            for channel in candidate.protected_channels
+        }
+        interactive_ids = {
+            channel.channel_id
+            for channel in candidate.interactive_channels
+        }
+
+        configured = any(
+            workflow.category_id == candidate.category.category_id
+            and workflow.management_channel_id in protected_ids
+            and bool(workflow.channel_ids)
+            and set(workflow.channel_ids).issubset(
+                interactive_ids,
+            )
+            for workflow in workflows
+        )
+
+        if not configured:
+            unconfigured_candidates.append(
+                candidate,
+            )
+
+    lines.extend(
+        [
+            "",
+            (
+                "**Structures Discord détectées mais non configurées "
+                f"({len(unconfigured_candidates)})**"
+            ),
+        ]
+    )
+
+    if not unconfigured_candidates:
+        lines.append(
+            "- Aucune"
+        )
+        return lines
+
+    for candidate in unconfigured_candidates:
+        protected = ", ".join(
+            f"#{channel.channel_name}"
+            for channel in candidate.protected_channels
+        )
+        interactive = ", ".join(
+            f"#{channel.channel_name}"
+            for channel in candidate.interactive_channels
+        )
+
+        lines.extend(
+            [
+                "=============",
+                f"- Catégorie : {candidate.category.category_name}",
+                f"  Salons protégés : {protected or 'aucun'}",
+                f"  Salons interactifs : {interactive or 'aucun'}",
+            ]
+        )
+
+    return lines
+
+
 def create_config_group(
     inspection_service: GuildConfigurationInspectionService,
     report_service: ReportService,
@@ -347,16 +537,33 @@ def create_config_group(
             _format_admin_lines(result),
             _format_policy_lines(result),
             _format_metrics_lines(result),
+            _format_ai_lines(
+                result,
+                interaction.guild,
+            ),
+            _format_workflow_lines(
+                result,
+            ),
         ]
 
-        message = "\n\n".join(
-            "\n".join(section)
-            for section in sections
-        )
+        lines: list[str] = []
 
-        await interaction.followup.send(
-            message,
-            ephemeral=True,
+        for section in sections:
+            if not section:
+                continue
+
+            if lines:
+                lines.append(
+                    "",
+                )
+
+            lines.extend(
+                section,
+            )
+
+        await send_ephemeral_diagnostic(
+            interaction,
+            lines,
         )
 
     return config_group
