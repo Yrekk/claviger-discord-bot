@@ -103,10 +103,69 @@ async def test_catalog_scan_separates_workflows_and_reports_questionnaire_gaps()
 
     assert "=============" in message
     assert "**Workflow — Gamer**" in message
-    assert "- Commande : /gamer" in message
+    assert "- Structure : ✅ VALIDE" in message
+    assert "- Commande : ✅ /gamer configurée" in message
     assert "- Catégorie : GAMING" in message
     assert "- Rôle principal : Gamer" in message
     assert "#discussion-gamer" in message
+    assert "- État catalogue : ⚠️ MÉTADONNÉES INCOMPLÈTES + SYNCHRONISATION REQUISE" in message
     assert "- Pattern : gamer-" in message
-    assert "- Entrées metadata incomplètes : 1" in message
+    assert "**⚠️ Problèmes détectés**" in message
     assert "strategie : label, description manquant(s)" in message
+    assert "Synchronisation BDD requise pour : gamer-strategie" in message
+    assert "**Résumé catalogue**" in message
+    assert "- Métadonnées questionnaire complètes : 1 / 2" in message
+
+
+
+def test_catalog_scan_formats_structure_errors_separately_from_catalog_health() -> None:
+    """Keep workflow structure failures distinct from catalog readiness."""
+
+    result = GuildCatalogDiagnosticResult(
+        workflows=(
+            WorkflowCatalogDiagnostic(
+                workflow_key="adult",
+                title="adult",
+                command_name="adult",
+                category_name="ADULT",
+                management_channel_name=None,
+                execution_channel_names=(),
+                primary_role_name="adult",
+                primary_role_explicit_channel_names=(),
+                ai_questionnaire_owner=False,
+                structure_issues=(
+                    "salon de gestion absent de Discord",
+                    "aucun salon d'exécution configuré",
+                ),
+                catalogs=(
+                    WorkflowCatalogSectionDiagnostic(
+                        catalog_key="adult",
+                        display_name="adult",
+                        role_prefix="access-",
+                        detected_role_names=("access-test",),
+                        linked_channel_names=("test-access",),
+                        entry_count=1,
+                        complete_entry_count=1,
+                        incomplete_entries=(),
+                        unsynced_role_names=(),
+                        role_issues=(),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    message = "\n".join(
+        __import__(
+            "claviger.commands.admin.catalog_command",
+            fromlist=["_format_catalog_diagnostic"],
+        )._format_catalog_diagnostic(
+            result,
+        )
+    )
+
+    assert "- Structure : ❌ À CORRIGER" in message
+    assert "**⚠️ Problèmes de structure**" in message
+    assert "- salon de gestion absent de Discord" in message
+    assert "- aucun salon d'exécution configuré" in message
+    assert "- État catalogue : ✅ READY" in message

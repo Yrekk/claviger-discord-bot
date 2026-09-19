@@ -27,10 +27,40 @@ def _format_name_list(
     )
 
 
+def _format_catalog_state(
+    catalog,
+) -> str:
+    """Return one concise status describing the catalog problem class."""
+
+    states: list[str] = []
+
+    if catalog.incomplete_entries:
+        states.append(
+            "MÉTADONNÉES INCOMPLÈTES"
+        )
+
+    if catalog.unsynced_role_names:
+        states.append(
+            "SYNCHRONISATION REQUISE"
+        )
+
+    if catalog.role_issues:
+        states.append(
+            "ANOMALIES DÉTECTÉES"
+        )
+
+    if not states:
+        return "✅ READY"
+
+    return "⚠️ " + " + ".join(
+        states,
+    )
+
+
 def _format_catalog_diagnostic(
     result: GuildCatalogDiagnosticResult,
 ) -> list[str]:
-    """Format workflow/catalog readiness without exposing Discord IDs."""
+    """Format workflow/catalog readiness around actionable problem classes."""
 
     lines = [
         "**Diagnostic des catalogues et workflows**",
@@ -47,30 +77,31 @@ def _format_catalog_diagnostic(
         return lines
 
     for workflow in result.workflows:
-        workflow_has_issues = bool(
-            workflow.structure_issues
-            or not workflow.catalogs
-            or any(
-                catalog.incomplete_entries
-                or catalog.unsynced_role_names
-                or catalog.role_issues
-                for catalog in workflow.catalogs
-            )
+        structure_state = (
+            "❌ À CORRIGER"
+            if workflow.structure_issues
+            else "✅ VALIDE"
         )
+
+        command_name = workflow.command_name.strip()
         if not workflow.enabled:
-            workflow_state = "⏸ DÉSACTIVÉ"
-        elif workflow_has_issues:
-            workflow_state = "⚠️ À CORRIGER"
+            command_state = (
+                f"⏸ /{command_name} — workflow désactivé"
+                if command_name
+                else "⏸ workflow désactivé"
+            )
+        elif command_name:
+            command_state = f"✅ /{command_name} configurée"
         else:
-            workflow_state = "✅ READY"
+            command_state = "❌ aucune commande configurée"
 
         lines.extend(
             [
                 "",
                 _SEPARATOR,
                 f"**Workflow — {workflow.title}**",
-                f"- État : {workflow_state}",
-                f"- Commande : /{workflow.command_name}",
+                f"- Structure : {structure_state}",
+                f"- Commande : {command_state}",
                 (
                     f"- Catégorie : {workflow.category_name}"
                     if workflow.category_name
@@ -117,37 +148,95 @@ def _format_catalog_diagnostic(
         )
 
         if workflow.structure_issues:
-            lines.append(
-                "- Anomalies structure : "
-                + "; ".join(
-                    workflow.structure_issues,
-                )
+            lines.extend(
+                [
+                    "",
+                    "**⚠️ Problèmes de structure**",
+                    *(
+                        f"- {issue}"
+                        for issue in workflow.structure_issues
+                    ),
+                ]
             )
 
         if not workflow.catalogs:
-            lines.append(
-                "- Catalogue : ❌ aucun catalogue actif lié"
+            lines.extend(
+                [
+                    "",
+                    "**Catalogue**",
+                    "- État catalogue : ❌ AUCUN CATALOGUE ACTIF LIÉ",
+                ]
             )
             continue
 
         for catalog in workflow.catalogs:
-            catalog_has_issues = bool(
-                catalog.incomplete_entries
-                or catalog.unsynced_role_names
-                or catalog.role_issues
-            )
-            catalog_state = (
-                "⚠️ À CORRIGER"
-                if catalog_has_issues
-                else "✅ READY"
-            )
-
             lines.extend(
                 [
                     "",
                     f"**Catalogue — {catalog.display_name}**",
-                    f"- État : {catalog_state}",
+                    f"- État catalogue : {_format_catalog_state(catalog)}",
                     f"- Pattern : {catalog.role_prefix}",
+                ]
+            )
+
+            if (
+                catalog.incomplete_entries
+                or catalog.unsynced_role_names
+                or catalog.role_issues
+            ):
+                lines.extend(
+                    [
+                        "",
+                        "**⚠️ Problèmes détectés**",
+                    ]
+                )
+
+            for entry in catalog.incomplete_entries:
+                label = entry.label or entry.entry_key
+                missing = ", ".join(
+                    entry.missing_fields,
+                )
+                roles = _format_name_list(
+                    entry.target_role_names,
+                )
+                lines.append(
+                    (
+                        f"- {label} : {missing} manquant(s) "
+                        f"— rôles {roles}"
+                    )
+                )
+
+            if catalog.unsynced_role_names:
+                lines.append(
+                    (
+                        "- Synchronisation BDD requise pour : "
+                        + _format_name_list(
+                            catalog.unsynced_role_names,
+                        )
+                    )
+                )
+
+            for issue in catalog.role_issues:
+                reasons = "; ".join(
+                    issue.reasons,
+                )
+                channels = _format_name_list(
+                    tuple(
+                        f"#{name}"
+                        for name in issue.channel_names
+                    ),
+                )
+                lines.append(
+                    (
+                        f"- {issue.role_name} : {reasons} "
+                        f"— salons {channels}"
+                    )
+                )
+
+            lines.extend(
+                [
+                    "",
+                    "**Résumé catalogue**",
                     f"- Rôles Discord détectés : {len(catalog.detected_role_names)}",
                     (
                         "- Salons/forums liés aux rôles : "
@@ -164,8 +253,8 @@ def _format_catalog_diagnostic(
                     ),
                     f"- Entrées BDD : {catalog.entry_count}",
                     (
-                        "- Entrées metadata complètes : "
-                        f"{catalog.complete_entry_count}"
+                        "- Métadonnées questionnaire complètes : "
+                        f"{catalog.complete_entry_count} / {catalog.entry_count}"
                     ),
                     (
                         "- Entrées metadata incomplètes : "
@@ -177,67 +266,6 @@ def _format_catalog_diagnostic(
                     ),
                 ]
             )
-
-            if catalog.incomplete_entries:
-                incomplete_role_names = tuple(
-                    sorted(
-                        {
-                            role_name
-                            for entry in catalog.incomplete_entries
-                            for role_name in entry.target_role_names
-                        },
-                        key=str.casefold,
-                    )
-                )
-                lines.append(
-                    (
-                        "- Rôles concernés par des métadonnées incomplètes : "
-                        f"{len(incomplete_role_names)}"
-                    )
-                )
-                lines.append(
-                    "**À compléter pour le questionnaire**"
-                )
-
-                for entry in catalog.incomplete_entries:
-                    label = entry.label or entry.entry_key
-                    missing = ", ".join(
-                        entry.missing_fields,
-                    )
-                    roles = _format_name_list(
-                        entry.target_role_names,
-                    )
-                    lines.append(
-                        f"- {label} : {missing} manquant(s) — rôles {roles}"
-                    )
-
-            if catalog.unsynced_role_names:
-                lines.append(
-                    "**Rôles nécessitant une synchronisation**"
-                )
-                lines.extend(
-                    f"- {role_name}"
-                    for role_name in catalog.unsynced_role_names
-                )
-
-            if catalog.role_issues:
-                lines.append(
-                    "**Anomalies catalogue**"
-                )
-
-                for issue in catalog.role_issues:
-                    reasons = "; ".join(
-                        issue.reasons,
-                    )
-                    channels = _format_name_list(
-                        tuple(
-                            f"#{name}"
-                            for name in issue.channel_names
-                        ),
-                    )
-                    lines.append(
-                        f"- {issue.role_name} : {reasons} — salons {channels}"
-                    )
 
     return lines
 
