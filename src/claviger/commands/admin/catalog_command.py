@@ -47,11 +47,28 @@ def _format_catalog_diagnostic(
         return lines
 
     for workflow in result.workflows:
+        workflow_has_issues = bool(
+            workflow.structure_issues
+            or not workflow.catalogs
+            or any(
+                catalog.incomplete_entries
+                or catalog.unsynced_role_names
+                or catalog.role_issues
+                for catalog in workflow.catalogs
+            )
+        )
+        workflow_state = (
+            "⚠️ À CORRIGER"
+            if workflow_has_issues
+            else "✅ READY"
+        )
+
         lines.extend(
             [
                 "",
                 _SEPARATOR,
                 f"**Workflow — {workflow.title}**",
+                f"- État : {workflow_state}",
                 f"- Commande : /{workflow.command_name}",
                 (
                     f"- Catégorie : {workflow.category_name}"
@@ -113,10 +130,22 @@ def _format_catalog_diagnostic(
             continue
 
         for catalog in workflow.catalogs:
+            catalog_has_issues = bool(
+                catalog.incomplete_entries
+                or catalog.unsynced_role_names
+                or catalog.role_issues
+            )
+            catalog_state = (
+                "⚠️ À CORRIGER"
+                if catalog_has_issues
+                else "✅ READY"
+            )
+
             lines.extend(
                 [
                     "",
                     f"**Catalogue — {catalog.display_name}**",
+                    f"- État : {catalog_state}",
                     f"- Pattern : {catalog.role_prefix}",
                     f"- Rôles Discord détectés : {len(catalog.detected_role_names)}",
                     (
