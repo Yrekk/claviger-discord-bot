@@ -53,10 +53,13 @@ def paginate_diagnostic_lines(
             if current_lines and current_length + addition > max_length:
                 flush()
 
+            had_lines = bool(
+                current_lines,
+            )
             current_lines.append(
                 fragment,
             )
-            current_length += len(fragment) + (1 if current_length else 0)
+            current_length += len(fragment) + (1 if had_lines else 0)
 
     flush()
 

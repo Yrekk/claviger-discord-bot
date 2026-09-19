@@ -144,22 +144,34 @@ class GuildRoleDiagnosticService:
         anomalies: list[RolePatternAnomaly] = []
 
         for role_snapshot in snapshot.roles:
-            matches = tuple(
-                label
+            matching_bindings = tuple(
+                (
+                    prefix,
+                    label,
+                )
                 for prefix, label in prefix_bindings
                 if role_snapshot.role_name.startswith(prefix)
                 and role_snapshot.role_name != prefix
             )
 
-            if not matches:
+            if not matching_bindings:
                 continue
+
+            matches = tuple(
+                label
+                for _, label in matching_bindings
+            )
+            matched_prefixes = {
+                prefix
+                for prefix, _ in matching_bindings
+            }
 
             pattern_role_ids.add(
                 role_snapshot.role_id,
             )
             reasons: list[str] = []
 
-            if len(set(matches)) > 1:
+            if len(matched_prefixes) > 1:
                 reasons.append(
                     "correspond à plusieurs patterns de workflow"
                 )
