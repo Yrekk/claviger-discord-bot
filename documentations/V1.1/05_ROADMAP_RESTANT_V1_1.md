@@ -1,22 +1,18 @@
 # ROADMAP — reste à faire pour Claviger V1.1
 
-## Checkpoint de reprise — 17 septembre 2026
+## Checkpoint de reprise — 19 septembre 2026
 
-**Branche feature active :** `feature/v11-ai-config-server`  
-**Dernier commit fonctionnel validé avant documentation :** `12c95d51718bed22b9920fcbea69b155f3bccb72`  
+**Feature active :** `feature/v11-ai-config-server`  
+**Checkpoint fonctionnel avant documentation :** `f74a4c9ef7e12cbda45b339ceed5fc91abfd1364`  
 **Branche d'intégration cible :** `refactor/generic-workflows-v11`  
 **Schéma SQLite courant :** V12  
 **`develop` :** ne pas toucher avant fermeture V1.1.
 
-Pour une reprise après coupure de session, lire d'abord :
-
-`07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md`.
-
-Le code réel du HEAD reste la source de vérité.
+Le code du HEAD reste la source de vérité.
 
 ---
 
-# 1. Déjà terminé — ne pas refaire
+# 1. Tranches terminées — ne pas refaire
 
 ## Runtime multi-guild
 
@@ -26,364 +22,499 @@ Validé :
 - lifecycle Discord event-driven ;
 - isolation de readiness ;
 - locks par guild ;
-- join / available / unavailable / remove indépendants.
+- join / available / unavailable / remove indépendants ;
+- synchronisation de command tree par guild.
 
-## Identité et ownership
+## Identité, ownership et ADMIN
 
 Validé :
 
 - identité application séparée de la guild ;
 - ownership SQLite lié à l'application Discord ;
 - mismatch fail-closed ;
-- une base applicative, plusieurs guilds.
-
-## ADMIN
-
-Déjà en place :
-
-- discovery ;
-- reconciliation ;
-- provisioning ;
-- persistence SQLite ;
+- une base applicative pour plusieurs guilds ;
+- discovery / reconciliation / provisioning ADMIN ;
 - reporting activity/error par guild ;
-- `config-server` ;
-- scans administratifs, encore à moderniser sur le rendu V11.
+- fallback incident avant disponibilité d'ADMIN ;
+- commandes normales restreintes au salon ADMIN.
 
-## Réorganisation architecturale
+## Migration V11 / V12
 
-Terminée :
+Validé :
 
-- domaines séparés sous `models/`, `repositories/`, `services/`, `ui/` ;
-- tests en miroir ;
-- mini-README locaux ;
-- suppression des anciens shims devenus inutiles.
+- migration des anciens catalogues spécialisés vers
+  `guild_catalog_entries` / `guild_catalog_entry_targets` ;
+- IA globale déplacée dans `guild_settings` ;
+- anciennes colonnes V1 retirées ;
+- contexte historique `ai_preference` retiré ;
+- schéma V12 avec `guild_ai_questionnaire_owner` ;
+- owner unique par guild avec FK vers `guild_workflows`.
 
-Ne pas refaire cette réorganisation.
+## Configuration IA globale
 
-## Migration SQLite V11
-
-**Validée sur playground V10 représentatif.**
-
-La V11 :
-
-- convertit `guild_member_interests` et `guild_adult_accesses` vers les catalogues génériques ;
-- prend en charge le cas réel singleton + paire IA/No-IA portant le même suffixe ;
-- retire les tables spécialisées après validation ;
-- retire les colonnes V1 de `guild_settings` ;
-- reconstruit `guild_settings` avec uniquement :
-
-```text
-guild_id
-ai_enabled
-ai_role_id
-```
-
-- retire le contexte historique `ai_preference` ;
-- remet la décision IA V11 à un état non configuré au lieu d'hériter du workflow historique ;
-- reste atomique/fail-closed.
-
-Tests ciblés, Ruff et suite pytest complète : validés localement par le développeur.
-
-## Restart
-
-Le restart n'arrête plus le client avant la fin du callback Discord.
-
-Smoke réel : restart sans erreur.
-
-## Configuration IA globale de guild
-
-Le flux réel est maintenant :
+Validé en smoke réel :
 
 ```text
 ADMIN
 → IA globale
+→ rôle IA
 → workflows
 ```
 
-Smoke réel validé sur playground migré : l'étape IA est bien affichée, un rôle IA peut être configuré, puis le wizard continue vers les workflows.
+Le rôle IA est guild-scoped et n'appartient pas à un workflow.
 
-Le rôle IA appartient à la guild, pas à un workflow.
+## Configuration générique des workflows
 
-## Ownership du questionnaire IA
+Validé :
 
-La préférence IA utilisateur ne doit être posée que par **un seul workflow par guild**.
+- sélection ou création de catégorie ;
+- salon de gestion ;
+- salon d'exécution ;
+- rôle principal ;
+- préfixe questionnaire ;
+- confirmation avant première mutation ;
+- persistence SQLite après provisioning ;
+- rôle principal jamais choisi parmi les rôles réservés ;
+- revalidation backend des réservations ;
+- structures Discord déjà utilisées annotées et réutilisables.
 
-Le schéma V12 ajoute :
+Les réservations excluent notamment :
 
-```text
-guild_ai_questionnaire_owner
-guild_id PRIMARY KEY
-workflow_key FOREIGN KEY → guild_workflows
-```
+- rôle de l'application / rôles d'intégration ;
+- rôle IA global ;
+- rôles principaux déjà utilisés ;
+- rôles appartenant à des patterns/catalogues déjà liés ;
+- rôles techniquement non manipulables.
 
-Cette table est l'unique source de vérité pour déterminer quel workflow a le droit de demander/modifier la préférence IA.
+## Ownership de la question IA
 
-Commande prévue et implémentée sur la feature :
+Validé :
 
-```text
-/<application> workflow ai-questionnaire
-```
+- un seul workflow par guild peut poser/modifier la préférence IA ;
+- l'owner est persistant ;
+- l'ownership peut être déplacé ;
+- les autres workflows ne modifient jamais le rôle IA global.
 
-Elle permet d'assigner le premier propriétaire puis de déplacer atomiquement l'ownership vers un autre workflow.
-
-Les autres workflows ne posent jamais la question IA ; ils consomment l'état du rôle IA pour choisir leurs variantes `base` / `no_ai` / `ai`.
-
----
-
-# 2. Prochaine tranche immédiate — réservations de rôles et structures annotées
-
-Le smoke a montré que le sélecteur de rôle principal propose encore des rôles qui ne doivent pas être réutilisés.
-
-Exemples observés :
-
-- rôle du bot ;
-- rôle principal d'un workflow existant ;
-- rôle sous un préfixe/catalogue déjà lié à un workflow.
-
-## 2.1 Règles de réservation à implémenter
-
-Pour un rôle principal de workflow, exclure :
-
-1. les rôles portés par le compte du bot / rôles d'intégration applicative ;
-2. le rôle IA global configuré ;
-3. les `primary_role_id` déjà utilisés ;
-4. les rôles appartenant aux catalogues/préfixes déjà liés ;
-5. les rôles techniquement non manipulables.
-
-Appliquer la règle deux fois :
+Convention fonctionnelle actuelle :
 
 ```text
-filtrage UI/discovery
-+
-revalidation service/preflight
+premier questionnaire obligatoire (/membre)
+→ propriétaire de la question IA
+
+autres questionnaires
+→ consommateurs de l'état IA global
 ```
 
-L'UI Discord ne doit jamais être l'unique garde-fou d'une règle métier.
+## Runtime questionnaire générique
 
-## 2.2 Structures déjà utilisées
-
-Plusieurs workflows peuvent partager la même catégorie et les mêmes salons.
-
-Une structure existante ne doit donc pas être bloquée. Elle doit être **annotée** avec les workflows déjà liés.
-
-Exemple :
-
-```text
-test-before-member
-• protégés : #test-rules
-• interactifs : #test-accueil
-• workflows déjà configurés : /membre
-```
-
-La discovery Discord doit rester structurelle. La corrélation avec SQLite doit être portée par une couche d'enrichissement/coordinator, pas par un repository injecté directement dans `WorkflowStructureDiscoveryService`.
-
-## 2.3 Gate de sortie de cette tranche
-
-- tests ciblés verts ;
-- Ruff vert ;
-- pytest complet vert ;
-- aucun rôle réservé proposé ;
-- backend refuse aussi un rôle réservé soumis hors UI ;
-- structures partagées visibles et réutilisables ;
-- smoke from scratch sur seconde guild.
-
----
-
-# 3. Smoke from scratch sur seconde guild
-
-Le smoke a déjà validé :
-
-- échec ADMIN sans permission `Manage Channels` ;
-- fallback incident en MP tant qu'ADMIN n'existe pas ;
-- récupération après ajout des permissions ;
-- création des salons/forums ADMIN ;
-- passage vers IA globale ;
-- chemin IA désactivée ;
-- wizard workflow sans choix IA local.
-
-Suite du smoke après migration V11 → V12 :
-
-```text
-migrer la BDD DEV vers schéma 12
-→ relancer config-server
-→ activer IA
-→ créer/sélectionner le rôle IA global
-→ créer un nouveau workflow
-→ /<application> workflow ai-questionnaire
-→ choisir ce workflow comme propriétaire
-→ relancer la commande et déplacer l'ownership vers un autre workflow
-→ vérifier qu'une seule ligne d'ownership existe toujours
-```
-
-Puis reprendre le smoke du moteur questionnaire générique lorsqu'il sera construit.
-
----
-
-# 4. Moderniser les scans
-
-## `role scan`
-
-À adapter au modèle V11 :
-
-- ne plus afficher les IDs dans le rendu humain normal ;
-- clarifier ou fusionner visuellement « confiance » et « non manipulable » lorsque les informations se recouvrent ;
-- afficher une section IA claire ;
-- afficher les rôles principaux de workflows et les rôles/catalogues liés ;
-- garder les IDs dans les logs/diagnostics techniques seulement si nécessaires.
-
-## `config scan`
-
-Retirer la présentation `Policy effective — compatibilité actuelle` comme configuration active.
-
-La cible doit diagnostiquer :
-
-```text
-ADMIN
-→ IA globale
-→ workflows
-→ catalogues/bindings
-```
-
-Les anciens champs `member_role_name`, `adult_role_name`, préfixes et flags spécialisés sont historiques et ne doivent plus être exposés comme source de vérité.
-
----
-
-# 5. Moteur générique catalogue/questionnaire
-
-Après stabilisation de la configuration :
-
-- charger les entrées logiques depuis `guild_catalog_entries` ;
-- charger les targets depuis `guild_catalog_entry_targets` ;
-- restaurer les choix utilisateur ;
-- adapter les targets aux états IA/no-IA ;
-- valider existence et manipulabilité des rôles ;
-- ne muter les rôles qu'après validation finale.
-
-Le moteur ne doit pas contenir de branches métier codées en dur pour `member` ou `adult`.
-
-Parcours attendu :
-
-```text
-choix principaux
-→ étape complémentaire si nécessaire
-→ validation finale
-→ mutations
-```
-
-Aucune mutation entre les étapes.
-
----
-
-# 6. Binding explicite workflow → runtime
-
-Le stockage sait décrire un workflow, mais le runtime ne doit pas deviner son executor.
-
-Interdictions :
-
-- dispatch par nom de commande ;
-- dispatch par nom de workflow ;
-- dispatch par préfixe de rôle ;
-- dispatch par nom de salon.
-
-Cible :
+Implémenté :
 
 ```text
 workflow persisté
-→ binding runtime explicite
-→ commande/entrée
-→ moteur générique
+→ commande dynamique au restart
+→ synchro catalogue Discord
+→ lecture état membre
+→ lecture IA globale
+→ questionnaire générique
+→ soumission complète
+→ rebuild frais
+→ planning pur
+→ preflight complet
+→ mutations Discord
+→ reporting
+```
+
+Le moteur ne contient pas de branche métier dédiée à Membre ou Adult.
+
+Variantes supportées :
+
+- `base` ;
+- paire `no_ai` / `ai` ;
+- `ai` seule ;
+- `no_ai` seule.
+
+Le smoke fonctionnel complet de cette tranche est volontairement reporté après
+la correction des métadonnées de catalogue.
+
+## Diagnostics administratifs — tranche terminée
+
+Les trois diagnostics sont maintenant considérés comme validés.
+
+### `config scan`
+
+Affiche :
+
+- DB / ownership ;
+- ADMIN ;
+- IA globale ;
+- compteurs déclaratifs ;
+- workflows configurés ;
+- catégorie et commande ;
+- structures Discord **potentielles** détectées par la discovery ;
+- composition protégée / interactive ;
+- workflows déjà liés à ces structures.
+
+Le rendu Discord ne montre plus les IDs techniques et n'expose plus la policy
+legacy comme configuration active.
+
+### `roles scan`
+
+Affiche :
+
+- rôle de l'application ;
+- rôle IA ;
+- rôles principaux ;
+- rôles catalogue configurés ;
+- rôles manipulables hors workflow ;
+- rôles non manipulables ;
+- anomalies de pattern.
+
+Smoke Laboratorium accepté.
+
+### `catalog scan`
+
+Affiche séparément pour chaque workflow :
+
+- état de structure ;
+- état de commande ;
+- catégorie ;
+- salon de gestion ;
+- salons d'exécution ;
+- rôle principal ;
+- salons explicitement visibles par ce rôle ;
+- ownership de la question IA ;
+- état du catalogue ;
+- pattern ;
+- métadonnées ;
+- synchro BDD ;
+- anomalies de mapping/manageability.
+
+Les problèmes sont mis en avant avant le résumé chiffré.
+
+---
+
+# 2. Prochaine tranche immédiate — administration des métadonnées catalogue
+
+## Constat réel sur Laboratorium
+
+Le diagnostic actuel a permis d'identifier précisément le cas suivant :
+
+```text
+Workflow Membre
+→ catalogue interest-
+→ interest-test présent
+→ target BDD présente
+→ label manquant
+→ description manquante
+```
+
+Le workflow Adult possède déjà des métadonnées complètes sur ses entrées utiles.
+
+Le besoin n'est donc plus théorique : il faut une surface d'administration pour
+corriger proprement les entrées incomplètes.
+
+## Cible
+
+Réintroduire l'utilité des anciens `catalog sync` / `catalog next`, mais
+uniquement comme façade du backend générique V1.1.
+
+Le backend de référence reste :
+
+```text
+RoleChannelDiscoveryService
+→ CatalogEntrySynchronizationService
+→ CatalogEntryRepository
+```
+
+Aucune seconde implémentation de synchronisation ne doit être créée.
+
+## Fonctionnalités attendues
+
+1. **Synchronisation volontaire**
+   - déclencher le scan Discord ;
+   - créer/rafraîchir les targets techniques ;
+   - préserver les métadonnées humaines existantes ;
+   - signaler les mappings invalides ou ambigus.
+
+2. **Configuration des métadonnées**
+   - trouver la prochaine entrée incomplète ;
+   - afficher sa clé logique et ses rôles/targets ;
+   - saisir au minimum `label` et `description` ;
+   - emoji facultatif ;
+   - enregistrer sans modifier les targets Discord.
+
+3. **Boucle d'administration**
+   - après sauvegarde, proposer/afficher l'entrée suivante ;
+   - quand tout est complet, signaler clairement que le catalogue est prêt.
+
+4. **Diagnostic**
+   - `catalog scan` doit passer immédiatement de
+     `MÉTADONNÉES INCOMPLÈTES` à `READY` lorsque la dernière entrée requise
+     est complétée.
+
+## Contrat
+
+Une entrée est prête pour le questionnaire lorsque :
+
+```text
+enabled
+AND label non vide
+AND description non vide
+AND au moins une target exploitable pour le contexte
+```
+
+L'emoji reste facultatif.
+
+## Gate de sortie
+
+- Ruff vert ;
+- tests ciblés verts ;
+- pytest complet vert ;
+- metadata existantes préservées après sync ;
+- entrée incomplète complétable depuis Discord ;
+- aucune target technique modifiée par la saisie metadata ;
+- `catalog scan` reflète immédiatement le nouvel état ;
+- smoke réel sur `interest-test`.
+
+---
+
+# 3. Smoke questionnaire — Laboratorium
+
+Après la tranche metadata :
+
+## Préconditions attendues
+
+```text
+Workflow Membre
+- commande /membre
+- rôle principal Membre
+- catalogue interest-
+- owner de la question IA
+- interest-test metadata complète
+
+Workflow Adult
+- commande /adult
+- rôle principal adult
+- catalogue access-
+- non propriétaire de la question IA
+```
+
+Le rôle IA global actuel est `option-ia`.
+
+## Matrice Adult déjà préparée
+
+Le laboratoire contient volontairement :
+
+- une target `base` ;
+- une paire `ai` / `no_ai` ;
+- une target `ai` seule ;
+- une target `no_ai` seule ;
+- un rôle catalogue non manipulable ;
+- un rôle manipulable hors workflow servant de témoin d'isolation.
+
+## Parcours à valider
+
+### A. Membre avec IA
+
+```text
+/membre
+→ accepter la préférence IA
+→ reçoit option-ia
+→ sélection interest-test
+→ reçoit Membre + interest-test
+```
+
+Puis :
+
+```text
+/adult
+→ aucune question IA
+→ lit option-ia
+→ propose/résout les variantes IA
+→ attribue les targets IA appropriées
+→ conserve interest-test et les rôles hors périmètre
+```
+
+### B. Membre sans IA
+
+```text
+/membre
+→ refuser IA
+→ option-ia absente
+→ /adult
+→ variantes no_ai utilisées
+```
+
+### C. Bascule
+
+```text
+/membre
+→ changer préférence IA
+→ /adult
+→ sélection logique conservée
+→ target concrète opposée retirée
+→ nouvelle target appropriée ajoutée
+```
+
+### D. Cas de sécurité
+
+- rôle non manipulable : aucun effet de bord partiel avant preflight ;
+- formulaire devenu stale : refus ;
+- rôle/salon disparu après ouverture : refus fail-closed ;
+- commande Adult hors salon d'exécution : refus ;
+- rôle extérieur au workflow : préservé.
+
+---
+
+# 4. Smoke questionnaire — seconde guild
+
+Rejouer la même logique sur une autre guild avec une configuration différente.
+
+Objectifs :
+
+- aucune contamination inter-guild ;
+- commandes dynamiques propres à chaque guild ;
+- IA globale propre à chaque guild ;
+- owner questionnaire propre à chaque guild ;
+- catalogues/patterns indépendants ;
+- reporting dans les destinations de la guild concernée.
+
+Si la seconde guild ne possède pas encore les structures métier nécessaires,
+les créer à partir des résultats de `config scan` et `catalog scan` avant le
+questionnaire.
+
+---
+
+# 5. Robustesse / recovery / snapshots
+
+Après validation fonctionnelle :
+
+- rôle ou salon supprimé ;
+- permission du bot retirée ;
+- rôle devenu non manipulable ;
+- mapping devenu ambigu ;
+- restart pendant/après une opération ;
+- mutation Discord partiellement réussie ;
+- guild unavailable puis available ;
+- DB absente ;
+- DB indisponible ;
+- DB corrompue ;
+- DB trop récente ;
+- ownership incorrect ;
+- isolation stricte multi-guild.
+
+## Last Known Good / snapshots
+
+SQLite reste la source de vérité.
+
+Le snapshot doit être :
+
+- versionné ;
+- écrit atomiquement ;
+- read-only côté recovery ;
+- mis à jour uniquement après validation d'un état cohérent ;
+- insuffisant à lui seul pour autoriser une mutation persistante si SQLite est
+  indisponible.
+
+Séparer :
+
+```text
+snapshot applicatif de recovery
+≠
+backup opérationnel avant migration/déploiement
 ```
 
 ---
 
-# 7. Robustesse et recovery
-
-Une fois le runtime générique en place, valider notamment :
-
-- ressources Discord supprimées ;
-- permissions modifiées ;
-- rôle devenu non manipulable ;
-- mapping ambigu ;
-- base absente / indisponible / corrompue / trop récente ;
-- ownership incorrect ;
-- guild unavailable puis available ;
-- échec partiel de mutation Discord ;
-- isolation entre guilds.
-
-Les snapshots/LKG restent read-only pour le recovery. Ne pas restaurer une seconde persistence modifiable en parallèle de SQLite.
-
----
-
-# 8. Smoke tests de fermeture V1.1
-
-Avant fermeture :
-
-1. guild DEV/configuration from scratch ;
-2. ADMIN ;
-3. IA désactivée ;
-4. IA activée + rôle partagé ;
-5. création et réutilisation de workflow ;
-6. structures partagées ;
-7. permissions management/execution ;
-8. restart ;
-9. exécution du runtime générique ;
-10. seconde guild avec configuration différente ;
-11. isolation inter-guild ;
-12. reporting activity/error.
-
----
-
-# 9. Audit de fermeture
+# 6. Audit et nettoyage de fermeture
 
 Effectuer une passe dédiée :
 
 - architecture ;
 - sécurité ;
 - permissions Discord ;
-- persistence/migrations ;
-- logs/reporting ;
-- recovery ;
+- persistence / migrations ;
+- logs / reporting ;
+- imports et compatibilités legacy ;
 - documentation ;
-- imports/compatibilités résiduelles ;
 - cohérence `src/` ↔ `tests/`.
 
+Les anciennes policies spécialisées ne doivent plus être présentées comme la
+source de vérité des workflows V1.1.
+
 ---
 
-# 10. Intégration et déploiement
+# 7. CI/CD et environnement Linux
 
-Quand la V1.1 est réellement fermée :
+## CI
+
+Conserver au minimum :
 
 ```text
-feature(s) validées
-→ refactor/generic-workflows-v11
-→ validation complète
-→ develop
-→ CI
-→ smoke final
-→ deploy/succumbrae
-→ sauvegarde DB
-→ migration contrôlée
-→ validation runtime/reporting
+ruff
+pytest
 ```
 
-Aucun merge vers la branche d'intégration sans acceptation explicite du développeur.
+sur les branches d'intégration appropriées.
+
+## CD
+
+Le déploiement contrôlé doit partir de :
+
+```text
+deploy/succumbrae
+```
+
+avec :
+
+- secrets hors dépôt ;
+- backup SQLite avant déploiement/migration ;
+- Docker/Compose ;
+- validation Linux ;
+- reporting actif après restart.
+
+Ne pas déployer directement depuis `main`.
 
 ---
 
-# 11. Ordre strict résumé
+# 8. Smoke final V1.1 et promotion
+
+Ordre de promotion :
 
 ```text
-1. Réservations/filtrage de rôles + annotation structures
-2. Smoke from scratch seconde guild
-3. role scan / config scan V11
-4. Catalogue/questionnaire générique
-5. Binding workflow → runtime
-6. Robustesse/recovery
-7. Smoke tests de fermeture
-8. Audit final
-9. Documentation finale
-10. Intégration refactor → develop
-11. Déploiement contrôlé
+feature/*
+    ↓
+refactor/generic-workflows-v11
+    ↓
+develop
+    ↓
+deploy/succumbrae
+    ↓
+Succumbrae réel
+    ↓
+smoke 100 %
+    ↓
+main
+```
+
+Aucun merge sans acceptation explicite du développeur.
+
+---
+
+# 9. Ordre strict résumé
+
+```text
+1. Métadonnées catalogue
+2. Smoke questionnaire Laboratorium
+3. Smoke questionnaire seconde guild
+4. Robustesse / recovery / snapshots
+5. Audit final
+6. CI/CD + validation Linux
+7. Smoke final V1.1
+8. Documentation finale
+9. Feature → refactor → develop
+10. Deploy/succumbrae
+11. Validation production → main
 ```
 
 Ne pas partir sur V1.2, Web Admin ou agent IA avant fermeture de ce socle V1.1.

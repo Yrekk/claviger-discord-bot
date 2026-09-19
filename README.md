@@ -1,15 +1,35 @@
 # Claviger
 
-## Livraison stockage V11 — 17 septembre 2026
+## Checkpoint V1.1 — 19 septembre 2026
 
-Tranche préparée depuis `refactor/generic-workflows-v11`, commit `8353649`.
-Après intégration de ces fichiers, le schéma cible est **V11**. La migration et ses tests sont implémentés ; l'intégration locale et le commit restent à effectuer par le développeur.
+La branche active de travail est `feature/v11-ai-config-server`, destinée à être
+réintégrée dans `refactor/generic-workflows-v11` après validation explicite.
 
-**État transitoire : ne pas démarrer cette tranche contre les bases réelles.** Le wizard actuel écrit encore la préférence IA dans les anciens contextes ; son adaptation à `guild_settings` est le prochain chantier. Le runtime générique reste à construire. Les anciens moteurs spécialisés ont déjà été retirés de cette branche : leurs descriptions ci-dessous servent de référence historique, pas de garantie de disponibilité.
+Le schéma SQLite courant est **V12**.
 
-Validation locale sur données synthétiques : **488 tests réussis**, contre 444 au checkpoint initial, Ruff sans erreur. Aucun test Discord réel ni migration des bases de production/développement n'a été effectué.
+Les tranches suivantes sont maintenant implémentées et validées fonctionnellement
+sur l'environnement Discord de laboratoire :
 
-Lire [le contrat et la passation de cette tranche](documentations/V1.1/06_Migration_V11_Contrat_et_Passation.md) pour les décisions récentes, les limites, les fichiers et les commandes de validation. Ce complément actualise les sections antérieures concernant la prochaine migration et la configuration IA.
+- configuration ADMIN multi-guild ;
+- configuration IA globale par guild ;
+- ownership unique de la question IA ;
+- configuration générique des workflows avec réservations de rôles ;
+- annotation des structures Discord déjà utilisées ;
+- commandes runtime reconstruites depuis les workflows persistés ;
+- moteur de questionnaire générique ;
+- synchronisation générique des catalogues depuis Discord ;
+- diagnostics administratifs `config scan`, `roles scan` et `catalog scan`.
+
+La prochaine tranche porte sur **l'administration des métadonnées de catalogue** :
+permettre de synchroniser volontairement les entrées puis de compléter les
+`label` / `description` nécessaires au questionnaire, sur le nouveau backend
+générique. Le smoke questionnaire reprendra immédiatement après cette tranche.
+
+La roadmap de référence est :
+
+```text
+documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
+```
 
 
 Claviger est un bot Discord développé en Python pour automatiser la gestion d'accès, de préférences et de rôles à partir de workflows contrôlés par le serveur.
@@ -50,27 +70,46 @@ L'objectif est de conserver une architecture modulaire, testable et réutilisabl
 
 La V1.0 est déployée sur un serveur Linux via Docker.
 
-La V1.1 est actuellement développée sur `refactor/generic-workflows-v11`, dans un environnement Discord distinct de la production. Cette branche doit être intégrée dans `develop` après fermeture fonctionnelle et validation complète. La V1.1 ne constitue pas une réécriture : chaque évolution est introduite par petites tranches testées et conservant les comportements déjà validés.
+La V1.1 est actuellement développée sur la feature
+`feature/v11-ai-config-server`, au-dessus de
+`refactor/generic-workflows-v11`. Elle sera intégrée dans `develop` seulement
+après fermeture fonctionnelle et validation complète.
 
-### Checkpoint V1.1 — 16 septembre 2026
+### Checkpoint V1.1 — 19 septembre 2026
 
-Le socle multi-guild, la configuration ADMIN, le reporting par guild et la configuration générique d'un workflow jusqu'à sa persistence sont implémentés.
+Le socle multi-guild, la configuration ADMIN, le reporting par guild, la
+configuration générique des workflows et le runtime questionnaire générique sont
+implémentés.
 
-La réorganisation architecturale de fin de V1.1 est terminée sur la branche de travail :
+Le runtime sait désormais :
 
-- arborescence organisée par domaines fonctionnels ;
-- chemins canoniques sous `models/`, `repositories/`, `services/` et `ui/` ;
-- tests rangés en miroir ;
-- mini-README dans les dossiers fonctionnels ;
-- anciens shims plats devenus inutiles supprimés.
+- reconstruire les commandes de workflow persistées au démarrage ;
+- synchroniser les cibles catalogue depuis l'état Discord réel ;
+- restaurer l'état des rôles d'un membre ;
+- appliquer les variantes `base`, `no_ai` et `ai` ;
+- lire une préférence IA globale de guild ;
+- limiter la question IA à un unique workflow propriétaire ;
+- planifier les mutations avant exécution ;
+- prévalider tous les rôles avant la première mutation ;
+- préserver les rôles hors périmètre du workflow.
 
-Le schéma cible de la tranche livrée est **V11**. Le prochain chantier est l’adaptation de `config-server` aux paramètres IA de guild. L'exécution runtime entièrement générique des workflows persistés reste à construire.
+Les outils de diagnostic V1.1 sont également en place :
+
+- `/{bot} config scan` : état global, workflows configurés et structures
+  potentielles détectées ;
+- `/{bot} roles scan` : classification des rôles et anomalies de patterns ;
+- `/{bot} catalog scan` : structure, commande, rôle principal, mappings,
+  métadonnées et anomalies par workflow/catalogue.
+
+Le prochain chantier est l'administration des métadonnées de catalogue, avant
+de reprendre les smoke tests des questionnaires sur les deux guilds DEV.
 
 La roadmap opérationnelle du reste de la V1.1 est maintenue dans :
 
 ```text
 documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
 ```
+
 
 ---
 
@@ -292,7 +331,7 @@ Une guild prête peut exposer :
 ```text
 /say
 /membre
-/noctis
+/adult
 /{bot} ...
 ```
 
@@ -338,40 +377,70 @@ Les commandes de récupération restent volontairement utilisables hors de ce sa
 
 ---
 
-## Diagnostic de configuration
+## Diagnostics administratifs
 
-La commande read-only :
+Les diagnostics sont read-only : ils observent Discord et SQLite sans effectuer
+de mutation.
 
-```text
-/{application-root} config scan
-```
+### `/{application-root} config scan`
 
-permet d'inspecter l'état de configuration de la guild et de l'application sans effectuer de mutation Discord ou SQLite.
+Expose notamment :
 
-Elle expose notamment :
+- état et version de la base SQLite ;
+- ownership applicatif ;
+- état de la configuration ADMIN ;
+- état de l'IA globale et rôle IA ;
+- workflow propriétaire de la question IA ;
+- compteurs déclaratifs ;
+- workflows configurés, avec commande et catégorie ;
+- **workflows potentiels détectés par la discovery**, avec leurs salons protégés
+  et interactifs ;
+- indication des structures déjà liées à un workflow ou encore disponibles.
 
-- l'état et la version de la base SQLite ;
-- l'ownership applicatif ;
-- la configuration ADMIN persistée et sa validation contre l'état Discord réel ;
-- l'état ADMIN `READY`, `INCOMPLETE` ou `DRIFT` ;
-- la source de la policy et le nombre d'overrides persistés ;
-- les valeurs de policy historiques encore utilisées pour compatibilité ;
-- le nombre de workflows, catalogues et contextes activés.
+Le rendu Discord privilégie les noms et états humains. Les IDs techniques ne sont
+pas affichés dans le diagnostic normal.
 
-`config scan` possède un comportement particulier de recovery :
+`config scan` conserve un comportement de recovery :
 
 ```text
 ADMIN sain
 → commande autorisée uniquement dans le salon ADMIN configuré
 
 ADMIN absent / incomplet / en drift
-→ commande utilisable hors du salon ADMIN
-→ diagnostic possible avant réparation
+→ diagnostic utilisable pour permettre la réparation
 ```
 
-La commande ne répare rien et ne persiste rien. Elle observe uniquement l'état courant.
+### `/{application-root} roles scan`
 
----
+Classe les rôles du serveur selon leur usage réel :
+
+- rôle de l'application ;
+- rôle IA global ;
+- rôles principaux de workflows ;
+- rôles catalogue configurés ;
+- rôles manipulables hors workflows ;
+- rôles non manipulables ;
+- anomalies de pattern ou de mapping.
+
+### `/{application-root} catalog scan`
+
+Produit un diagnostic détaillé, séparé par workflow :
+
+- validité de la structure ;
+- commande persistée ;
+- catégorie, salons de gestion et d'exécution ;
+- rôle principal et salons explicitement visibles avec ce rôle ;
+- ownership de la question IA ;
+- pattern de catalogue ;
+- rôles et salons détectés ;
+- entrées BDD ;
+- métadonnées complètes/incomplètes ;
+- rôles non synchronisés ;
+- rôles non manipulables ou mappings incohérents.
+
+Les problèmes sont affichés par couche : **structure**, **commande** et
+**catalogue**, afin d'éviter un statut générique ambigu.
+
 
 Chaque guild peut posséder une structure ADMIN persistée en SQLite.
 
@@ -548,18 +617,39 @@ Le reporting Discord refuse de router un événement sans `guild_id` ou sans des
 
 # Catalogues Discord
 
-Claviger synchronise actuellement deux catalogues runtime historiques :
+La V1.1 utilise désormais un stockage générique :
 
 ```text
-member_interests
-adult_accesses
+guild_catalogs
+    ↓
+guild_catalog_entries
+    ↓
+guild_catalog_entry_targets
 ```
 
-Ils sont encore construits explicitement par le `CatalogRegistry`.
+Un catalogue est lié à un workflow par sa définition persistée. Les anciennes
+tables spécialisées `guild_member_interests` et `guild_adult_accesses` ont été
+migrées vers ce modèle lors du passage V10 → V11.
 
-La cible V1.1 est de faire évoluer cette logique vers des définitions de workflows/catalogues configurées et persistées plutôt que multiplier les implémentations métier dédiées.
+Les métadonnées humaines d'une entrée sont séparées de ses cibles Discord :
 
----
+```text
+entrée logique
+├── label
+├── description
+├── emoji
+└── targets
+    ├── base
+    ├── no_ai
+    └── ai
+```
+
+La synchronisation automatique du runtime met à jour l'identité et la santé des
+cibles Discord sans écraser les métadonnées humaines déjà configurées.
+
+La prochaine tranche ajoute la surface d'administration permettant de compléter
+les métadonnées manquantes sur ce backend générique.
+
 
 ## Découverte rôle ↔ salon
 
@@ -619,136 +709,100 @@ Une erreur pendant la transaction entraîne un rollback SQLite plutôt qu'un ét
 
 ---
 
-# Workflows utilisateur actuels
+# Workflows utilisateur V1.1
 
-## Centres d'intérêt
+Les commandes utilisateur ne reposent plus sur des moteurs spécialisés codés en
+dur. Chaque commande est reconstruite depuis un `guild_workflow` persisté.
 
-La commande publique :
-
-```text
-/membre
-```
-
-permet actuellement de gérer les centres d'intérêt.
-
-Le workflow :
-
-- restaure les sélections actuelles ;
-- génère les choix depuis le catalogue ;
-- calcule les rôles à ajouter et retirer ;
-- préserve les rôles hors périmètre ;
-- exécute les mutations uniquement après validation.
-
----
-
-## Accès adultes
-
-La commande historique :
-
-```text
-/noctis
-```
-
-gère actuellement les accès adultes.
-
-Le nom correspond au serveur historique pour lequel Claviger a été créé.
-
-La logique interne évolue progressivement vers des concepts plus génériques.
-
-La V1 distingue notamment les conventions :
-
-```text
-access-no-ia-theme
-access-ia-theme
-```
-
-La préférence IA est additive.
-
-```text
-Thème sélectionné
-IA désactivée
-
-→ access-no-ia-theme
-```
-
-Avec l'option IA activée :
-
-```text
-Thème sélectionné
-IA activée
-
-→ access-no-ia-theme
-→ access-ia-theme
-→ option-ia
-```
-
----
-
-# Cible V1.1 — workflows configurables et questionnaire générique
-
-Cette partie décrit l'architecture cible de fin de V1.1. Elle n'est pas encore entièrement implémentée.
-
-```text
-Discord categories / roles / channels
-    ↓
-Discovery
-    ↓
-Role ↔ channel mapping
-    ↓
-Configured workflow / catalog definition
-    ↓
-SQLite catalog
-    ↓
-Generic questionnaire workflow
-    ↓
-Generic reusable modal
-        ├── one stage when sufficient
-        └── second stage only when complementary choices exist
-    ↓
-Complete user selection
-    ↓
-Planner
-    ↓
-Preflight
-    ↓
-Execution
-```
-
-Le but est que :
+Exemples actuellement utilisés sur le laboratoire :
 
 ```text
 /membre
-/noctis
-/futur access
+/adult
 ```
 
-deviennent des façades ou configurations de workflow plutôt que trois moteurs de questionnaire indépendants.
+Le nom de commande, la catégorie, les salons, le rôle principal et les
+catalogues sont des données de configuration.
 
 ---
 
-## Questionnaire adulte multi-étapes
+# Runtime générique des questionnaires
 
-Le parcours cible reste adaptatif :
+Le pipeline V1.1 est maintenant implémenté :
 
 ```text
-Commande adulte
+workflow persisté
     ↓
-Choix principaux + préférence IA
+commande Discord reconstruite
     ↓
-Accès complémentaires nécessaires ?
-    ├── Non → validation finale
-    └── Oui → seconde modal
-                ↓
-             validation finale
+synchronisation du catalogue depuis Discord
+    ↓
+état courant du membre
+    ↓
+préférence IA globale de la guild
+    ↓
+questionnaire générique
+    ↓
+sélection complète
+    ↓
+planner
+    ↓
+preflight de tous les rôles
+    ↓
+mutations Discord
+    ↓
+reporting
 ```
 
-La seconde étape ne doit exister que lorsqu'elle contient réellement des choix utiles.
+## Préférence IA globale
 
-Aucune mutation Discord ne doit avoir lieu entre les étapes.
+La préférence IA appartient à la guild et est matérialisée par un rôle global.
 
-Le planner reçoit uniquement la sélection complète et finalisée.
+Un seul workflow par guild peut être propriétaire de la question IA :
 
----
+```text
+guild_ai_questionnaire_owner
+guild_id → workflow_key
+```
+
+Les autres workflows ne reposent jamais la question. Ils lisent simplement
+l'état du rôle IA déjà attribué au membre.
+
+Le cas standard visé est :
+
+```text
+/membre
+→ questionnaire obligatoire d'entrée
+→ pose la question IA
+→ attribue éventuellement le rôle IA global
+
+/adult
+→ ne pose pas la question IA
+→ lit le rôle IA global
+→ choisit les variantes de catalogue correspondantes
+```
+
+## Variantes de cibles
+
+Pour une entrée logique sélectionnée :
+
+- `base` est indépendante de la préférence IA ;
+- une paire `no_ai` / `ai` choisit la cible correspondant à l'état IA ;
+- une cible `ai` seule n'est disponible que lorsque l'IA est active pour le
+  membre ;
+- une cible `no_ai` seule n'est disponible que lorsque l'IA est inactive.
+
+Le changement de préférence conserve la sélection logique et remplace la cible
+concrète appropriée au moment du planning.
+
+## Interface Discord
+
+Le questionnaire utilise les composants Discord natifs. Les choix visibles sont
+capturés dans la soumission afin de détecter un formulaire devenu obsolète entre
+son ouverture et sa validation.
+
+Aucune mutation Discord n'a lieu avant la validation finale.
+
 
 # Réconciliation des rôles
 
@@ -1019,92 +1073,31 @@ Les bases DEV et PROD ne doivent jamais être interchangeées comme mécanisme d
 
 # V1.1 — déjà implémenté
 
-La consolidation V1.1 a déjà introduit plusieurs changements structurants.
+La consolidation V1.1 comprend maintenant :
 
-### Runtime multi-guild
+- runtime multi-guild et lifecycle event-driven ;
+- identité application/guild séparée ;
+- ownership SQLite applicatif ;
+- readiness par guild ;
+- ADMIN discovery/reconciliation/provisioning/persistence ;
+- reporting activity/error par guild ;
+- configuration IA globale ;
+- ownership unique de la question IA ;
+- migration SQLite V11 puis V12 ;
+- configuration générique des workflows ;
+- filtrage des rôles réservés et revalidation backend ;
+- annotation des structures Discord déjà utilisées ;
+- commandes runtime dynamiques issues des workflows persistés ;
+- synchronisation générique des catalogues ;
+- questionnaire générique avec planner/preflight/executor ;
+- diagnostics `config scan`, `roles scan` et `catalog scan` ;
+- réorganisation architecturale et tests en miroir.
 
-- état runtime par guild ;
-- lifecycle event-driven ;
-- isolation de la readiness ;
-- isolation des command trees ;
-- locks par guild ;
-- join/available/unavailable/remove gérés indépendamment.
+Les tranches sont validées progressivement sur une application Discord DEV et
+plusieurs guilds de test. La V1.1 n'est pas encore considérée fermée tant que les
+métadonnées catalogue, les smoke questionnaires multi-guild, le recovery et le
+déploiement contrôlé ne sont pas terminés.
 
-### Identité application / guild
-
-- identité Discord applicative séparée ;
-- identité locale de guild séparée.
-
-### Ownership de base
-
-- DB liée à l'application ;
-- mismatch fail-closed ;
-- aucune initialisation par guild.
-
-### Configuration ADMIN
-
-- discovery ;
-- reconciliation ;
-- provisioning ;
-- persistence SQLite ;
-- `/{bot} config-server` ;
-- diagnostic read-only `/{bot} config scan`.
-
-### Configuration générique des workflows
-
-La chaîne de configuration est implémentée jusqu'à la persistence :
-
-```text
-Discord UI
-→ WorkflowConfigurationDraft
-→ discovery
-→ reconciliation
-→ preflight
-→ provisioning
-→ persistence SQLite
-```
-
-Le wizard sait sélectionner ou créer les ressources nécessaires et ne déclenche aucune mutation avant confirmation finale.
-
-Cette capacité de configuration ne doit pas être confondue avec l'exécution runtime générique, qui reste à construire.
-
-### Readiness par guild
-
-- `READY` ;
-- `ADMIN_CONFIGURATION_MISSING` ;
-- `ADMIN_CONFIGURATION_INCOMPLETE`.
-
-### Reporting par guild
-
-- activité vers le forum activité ;
-- incidents vers le forum erreurs ;
-- routage à partir de la DB ;
-- Python logging indépendant.
-
-### Isolation multi-guild
-
-Les tests couvrent explicitement :
-
-```text
-Guild A READY
-Guild B non configurée
-Guild C rejointe pendant le runtime
-```
-
-sans contamination mutuelle.
-
-### Réorganisation architecturale
-
-La réorganisation de fin de V1.1 est terminée sur la branche de travail :
-
-- domaines fonctionnels séparés ;
-- arborescence `src/` clarifiée ;
-- tests rangés en miroir ;
-- mini-README dans les dossiers fonctionnels ;
-- anciens chemins de compatibilité plats supprimés lorsqu'ils n'avaient plus de consommateur ;
-- aucun refactor fonctionnel majeur mélangé à cette phase.
-
----
 
 # V1.1 — reste à réaliser
 
@@ -1114,57 +1107,74 @@ La source de reprise détaillée est :
 documentations/V1.1/05_ROADMAP_RESTANT_V1_1.md
 ```
 
-L'ordre fonctionnel retenu est :
+Ordre actuel :
 
 ```text
-1. Migration SQLite V11
-2. Adaptation de config-server au modèle V11
-3. Catalogue/questionnaire générique
-4. Binding explicite workflow → runtime
-5. Robustesse / recovery / éventuel Last Known Good
-6. Smoke tests Discord DEV
-7. Audit final
+1. Administration des métadonnées de catalogue
+2. Smoke questionnaire Laboratorium
+3. Smoke questionnaire seconde guild
+4. Robustesse / recovery / snapshots
+5. Audit architecture, sécurité et reporting
+6. CI/CD et validation Linux
+7. Smoke final V1.1
 8. Documentation finale
-9. Ruff + pytest + CI
-10. Intégration dans develop
-11. Déploiement contrôlé
+9. Intégration feature → refactor → develop
+10. Déploiement contrôlé sur Succumbrae
+11. Validation production puis main
 ```
 
-### Migration SQLite V11
+### Prochaine tranche — métadonnées de catalogue
 
-Faire évoluer le stockage spécialisé historique vers un modèle générique d'entrées de catalogue et de cibles Discord, tout en déplaçant la préférence IA au niveau de la guild.
+Le backend sait déjà découvrir et synchroniser les entrées techniques. Il faut
+maintenant fournir une surface admin moderne, construite sur ce même backend,
+pour :
 
-La migration doit être atomique, fail-closed et préserver tous les rôles sources avant suppression des anciennes structures.
+- déclencher explicitement une synchronisation si nécessaire ;
+- lister les entrées incomplètes ;
+- compléter au minimum `label` et `description` ;
+- préserver les métadonnées existantes lors des refresh Discord ;
+- rendre l'état visible immédiatement dans `catalog scan`.
 
-### Catalogue et questionnaire génériques
+L'objectif fonctionnel reprend l'ergonomie utile des anciens
+`catalog sync` / `catalog next`, sans réintroduire l'ancien stockage
+spécialisé.
 
-Réutiliser un même moteur pour les catalogues configurés et les parcours utilisateur, sans logique runtime codée autour de `member_interests`, `adult_accesses`, `access-ia-*` ou `access-no-ia-*`.
+### Smoke questionnaire
 
-### Binding runtime explicite
+Le premier scénario de fermeture est volontairement construit autour de deux
+workflows :
 
-Une définition de workflow persistée devra être reliée explicitement à son executor/handler runtime.
+```text
+/membre
+→ propriétaire de la question IA
+→ catalogue simple indépendant de l'IA
 
-Aucune heuristique fondée sur le nom de commande, le préfixe de rôle, le nom du workflow ou le nom des salons ne doit décider silencieusement du moteur d'exécution.
+/adult
+→ non propriétaire
+→ base
+→ paire no_ai / ai
+→ ai-only
+→ no-ai-only
+→ cas de rôle non manipulable
+```
 
-### Robustesse et audit final
+Ce smoke doit prouver qu'un membre ayant choisi l'IA dans `/membre` obtient
+ensuite les cibles IA appropriées dans `/adult`, sans que ce second workflow
+repose ou modifie la préférence globale.
 
-Avant livraison :
+### Robustesse et intégration
 
-- campagne de défaillances ;
-- vérification du drift Discord ;
-- audit architecture ;
-- audit sécurité ;
-- audit logging/reporting ;
-- audit documentation ;
-- smoke tests sur plusieurs guilds.
+Après les deux smokes guild :
 
-### CI et intégration
+- campagne de drift Discord ;
+- échecs partiels de mutation ;
+- DB absente, corrompue, indisponible ou trop récente ;
+- snapshots / Last Known Good ;
+- audit final ;
+- CI/CD ;
+- validation Linux ;
+- intégration contrôlée puis déploiement.
 
-La CI existe déjà et exécute Ruff + pytest sur `develop` et `main`.
-
-La fin de V1.1 consiste donc à rendre la branche de travail verte, l'intégrer dans `develop`, laisser la CI valider l'intégration, puis préparer le déploiement contrôlé.
-
----
 
 # Last Known Good — cible
 
@@ -1391,11 +1401,14 @@ main
 develop
 → branche d'intégration de la prochaine version
 
-refactor/generic-workflows-v11
-→ branche de travail actuelle pour la fin de V1.1
+feature/v11-ai-config-server
+→ feature active de fermeture fonctionnelle V1.1
 
-deployment branch
-→ état utilisé pour un déploiement contrôlé
+refactor/generic-workflows-v11
+→ branche d'intégration V1.1 avant develop
+
+deploy/succumbrae
+→ branche de déploiement contrôlé sur le serveur Linux
 ```
 
 Les évolutions sont testées avant intégration sur `develop`, puis avant livraison sur la branche stable ou de déploiement appropriée.
