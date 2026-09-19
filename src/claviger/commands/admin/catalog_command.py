@@ -149,6 +149,22 @@ def _format_catalog_diagnostic(
             )
 
             if catalog.incomplete_entries:
+                incomplete_role_names = tuple(
+                    sorted(
+                        {
+                            role_name
+                            for entry in catalog.incomplete_entries
+                            for role_name in entry.target_role_names
+                        },
+                        key=str.casefold,
+                    )
+                )
+                lines.append(
+                    (
+                        "- Rôles concernés par des métadonnées incomplètes : "
+                        f"{len(incomplete_role_names)}"
+                    )
+                )
                 lines.append(
                     "**À compléter pour le questionnaire**"
                 )
@@ -158,8 +174,11 @@ def _format_catalog_diagnostic(
                     missing = ", ".join(
                         entry.missing_fields,
                     )
+                    roles = _format_name_list(
+                        entry.target_role_names,
+                    )
                     lines.append(
-                        f"- {label} : {missing} manquant(s)"
+                        f"- {label} : {missing} manquant(s) — rôles {roles}"
                     )
 
             if catalog.unsynced_role_names:

@@ -8,6 +8,7 @@ class CatalogMetadataIssue:
     entry_key: str
     label: str | None
     missing_fields: tuple[str, ...]
+    target_role_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

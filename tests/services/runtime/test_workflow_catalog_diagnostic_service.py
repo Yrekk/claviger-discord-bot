@@ -259,6 +259,9 @@ async def test_catalog_diagnostic_reports_metadata_sync_and_structure_state() ->
         "label",
         "description",
     )
+    assert catalog_diagnostic.incomplete_entries[0].target_role_names == (
+        "gamer-strategie",
+    )
     assert catalog_diagnostic.unsynced_role_names == (
         "gamer-anomalie",
     )

@@ -222,6 +222,15 @@ class WorkflowCatalogDiagnosticService:
                             missing_fields=tuple(
                                 missing_fields,
                             ),
+                            target_role_names=tuple(
+                                sorted(
+                                    {
+                                        target.role_name
+                                        for target in entry.targets
+                                    },
+                                    key=str.casefold,
+                                )
+                            ),
                         )
                     )
 
