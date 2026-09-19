@@ -293,11 +293,12 @@ def _format_ai_lines(
             if configuration.ai_role_id is not None
             else None
         )
-        role_label = (
-            f"{role.name} (conservé)"
-            if role is not None
-            else "aucun"
-        )
+        if configuration.ai_role_id is None:
+            role_label = "aucun"
+        elif role is None:
+            role_label = "⚠️ rôle conservé introuvable"
+        else:
+            role_label = f"{role.name} (conservé)"
     else:
         state = "activée"
         role = (
@@ -378,10 +379,19 @@ def _format_workflow_lines(
             else None
         )
 
+        workflow_state = (
+            "✅ actif"
+            if workflow.enabled
+            else "⏸ désactivé"
+        )
+
         lines.extend(
             [
                 "=============",
-                f"- **{workflow.title}** — /{workflow.command_name}",
+                (
+                    f"- **{workflow.title}** — /{workflow.command_name} "
+                    f"— {workflow_state}"
+                ),
                 (
                     f"  Catégorie : {category_name}"
                     if category_name is not None
