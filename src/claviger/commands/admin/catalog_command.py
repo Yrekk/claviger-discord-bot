@@ -2,6 +2,9 @@ import discord
 from discord import app_commands
 
 from claviger.commands.admin.diagnostic_output import send_ephemeral_diagnostic
+from claviger.services.catalogs.catalog_administration_service import (
+    CatalogAdministrationService,
+)
 from claviger.models.runtime.workflow_catalog_diagnostic_model import (
     GuildCatalogDiagnosticResult,
 )
@@ -9,6 +12,9 @@ from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
 from claviger.services.runtime.workflow_catalog_diagnostic_service import (
     WorkflowCatalogDiagnosticService,
+)
+from claviger.ui.catalogs.catalog_metadata_view import (
+    open_next_catalog_metadata,
 )
 
 _SEPARATOR = "============="
@@ -273,8 +279,9 @@ def _format_catalog_diagnostic(
 def create_catalog_group(
     diagnostic_service: WorkflowCatalogDiagnosticService,
     report_service: ReportService,
+    administration_service: CatalogAdministrationService | None = None,
 ) -> app_commands.Group:
-    """Create owner-only workflow catalog diagnostics."""
+    """Create owner-only workflow catalog diagnostics and administration."""
 
     catalog_group = app_commands.Group(
         name="catalog",
@@ -341,5 +348,160 @@ def create_catalog_group(
                 result,
             ),
         )
+
+    if administration_service is not None:
+
+        @catalog_group.command(
+            name="sync",
+            description="Synchronise les catalogues actifs depuis Discord.",
+        )
+        async def sync_catalogs(
+            interaction: discord.Interaction,
+        ) -> None:
+            if interaction.guild is None:
+                await interaction.response.send_message(
+                    "Cette commande doit être utilisée sur un serveur.",
+                    ephemeral=True,
+                )
+                return
+
+            if interaction.user.id != interaction.guild.owner_id:
+                await interaction.response.send_message(
+                    "Cette commande est réservée au propriétaire du serveur.",
+                    ephemeral=True,
+                )
+                return
+
+            await interaction.response.defer(
+                ephemeral=True,
+            )
+
+            summaries = await administration_service.synchronize_all(
+                interaction.guild,
+            )
+
+            if not summaries:
+                await interaction.followup.send(
+                    "Aucun catalogue actif n'est lié à un workflow actif.",
+                    ephemeral=True,
+                )
+                return
+
+            lines = [
+                "**Synchronisation des catalogues**",
+            ]
+            failed = False
+
+            for summary in summaries:
+                lines.append(
+                    "============="
+                )
+                lines.append(
+                    f"**{summary.display_name}** — pattern "
+                    f"`{summary.role_prefix}`"
+                )
+
+                if not summary.succeeded:
+                    failed = True
+                    lines.append(
+                        f"- ❌ Échec : {summary.error}"
+                    )
+                    continue
+
+                lines.extend(
+                    [
+                        f"- ✅ Entrées techniques : {summary.entry_count}",
+                        (
+                            "- Métadonnées incomplètes : "
+                            f"{summary.incomplete_metadata_count}"
+                        ),
+                    ]
+                )
+
+            severity = (
+                ReportSeverity.WARNING
+                if failed
+                else ReportSeverity.INFO
+            )
+            await report_service.emit(
+                ReportEvent(
+                    event_type="catalog.sync.completed",
+                    severity=severity,
+                    title="Synchronisation catalogue terminée",
+                    summary=(
+                        "Au moins un catalogue a échoué."
+                        if failed
+                        else "Tous les catalogues actifs ont été synchronisés."
+                    ),
+                    details="\n".join(
+                        lines,
+                    ),
+                    guild_id=interaction.guild.id,
+                    guild_label=interaction.guild.name,
+                    actor_id=interaction.user.id,
+                    actor_label=interaction.user.display_name,
+                )
+            )
+
+            await send_ephemeral_diagnostic(
+                interaction,
+                lines,
+            )
+
+        @catalog_group.command(
+            name="next",
+            description="Configure la prochaine entrée catalogue incomplète.",
+        )
+        async def next_catalog_metadata(
+            interaction: discord.Interaction,
+        ) -> None:
+            if interaction.guild is None:
+                await interaction.response.send_message(
+                    "Cette commande doit être utilisée sur un serveur.",
+                    ephemeral=True,
+                )
+                return
+
+            if interaction.user.id != interaction.guild.owner_id:
+                await interaction.response.send_message(
+                    "Cette commande est réservée au propriétaire du serveur.",
+                    ephemeral=True,
+                )
+                return
+
+            try:
+                await open_next_catalog_metadata(
+                    interaction,
+                    service=administration_service,
+                    report_service=report_service,
+                )
+            except Exception as error:
+                await report_service.emit(
+                    ReportEvent(
+                        event_type="catalog.metadata.prepare_failed",
+                        severity=ReportSeverity.ERROR,
+                        title="Échec de préparation des métadonnées catalogue",
+                        summary=(
+                            "La prochaine entrée incomplète n'a pas pu "
+                            "être préparée."
+                        ),
+                        details=f"{type(error).__name__}: {error}",
+                        guild_id=interaction.guild.id,
+                        guild_label=interaction.guild.name,
+                        actor_id=interaction.user.id,
+                        actor_label=interaction.user.display_name,
+                    )
+                )
+
+                if interaction.response.is_done():
+                    await interaction.followup.send(
+                        "Impossible de préparer la prochaine entrée.",
+                        ephemeral=True,
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "Impossible de préparer la prochaine entrée.",
+                        ephemeral=True,
+                    )
 
     return catalog_group

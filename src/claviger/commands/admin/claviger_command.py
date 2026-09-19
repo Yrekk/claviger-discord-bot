@@ -24,6 +24,9 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
+from claviger.services.catalogs.catalog_administration_service import (
+    CatalogAdministrationService,
+)
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
@@ -107,6 +110,7 @@ def create_claviger_group(
     ) = None,
     role_diagnostic_service: GuildRoleDiagnosticService | None = None,
     catalog_diagnostic_service: WorkflowCatalogDiagnosticService | None = None,
+    catalog_administration_service: CatalogAdministrationService | None = None,
     command_name: str,
     application_name: str,
     application_id: int,
@@ -208,6 +212,7 @@ def create_claviger_group(
         catalog_group = create_catalog_group(
             catalog_diagnostic_service,
             report_service,
+            administration_service=catalog_administration_service,
         )
         admin_group.add_command(
             catalog_group,

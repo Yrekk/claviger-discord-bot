@@ -99,6 +99,9 @@ from claviger.services.admin.admin_structure_discovery_service import (
 from claviger.services.admin.admin_structure_provisioning_service import (
     AdminStructureProvisioningService,
 )
+from claviger.services.catalogs.catalog_administration_service import (
+    CatalogAdministrationService,
+)
 from claviger.services.catalogs.catalog_entry_synchronization_service import (
     CatalogEntrySynchronizationService,
 )
@@ -317,6 +320,11 @@ class ClavigerBot(discord.Client):
                 discovery_service=self.role_channel_discovery_service,
                 variant_classifier=self.catalog_variant_classifier,
             )
+        )
+        self.catalog_administration_service = CatalogAdministrationService(
+            workflow_repository=self.workflow_definition_repository,
+            entry_repository=self.catalog_entry_repository,
+            synchronization_service=self.catalog_entry_synchronization_service,
         )
         self.guild_ai_questionnaire_owner_repository = (
             GuildAIQuestionnaireOwnerRepository(
@@ -667,6 +675,9 @@ class ClavigerBot(discord.Client):
                 role_diagnostic_service=self.guild_role_diagnostic_service,
                 catalog_diagnostic_service=(
                     self.workflow_catalog_diagnostic_service
+                ),
+                catalog_administration_service=(
+                    self.catalog_administration_service
                 ),
                 command_name=application_identity.admin_command_name,
                 application_name=application_identity.application_name,
