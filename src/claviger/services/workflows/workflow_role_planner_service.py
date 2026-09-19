@@ -71,11 +71,13 @@ class WorkflowRolePlannerService:
                     f"Unknown questionnaire entries: {unknown_text}."
                 )
 
-            desired_role_ids.extend(
-                option.target_role_id
-                for option in current_catalog.options
-                if option.entry_key in selected_keys
-            )
+            for option in current_catalog.options:
+                if option.entry_key not in selected_keys:
+                    continue
+
+                desired_role_ids.extend(
+                    option.target_role_ids,
+                )
 
         if questionnaire.ai_editable:
             if submission.ai_preference is None:

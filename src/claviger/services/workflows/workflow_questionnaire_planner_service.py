@@ -91,12 +91,12 @@ class WorkflowQuestionnairePlannerService:
                     for target in entry.targets
                 )
 
-                target = self._resolve_target(
+                targets = self._resolve_targets(
                     entry,
                     ai_preference=effective_ai_preference,
                 )
 
-                if target is None:
+                if not targets:
                     continue
 
                 selected = any(
@@ -111,7 +111,10 @@ class WorkflowQuestionnairePlannerService:
                         label=entry.label or entry.entry_key,
                         description=entry.description,
                         emoji=entry.emoji,
-                        target_role_id=target.role_id,
+                        target_role_ids=tuple(
+                            target.role_id
+                            for target in targets
+                        ),
                         selected=selected,
                     )
                 )
@@ -146,12 +149,12 @@ class WorkflowQuestionnairePlannerService:
         )
 
     @staticmethod
-    def _resolve_target(
+    def _resolve_targets(
         entry: CatalogEntry,
         *,
         ai_preference: bool,
-    ) -> CatalogEntryTarget | None:
-        """Resolve the concrete target representing one logical entry."""
+    ) -> tuple[CatalogEntryTarget, ...]:
+        """Resolve every concrete target required by one logical entry."""
 
         by_variant: dict[str, CatalogEntryTarget] = {}
 
@@ -175,11 +178,30 @@ class WorkflowQuestionnairePlannerService:
             )
 
         if base is not None:
-            return base if base.is_available else None
+            return (
+                (base,)
+                if base.is_available
+                else ()
+            )
 
-        target = ai if ai_preference else no_ai
+        targets: list[CatalogEntryTarget] = []
 
-        if target is None or not target.is_available:
-            return None
+        if no_ai is not None:
+            if not no_ai.is_available:
+                return ()
 
-        return target
+            targets.append(
+                no_ai,
+            )
+
+        if ai_preference and ai is not None:
+            if not ai.is_available:
+                return ()
+
+            targets.append(
+                ai,
+            )
+
+        return tuple(
+            targets,
+        )

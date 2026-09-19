@@ -37,7 +37,12 @@ def _questionnaire(
                         label="Casino",
                         description=None,
                         emoji=None,
-                        target_role_id=502,
+                        target_role_ids=(
+                            501,
+                            502,
+                        )
+                        if ai_preference
+                        else (501,),
                         selected=True,
                     ),
                     WorkflowQuestionnaireOption(
@@ -46,7 +51,9 @@ def _questionnaire(
                         label="Studio",
                         description=None,
                         emoji=None,
-                        target_role_id=503,
+                        target_role_ids=(
+                            503,
+                        ),
                         selected=False,
                     ),
                 ),
@@ -84,8 +91,8 @@ def _submission(
     )
 
 
-def test_plan_swaps_variant_roles_and_manages_ai_only_for_owner() -> None:
-    """Replace obsolete variants, add primary role and update the global AI role."""
+def test_plan_keeps_no_ai_role_and_adds_ai_target_for_owner() -> None:
+    """Keep the no-AI baseline while adding IA and the global IA role."""
 
     plan = WorkflowRolePlannerService().build_plan(
         questionnaire=_questionnaire(),
@@ -103,8 +110,32 @@ def test_plan_swaps_variant_roles_and_manages_ai_only_for_owner() -> None:
         502,
         900,
     )
+    assert plan.remove_role_ids == ()
+
+
+def test_plan_removes_ai_target_when_preference_is_disabled() -> None:
+    """Disable IA by removing only IA roles while preserving the no-AI baseline."""
+
+    plan = WorkflowRolePlannerService().build_plan(
+        questionnaire=_questionnaire(
+            ai_preference=False,
+        ),
+        submission=_submission(
+            selected=("casino",),
+            ai_preference=False,
+        ),
+        member_role_ids={
+            300,
+            501,
+            502,
+            900,
+        },
+    )
+
+    assert plan.add_role_ids == ()
     assert plan.remove_role_ids == (
-        501,
+        502,
+        900,
     )
 
 
@@ -121,6 +152,7 @@ def test_non_owner_never_mutates_ai_role() -> None:
         ),
         member_role_ids={
             300,
+            501,
             502,
             900,
         },

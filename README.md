@@ -18,12 +18,13 @@ sur l'environnement Discord de laboratoire :
 - commandes runtime reconstruites depuis les workflows persistés ;
 - moteur de questionnaire générique ;
 - synchronisation générique des catalogues depuis Discord ;
+- administration des métadonnées via `catalog sync` / `catalog next` ;
 - diagnostics administratifs `config scan`, `roles scan` et `catalog scan`.
 
-La prochaine tranche porte sur **l'administration des métadonnées de catalogue** :
-permettre de synchroniser volontairement les entrées puis de compléter les
-`label` / `description` nécessaires au questionnaire, sur le nouveau backend
-générique. Le smoke questionnaire reprendra immédiatement après cette tranche.
+Le smoke d'administration des métadonnées est validé sur Laboratorium. Le smoke
+questionnaire est en cours ; il a permis de confirmer que l'activation IA doit
+être **additive** : les accès `no_ai` restent le socle disponible et les accès
+`ai` viennent s'y ajouter lorsque la préférence IA est active.
 
 La roadmap de référence est :
 
@@ -65,7 +66,7 @@ L'objectif est de conserver une architecture modulaire, testable et réutilisabl
 | **V1.0** | Déployée | Gestion des rôles, catalogues et questionnaires Discord |
 | **V1.1** | En développement — socle stabilisé | Runtime multi-guild, configuration par serveur, reporting, généricité et robustesse |
 | **V1.2** | Planifiée | Onboarding des nouveaux membres et fonctionnalités sociales / fun |
-| **V1.3** | Planifiée | Administration Web et outils de modération |
+| **V1.3** | Planifiée | Administration Web, outils de modération et pagination des gros questionnaires |
 | **Long terme** | Exploration | IA conversationnelle, tools et comportements agentiques |
 
 La V1.0 est déployée sur un serveur Linux via Docker.
@@ -787,13 +788,15 @@ Le cas standard visé est :
 Pour une entrée logique sélectionnée :
 
 - `base` est indépendante de la préférence IA ;
-- une paire `no_ai` / `ai` choisit la cible correspondant à l'état IA ;
-- une cible `ai` seule n'est disponible que lorsque l'IA est active pour le
-  membre ;
-- une cible `no_ai` seule n'est disponible que lorsque l'IA est inactive.
+- `no_ai` constitue le socle d'accès et reste disponible avec ou sans IA ;
+- une paire `no_ai` / `ai` applique uniquement `no_ai` sans IA, puis
+  applique **`no_ai` + `ai`** lorsque l'IA est active ;
+- une cible `ai` seule n'est disponible que lorsque l'IA est active ;
+- une cible `no_ai` seule reste disponible dans les deux états.
 
-Le changement de préférence conserve la sélection logique et remplace la cible
-concrète appropriée au moment du planning.
+Le changement de préférence conserve la sélection logique. Activer l'IA ajoute
+les cibles `ai` sans retirer les cibles `no_ai`. Désactiver l'IA retire les
+cibles `ai` devenues inutiles tout en conservant le socle `no_ai`.
 
 ## Interface Discord
 
@@ -802,6 +805,19 @@ capturés dans la soumission afin de détecter un formulaire devenu obsolète en
 son ouverture et sa validation.
 
 Aucune mutation Discord n'a lieu avant la validation finale.
+
+### Pagination des gros questionnaires — cible V1.3
+
+La V1.1 conserve volontairement une seule modal tant que le catalogue reste
+confortablement lisible. Discord permet le défilement vertical, mais une modal
+très longue devient difficile à parcourir et reste soumise aux limites de ses
+composants.
+
+La V1.3 devra donc permettre de paginer un gros questionnaire en plusieurs
+étapes lorsque le volume de choix le justifie. Cette pagination reste une
+préoccupation d'interface : les choix sont accumulés entre les pages, puis un
+seul plan complet est construit, prévalidé et appliqué lors de la validation
+finale. **Aucune mutation de rôle ne doit avoir lieu entre deux pages.**
 
 
 # Réconciliation des rôles

@@ -91,7 +91,7 @@ def _workflow() -> WorkflowDefinition:
 
 
 def test_questionnaire_uses_member_ai_state_and_restores_logical_selection() -> None:
-    """Pick the matching variant while preserving the logical selection."""
+    """Keep the no-AI baseline and add the AI target for one logical choice."""
 
     planner = WorkflowQuestionnairePlannerService()
     no_ai = _target(501, "no_ai")
@@ -125,12 +125,15 @@ def test_questionnaire_uses_member_ai_state_and_restores_logical_selection() -> 
         "generic",
     )
     casino = result.catalogs[0].options[0]
-    assert casino.target_role_id == 502
+    assert casino.target_role_ids == (
+        501,
+        502,
+    )
     assert casino.selected is True
 
 
 def test_questionnaire_supports_ai_only_and_no_ai_only_entries() -> None:
-    """Hide singleton variants that do not apply to the effective AI preference."""
+    """Keep no-AI singletons visible and add AI-only choices when IA is active."""
 
     planner = WorkflowQuestionnairePlannerService()
 
@@ -168,6 +171,13 @@ def test_questionnaire_supports_ai_only_and_no_ai_only_entries() -> None:
 
     assert tuple(option.entry_key for option in result_ai.catalogs[0].options) == (
         "ai-only",
+        "no-ai-only",
+    )
+    assert result_ai.catalogs[0].options[0].target_role_ids == (
+        601,
+    )
+    assert result_ai.catalogs[0].options[1].target_role_ids == (
+        602,
     )
 
 
@@ -195,4 +205,34 @@ def test_owner_can_preview_questionnaire_for_new_ai_preference() -> None:
     )
 
     assert result.ai_preference is True
-    assert result.catalogs[0].options[0].target_role_id == 502
+    assert result.catalogs[0].options[0].target_role_ids == (
+        501,
+        502,
+    )
+
+
+def test_ai_pair_is_hidden_when_one_required_target_is_unavailable() -> None:
+    """Fail closed instead of applying only half of an IA-enabled pair."""
+
+    planner = WorkflowQuestionnairePlannerService()
+
+    result = planner.build(
+        workflow=_workflow(),
+        entries_by_catalog={
+            "access": (
+                _entry(
+                    "casino",
+                    _target(501, "no_ai"),
+                    _target(502, "ai", available=False),
+                ),
+            ),
+        },
+        member_role_ids={
+            900,
+        },
+        ai_enabled=True,
+        ai_role_id=900,
+        owner_workflow_key=None,
+    )
+
+    assert result.catalogs == ()

@@ -11,7 +11,7 @@ class WorkflowQuestionnaireOption:
     description: str | None
     emoji: str | None
 
-    target_role_id: int
+    target_role_ids: tuple[int, ...]
     selected: bool
 
 

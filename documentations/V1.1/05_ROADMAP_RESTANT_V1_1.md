@@ -133,8 +133,36 @@ Variantes supportées :
 - `ai` seule ;
 - `no_ai` seule.
 
-Le smoke fonctionnel complet de cette tranche est volontairement reporté après
-la correction des métadonnées de catalogue.
+Contrat fonctionnel confirmé pendant le smoke Laboratorium :
+
+```text
+Sans IA
+→ base
+→ no_ai
+
+Avec IA
+→ base
+→ no_ai
+→ ai en supplément
+```
+
+Une paire sélectionnée produit donc `no_ai` sans IA puis `no_ai + ai` avec
+IA. Une entrée `no_ai` seule reste disponible dans les deux états ; une entrée
+`ai` seule n'est disponible qu'avec IA. La préférence IA est additive et ne
+doit jamais supprimer le socle `no_ai`.
+
+### UX questionnaire et pagination
+
+Pour la V1.1, un questionnaire utilise une seule modal tant que son volume reste
+raisonnable. Le scroll Discord suffit pour les petits et moyens catalogues et
+évite d'ajouter une mécanique de navigation pendant la fermeture de la V1.1.
+
+La **V1.3** devra introduire une pagination / navigation multi-étapes pour les
+gros catalogues. La raison est UX autant que technique : éviter une modal trop
+longue, rester sous les limites des composants Discord et rendre les choix plus
+faciles à parcourir. Les pages ne constituent pas des transactions séparées :
+elles accumulent un état temporaire, puis un seul planning, un seul preflight et
+une seule exécution ont lieu après la validation finale.
 
 ## Diagnostics administratifs — tranche terminée
 
@@ -193,7 +221,7 @@ Les problèmes sont mis en avant avant le résumé chiffré.
 
 ---
 
-# 2. Prochaine tranche immédiate — administration des métadonnées catalogue
+# 2. Tranche terminée — administration des métadonnées catalogue
 
 ## Constat réel sur Laboratorium
 
@@ -265,7 +293,11 @@ AND au moins une target exploitable pour le contexte
 
 L'emoji reste facultatif.
 
-## Gate de sortie
+## Gate de sortie — validée sur Laboratorium
+
+Le smoke `catalog scan → catalog sync → catalog next → catalog scan` a validé
+la synchronisation technique et la complétion des métadonnées. Les anomalies
+volontaires du catalogue Adult restent visibles comme prévu.
 
 - Ruff vert ;
 - tests ciblés verts ;
@@ -504,8 +536,8 @@ Aucun merge sans acceptation explicite du développeur.
 # 9. Ordre strict résumé
 
 ```text
-1. Métadonnées catalogue
-2. Smoke questionnaire Laboratorium
+1. ✅ Métadonnées catalogue — validées
+2. Smoke questionnaire Laboratorium — en cours
 3. Smoke questionnaire seconde guild
 4. Robustesse / recovery / snapshots
 5. Audit final
