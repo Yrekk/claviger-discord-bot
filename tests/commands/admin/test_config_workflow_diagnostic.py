@@ -156,7 +156,14 @@ def test_config_scan_lists_workflows_and_unconfigured_discovered_structures() ->
     assert "Catégorie : GAMING" in message
     assert "=============" in message
 
-    assert "**Structures Discord détectées mais non configurées (1)**" in message
-    assert "Catégorie : ADULT" in message
+    assert "**Workflows potentiels détectés (2)**" in message
+
+    assert "- **GAMING**" in message
+    assert "Salons protégés : #gestion-gaming" in message
+    assert "Salons interactifs : #gaming" in message
+    assert "Workflow(s) configuré(s) : /gamer" in message
+
+    assert "- **ADULT**" in message
     assert "Salons protégés : #gestion-adult" in message
     assert "Salons interactifs : #adult" in message
+    assert "Workflow(s) configuré(s) : aucun — structure disponible" in message

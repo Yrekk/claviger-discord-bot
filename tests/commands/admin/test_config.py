@@ -25,11 +25,6 @@ from claviger.models.runtime.guild_configuration_inspection_model import (
 from claviger.models.runtime.guild_configuration_metrics_model import (
     GuildConfigurationMetrics,
 )
-from claviger.models.runtime.guild_policy_inspection_model import (
-    GuildPolicyInspection,
-    GuildPolicySource,
-)
-from claviger.policies.default_policy import SAFE_DEFAULT_POLICY
 from claviger.reporting.service import ReportService
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
@@ -103,10 +98,7 @@ def _create_ready_result() -> GuildConfigurationInspectionResult:
         ),
         database_owner_application_id=789,
         admin=admin,
-        policy=GuildPolicyInspection(
-            effective=SAFE_DEFAULT_POLICY,
-            source=GuildPolicySource.SAFE_DEFAULT,
-        ),
+        policy=None,
         metrics=GuildConfigurationMetrics(
             workflow_count=2,
             catalog_count=3,
@@ -152,7 +144,13 @@ async def test_config_scan_displays_live_admin_health_and_generic_counts() -> No
     assert "#report-activity" in message
     assert "#report-error" in message
     assert "- État : ✅ READY" in message
-    assert "- Source : `SAFE_DEFAULT_POLICY`" in message
+    assert "Policy effective" not in message
+    assert "SAFE_DEFAULT_POLICY" not in message
+    assert "Application ID" not in message
+    assert "(`123`)" not in message
+    assert "(`789`)" not in message
+    assert "(`1000`)" not in message
+    assert "(`1001`)" not in message
     assert "- Workflows activés : 2" in message
     assert "- Catalogues activés : 3" in message
     assert "- Contextes partagés activés : 1" in message
