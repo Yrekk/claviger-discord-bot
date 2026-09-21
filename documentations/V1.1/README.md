@@ -32,8 +32,8 @@ Au checkpoint du 19 septembre 2026 :
 - **H1.2 — runtime normal / recovery / minimal : ✅ VALIDÉ** ;
 - **H1 — sécurité DB et mode minimal : ✅ FERMÉ** ;
 - **H2 — mutations Discord partielles : ✅ VALIDÉ** ;
-- **H3 — drift live restant : 🧪 À VALIDER** ;
-- prochaine étape : validation locale H3, puis H4 — Last Known Good + backups.
+- **H3 — drift live restant : ✅ VALIDÉ** ;
+- prochaine tranche : **H4 — Last Known Good + backups**.
 
 Décisions de continuité déjà actées :
 
@@ -56,7 +56,10 @@ Décisions de continuité déjà actées :
 - backup obligatoire avant migration et déploiement ;
 - un moteur post-V1.1 de résilience/réconciliation des rôles membres est prévu,
   sans numéro de version fixé à ce stade ; son cadrage est dans
-  `documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md`.
+  `documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md` ;
+- aucune ressource Discord divergente ne doit être remappée automatiquement par
+  simple ressemblance ; une proposition future par IA devra rester soumise à
+  validation explicite de l'admin.
 
 ## Documents
 

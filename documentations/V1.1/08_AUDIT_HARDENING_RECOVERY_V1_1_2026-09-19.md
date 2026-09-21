@@ -1306,6 +1306,26 @@ Gate :
 
 ---
 
+### Décision de recovery manuel sur drift
+
+Pour les ressources Discord structurantes référencées par ID, Claviger ne doit
+pas tenter de réparer automatiquement une divergence en recherchant un rôle ou
+un salon au nom similaire.
+
+Le comportement attendu est :
+
+```text
+drift détecté
+→ fail-closed
+→ report avec l'ID attendu et l'état live observé
+→ action explicite de l'admin
+```
+
+Une future IA pourra proposer une correspondance ou une procédure de réparation,
+mais aucune mutation ne doit être exécutée sans validation explicite de l'admin.
+
+---
+
 ## Tranche H4 — snapshot Last Known Good et backups
 
 Objectif :

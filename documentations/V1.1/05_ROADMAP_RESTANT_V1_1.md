@@ -437,7 +437,7 @@ H1  Sécurité DB et mode minimal               ✅ VALIDÉ
 └─ H1.2 Runtime normal/recovery/minimal        ✅ VALIDÉ
 
 H2  Mutations Discord partielles              ✅ VALIDÉ
-H3  Drift live restant                         🧪 À VALIDER
+H3  Drift live restant                         ✅ VALIDÉ
 H4  Last Known Good + backups                  ⏳ À FAIRE
 H5  Matrice de panne + smoke multi-guild       ⏳ À FAIRE
 ```
@@ -458,6 +458,15 @@ ajoutés/retirés reportés, aucun faux succès utilisateur, aucune compensation
 automatique, et réconciliation par rebuild frais du questionnaire. Les tests
 ciblés et les régressions runtime associées ont été validés localement le
 21 septembre 2026.
+
+**H3 est fermé** : le runtime questionnaire valide désormais l'IA contre l'état
+Discord live, refuse les drifts au lieu de les transformer en état métier
+valide, produit un incident ADMIN actionnable avec l'ID de rôle attendu et
+utilise un fallback DM humain lorsque le forum ADMIN échoue réellement.
+
+Aucune ressource Discord divergente ne doit être réparée automatiquement par
+heuristique ; une future IA pourra proposer une correction, mais l'admin devra
+la valider explicitement.
 
 L'audit initial reste la matrice de risques et de contrats ; le fichier 09 doit
 désormais être mis à jour au démarrage et à la clôture de chaque nouvelle

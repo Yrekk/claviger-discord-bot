@@ -52,7 +52,7 @@ l'historique depuis les conversations.
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
 | H2 | Mutations Discord partielles | ✅ VALIDÉ |
-| H3 | Drift live restant | 🧪 À VALIDER |
+| H3 | Drift live restant | ✅ VALIDÉ |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
 
@@ -383,7 +383,7 @@ base du commit correctif.
 
 # 5. H3 — Drift live restant
 
-**État : 🧪 À VALIDER**
+**État : ✅ VALIDÉ**
 
 ## Problèmes traités
 
@@ -509,6 +509,38 @@ Le test `test_bot_composes_generic_questionnaire_runtime` vérifie désormais la
 nouvelle dépendance de service. Les autres `ai_repository` des diagnostics
 read-only restent inchangés : ils n'appartiennent pas au runtime questionnaire.
 
+## Décision de recovery humain
+
+Un drift de ressource Discord ne doit pas être réparé automatiquement par
+heuristique.
+
+Exemple :
+
+```text
+BDD → ai_role_id = 900
+Discord → rôle 900 absent
+Discord → autre rôle au nom similaire présent
+```
+
+Claviger doit :
+
+1. signaler le drift ;
+2. conserver l'ID attendu pour le diagnostic ;
+3. demander une réaffectation/recréation explicite par l'admin ;
+4. ne jamais sélectionner automatiquement un rôle « ressemblant ».
+
+Une future IA pourra proposer une correspondance ou une action, mais toute
+mutation devra rester soumise à validation explicite de l'admin.
+
+## Validation
+
+H3 a été validée localement par le développeur le 21 septembre 2026 après les
+tests ciblés et un Ruff fix final poussé sur :
+
+```text
+34dfcf6e5534ed65c12bf52c39f3bacc6abefc60
+```
+
 ## Gate H3
 
 - consumer IA fail-closed si le rôle global configuré n'existe plus ;
@@ -516,6 +548,7 @@ read-only restent inchangés : ils n'appartiennent pas au runtime questionnaire.
 - incident actor-scoped routable vers un humain même si le forum persisté est cassé ;
 - pas de DM de secours pour l'activité INFO normale ;
 - reporting toujours best-effort vis-à-vis du métier ;
+- aucune réparation heuristique automatique d'une ressource Discord divergente ;
 - tests ciblés verts ;
 - aucune contamination inter-guild.
 
@@ -658,17 +691,21 @@ H2 est fermé :
 H2 — mutations Discord partielles      ✅ VALIDÉ
 ```
 
-Tranche active :
+H3 est fermé :
 
 ```text
-H3 — drift live restant
+H3 — drift live restant                 ✅ VALIDÉ
 ```
 
-Le code H3 est présent et la tranche est en **🧪 À VALIDER**.
+Prochaine tranche :
 
-Prochaine action :
+```text
+H4 — Last Known Good + backups
+```
 
-1. exécuter les tests ciblés H3 ;
-2. corriger toute régression éventuelle ;
-3. après validation locale, passer H3 en `✅ VALIDÉ` ;
-4. préparer H4 — Last Known Good + backups.
+À l'ouverture de H4 :
+
+1. vérifier le HEAD réel ;
+2. marquer H4 `🔧 EN COURS` ;
+3. implémenter le Last Known Good et le mode recovery explicite ;
+4. implémenter le moteur de backup SQLite cohérent et sa rotation.
