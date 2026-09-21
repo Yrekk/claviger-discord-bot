@@ -61,6 +61,23 @@ async def test_database_reports_available_database(
 
 
 @pytest.mark.asyncio
+async def test_database_integrity_check_accepts_valid_sqlite_database(
+    tmp_path: Path,
+) -> None:
+    """Accept a structurally coherent SQLite database."""
+
+    database = DatabaseConnection(
+        tmp_path / "claviger.db",
+    )
+
+    async with database.connect() as connection:
+        await connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+        await connection.commit()
+
+    assert await database.check_integrity() is True
+
+
+@pytest.mark.asyncio
 async def test_database_raises_when_path_is_unavailable(
     tmp_path: Path,
 ) -> None:

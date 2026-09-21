@@ -33,6 +33,7 @@ def _format_database_status(
         DatabaseState.READY: "Prête",
         DatabaseState.MIGRATION_REQUIRED: "Migration requise",
         DatabaseState.TOO_NEW: "Version trop récente",
+        DatabaseState.INTEGRITY_FAILED: "Intégrité invalide",
         DatabaseState.UNAVAILABLE: "Indisponible",
     }
 
@@ -43,6 +44,10 @@ def _format_database_status(
         DatabaseState.MIGRATION_REQUIRED: ("Exécuter manuellement les migrations."),
         DatabaseState.TOO_NEW: (
             "Ne pas modifier la base. Vérifier la version de Claviger."
+        ),
+        DatabaseState.INTEGRITY_FAILED: (
+            "Ne pas modifier la base. Utiliser une sauvegarde validée "
+            "ou diagnostiquer son intégrité."
         ),
         DatabaseState.UNAVAILABLE: (
             "Vérifier le fichier, les permissions et l'environnement d'exécution."
@@ -264,6 +269,11 @@ def create_database_group(
                     "plus récente que cette version de Claviger."
                 )
 
+            if status.state == DatabaseState.INTEGRITY_FAILED:
+                raise RuntimeError(
+                    "L'intégrité de la base de données n'a pas pu être validée."
+                )
+
             if status.state == DatabaseState.UNAVAILABLE:
                 raise RuntimeError("La base de données est actuellement indisponible.")
 
@@ -390,6 +400,11 @@ def create_database_group(
                 raise RuntimeError(
                     "La base de données utilise une version de schéma "
                     "plus récente que cette version de Claviger."
+                )
+
+            if status.state == DatabaseState.INTEGRITY_FAILED:
+                raise RuntimeError(
+                    "L'intégrité de la base de données n'a pas pu être validée."
                 )
 
             if status.state == DatabaseState.UNAVAILABLE:

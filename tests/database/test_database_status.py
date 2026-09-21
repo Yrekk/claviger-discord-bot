@@ -85,6 +85,59 @@ async def test_database_status_reports_ready_database(
 
 
 @pytest.mark.asyncio
+async def test_database_status_reports_integrity_failure(
+    tmp_path: Path,
+) -> None:
+    """Fail closed when SQLite cannot validate the database structure."""
+
+    database_path = tmp_path / "claviger.db"
+    database_path.write_bytes(
+        b"this is not a valid sqlite database"
+    )
+
+    database = DatabaseConnection(
+        database_path,
+    )
+    schema = DatabaseSchema(database)
+
+    service = DatabaseStatusService(
+        database,
+        schema,
+    )
+
+    status = await service.check()
+
+    assert status.state is DatabaseState.INTEGRITY_FAILED
+    assert status.current_version is None
+    assert status.target_version == CURRENT_SCHEMA_VERSION
+
+
+@pytest.mark.asyncio
+async def test_database_status_stops_before_schema_read_when_quick_check_fails() -> None:
+    """Never trust schema metadata after an explicit quick-check failure."""
+
+    database = Mock(spec=DatabaseConnection)
+    database.exists.return_value = True
+    database.is_available = AsyncMock(return_value=True)
+    database.check_integrity = AsyncMock(return_value=False)
+
+    schema = Mock(spec=DatabaseSchema)
+
+    service = DatabaseStatusService(
+        database,
+        schema,
+    )
+
+    status = await service.check()
+
+    assert status.state is DatabaseState.INTEGRITY_FAILED
+    assert status.current_version is None
+
+    database.check_integrity.assert_awaited_once()
+    schema.get_version.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_database_status_reports_newer_schema(
     tmp_path: Path,
 ) -> None:
@@ -129,6 +182,7 @@ async def test_database_status_reports_unavailable_database() -> None:
     assert status.state is DatabaseState.UNAVAILABLE
     assert status.current_version is None
 
+    database.check_integrity.assert_not_awaited()
     schema.get_version.assert_not_called()
 
 

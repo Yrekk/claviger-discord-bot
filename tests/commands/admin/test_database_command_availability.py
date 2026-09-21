@@ -102,6 +102,7 @@ def test_ready_owned_database_exposes_status_only() -> None:
     "database_state",
     [
         DatabaseState.TOO_NEW,
+        DatabaseState.INTEGRITY_FAILED,
         DatabaseState.UNAVAILABLE,
     ],
 )

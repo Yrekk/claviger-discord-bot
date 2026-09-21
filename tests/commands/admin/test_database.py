@@ -66,6 +66,44 @@ async def test_database_status_displays_current_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_database_status_displays_integrity_failure() -> None:
+    """Explain that an integrity failure must not be mutated in place."""
+
+    service = Mock(
+        spec=RoleDiscoveryService,
+    )
+    service.get_hierarchy = AsyncMock()
+
+    (
+        command,
+        database_status_service,
+        report_service,
+    ) = get_database_status_command(
+        service,
+    )
+
+    database_status_service.check.return_value = DatabaseStatus(
+        state=DatabaseState.INTEGRITY_FAILED,
+        current_version=None,
+        target_version=12,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    report_service.emit.assert_not_awaited()
+
+    message = interaction.followup.send.await_args.args[0]
+
+    assert "État : **Intégrité invalide**" in message
+    assert "Ne pas modifier la base" in message
+    assert "sauvegarde validée" in message
+
+
+@pytest.mark.asyncio
 async def test_database_status_rejects_non_owner() -> None:
     """Prevent non-owners from inspecting database administration."""
 

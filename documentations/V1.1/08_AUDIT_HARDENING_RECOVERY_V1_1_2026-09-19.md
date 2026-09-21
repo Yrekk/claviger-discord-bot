@@ -273,31 +273,42 @@ cible V2.0, pas à cette tranche fonctionnelle.
 
 ## 4.3 Corruption SQLite
 
-### État actuel
+### État après H1.1
 
-🟡 Une corruption suffisamment forte pour faire échouer l'ouverture, `SELECT 1` ou la lecture du `PRAGMA user_version` sera classée `UNAVAILABLE`.
+✅ `DatabaseStatusService` ne se contente plus de l'ouverture et de
+`SELECT 1`.
 
-### Limite importante
-
-❌ Aucun contrôle explicite de type :
+Après avoir confirmé que le fichier existe et reste accessible, il exécute
+désormais :
 
 ```sql
 PRAGMA quick_check;
 ```
 
-ou :
+avant de lire le `user_version`.
 
-```sql
-PRAGMA integrity_check;
+Un échec explicite du contrôle ou un résultat différent de `ok` produit :
+
+```text
+DatabaseState.INTEGRITY_FAILED
 ```
 
-n'est présent dans le chemin de diagnostic actuel.
+et non `READY`.
 
-Une corruption partielle qui laisse passer les opérations simples peut donc ne pas être identifiée par `DatabaseStatusService`.
+Le runtime métier reste donc fermé puisque seul `READY` peut être considéré
+opérationnel.
 
-### Priorité
+La commande de statut expose cet état comme **Intégrité invalide** et recommande
+de ne pas modifier la base en place. Les commandes de cycle de vie mutantes ne
+sont pas exposées pour cet état.
 
-**P0 — ajouter une stratégie d'intégrité proportionnée sans ralentir inutilement chaque opération.**
+### Limite restante
+
+🟡 `PRAGMA quick_check` est volontairement le contrôle courant léger. Le futur
+moteur de backup devra également valider la sauvegarde produite avant rotation.
+
+La stratégie de restauration/fallback appartient aux tranches snapshot/backup
+suivantes.
 
 ---
 
@@ -1168,7 +1179,7 @@ et validé avant toute rotation destructive.
 | DB trop récente | refus | ✅ |
 | DB ancienne | migration explicite | ✅ |
 | migration échoue | rollback de la migration courante | ✅ |
-| corruption SQLite partielle | pas de vraie integrity check | ❌ |
+| corruption SQLite partielle | `quick_check` + état `INTEGRITY_FAILED` | ✅ |
 | ownership absent | recovery bind | ✅ |
 | ownership incorrect | startup fail-closed | ✅ / 📌 UX |
 | catégorie ADMIN supprimée | recovery détecté live | ✅ |
@@ -1205,9 +1216,14 @@ L'ordre ci-dessous est une proposition de séquençage, pas encore une décision
 
 ## Tranche H1 — sécurité DB et mode minimal
 
-Objectif :
+Avancement :
 
-- distinguer disponibilité et intégrité ;
+- ✅ **H1.1** — distinguer disponibilité et intégrité avec `PRAGMA quick_check`
+  et l'état `INTEGRITY_FAILED`.
+
+Objectif restant :
+
+- intégrer cette distinction au contrat runtime minimal ;
 - définir le comportement face à une DB suspecte/corrompue ;
 - distinguer première installation et DB attendue disparue ;
 - introduire le contrat runtime normal / minimal / hard stop ;

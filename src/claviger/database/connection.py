@@ -54,6 +54,18 @@ class DatabaseConnection:
 
         return True
 
+    async def check_integrity(self) -> bool:
+        """Return whether SQLite quick_check reports a coherent database."""
+
+        if not self.exists():
+            return False
+
+        async with self.connect() as connection:
+            cursor = await connection.execute("PRAGMA quick_check")
+            rows = await cursor.fetchall()
+
+        return len(rows) == 1 and str(rows[0][0]).casefold() == "ok"
+
     def exists(self) -> bool:
         """Return whether the configured SQLite database file exists."""
         return self.database_path.is_file()

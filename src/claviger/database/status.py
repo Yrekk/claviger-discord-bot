@@ -21,6 +21,7 @@ class DatabaseState(StrEnum):
     READY = "ready"
     MIGRATION_REQUIRED = "migration_required"
     TOO_NEW = "too_new"
+    INTEGRITY_FAILED = "integrity_failed"
     UNAVAILABLE = "unavailable"
 
 
@@ -57,6 +58,28 @@ class DatabaseStatusService:
         if not await self.database.is_available():
             return DatabaseStatus(
                 state=DatabaseState.UNAVAILABLE,
+                current_version=None,
+                target_version=CURRENT_SCHEMA_VERSION,
+            )
+
+        try:
+            integrity_valid = await self.database.check_integrity()
+        except DatabaseUnavailableError:
+            return DatabaseStatus(
+                state=DatabaseState.UNAVAILABLE,
+                current_version=None,
+                target_version=CURRENT_SCHEMA_VERSION,
+            )
+        except aiosqlite.Error:
+            return DatabaseStatus(
+                state=DatabaseState.INTEGRITY_FAILED,
+                current_version=None,
+                target_version=CURRENT_SCHEMA_VERSION,
+            )
+
+        if not integrity_valid:
+            return DatabaseStatus(
+                state=DatabaseState.INTEGRITY_FAILED,
                 current_version=None,
                 target_version=CURRENT_SCHEMA_VERSION,
             )
