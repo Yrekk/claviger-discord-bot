@@ -51,7 +51,7 @@ l'historique depuis les conversations.
 | Tranche | Sujet | État |
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
-| H2 | Mutations Discord partielles | ⏳ À FAIRE |
+| H2 | Mutations Discord partielles | 🔧 EN COURS |
 | H3 | Drift live restant | ⏳ À FAIRE |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
@@ -264,15 +264,57 @@ tests/commands/admin/test_config_server.py
 
 # 4. H2 — Mutations Discord partielles
 
-**État : ⏳ À FAIRE**
+**État : 🔧 EN COURS**
 
-Contrat à fermer :
+## Problème traité
 
-- test dédié `WorkflowRoleExecutionPartialError` ;
-- reporting des IDs réellement ajoutés / retirés ;
-- décision explicite rollback compensatoire vs réconciliation ;
-- interruption/restart pendant une mutation ;
-- aucune fausse confirmation de succès.
+Le preflight garantit que toutes les ressources prévues sont valides **avant**
+la première mutation Discord. Il ne peut cependant pas rendre atomiques
+plusieurs appels Discord successifs.
+
+Exemple :
+
+```text
+retirer rôle A       ✅
+retirer rôle B       ✅
+ajouter rôle C       ❌ erreur Discord / réseau
+```
+
+Le membre possède alors un état réel partiellement modifié.
+
+## Contrat retenu
+
+H2 adopte une stratégie de **réconciliation**, pas de rollback automatique.
+
+```text
+mutation partielle détectée
+→ conserver la liste exacte des changements déjà réussis
+→ ne pas tenter de rollback Discord automatique
+→ signaler explicitement l'état partiel
+→ demander de relancer le questionnaire
+→ rebuild frais de l'état réel Discord
+→ nouveau planning
+→ nouveau preflight
+→ réconciliation vers l'état désiré
+```
+
+Raison : un rollback est lui-même une nouvelle série d'appels réseau susceptible
+d'échouer et d'aggraver l'incertitude.
+
+En cas de process kill/restart entre deux mutations, aucun handler Python ne
+peut garantir un report immédiat. Le recovery fonctionnel reste le même :
+relancer le questionnaire reconstruit l'état actuel du membre depuis Discord,
+sans supposer que l'exécution précédente s'est terminée.
+
+## Gate H2
+
+- tests dédiés sur mutation partielle pendant les removals et additions ;
+- `WorkflowRoleExecutionPartialError` expose les mutations réellement réussies ;
+- UI distingue une mutation partielle d'un échec sans effet de bord ;
+- report admin contient les IDs ajoutés / retirés effectivement ;
+- message utilisateur n'annonce jamais un succès complet après mutation partielle ;
+- aucune compensation automatique ;
+- la relance du questionnaire reste le chemin de réconciliation.
 
 ---
 
@@ -356,15 +398,17 @@ H1.2 — runtime normal/minimal          ✅ VALIDÉ
 H1   — sécurité DB et mode minimal     ✅ VALIDÉ
 ```
 
-Prochaine tranche :
+Tranche active :
 
 ```text
 H2 — mutations Discord partielles
 ```
 
-Avant H2 :
+Le HEAD a été vérifié et H2 est officiellement en cours.
 
-1. vérifier le HEAD réel ;
-2. marquer H2 `🔧 EN COURS` ;
-3. reprendre le contrat déjà défini dans l'audit ;
-4. implémenter sans recréer une phase de conception complète.
+Prochaine action :
+
+1. ajouter les tests dédiés de mutation partielle ;
+2. exploiter les IDs de mutation dans le reporting ;
+3. distinguer l'échec partiel dans l'UX questionnaire ;
+4. valider le chemin de réconciliation sans rollback automatique.
