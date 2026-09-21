@@ -52,7 +52,7 @@ l'historique depuis les conversations.
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
 | H2 | Mutations Discord partielles | ✅ VALIDÉ |
-| H3 | Drift live restant | 🔧 EN COURS |
+| H3 | Drift live restant | 🧪 À VALIDER |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
 
@@ -383,7 +383,7 @@ base du commit correctif.
 
 # 5. H3 — Drift live restant
 
-**État : 🔧 EN COURS**
+**État : 🧪 À VALIDER**
 
 ## Problèmes traités
 
@@ -419,12 +419,75 @@ uniquement du fait que la persistence ADMIN est complète.
   métier valide ;
 - le reporting reste best-effort et ne doit jamais casser l'opération métier.
 
+## Implémentation réalisée
+
+Commit principal :
+
+```text
+692b36f9843de12f3dda2838a683762e1ec14386
+feat: fail closed on live AI and reporting drift
+```
+
+### H3.1 — IA live
+
+Le runtime questionnaire ne lit plus directement la configuration IA persistée
+pour en déduire un état métier.
+
+Il réutilise désormais `GuildAIConfigurationService.inspect()` :
+
+```text
+DISABLED
+→ questionnaire sans IA valide
+
+READY
+→ configuration IA live valide
+
+MISSING / UNCONFIGURED / ENABLED_ROLE_MISSING
+ENABLED_ROLE_NOT_FOUND / ENABLED_ROLE_UNUSABLE
+BOT_MEMBER_UNAVAILABLE
+→ refus fail-closed
+```
+
+Ainsi, un consumer ne peut plus confondre « rôle IA supprimé » avec
+« préférence membre sans IA ».
+
+### H3.2 — fallback reporting humain
+
+La chaîne Discord devient :
+
+```text
+incident
+→ tentative forum ADMIN
+→ succès : terminé
+→ échec réel : DM forcé à l'acteur
+```
+
+Le DM forcé ignore volontairement la seule complétude SQLite : il est déclenché
+par l'échec réel du reporter forum.
+
+Les événements INFO ne déclenchent pas de DM de secours.
+
+## Validation ciblée à exécuter
+
+```text
+tests/services/workflows/test_workflow_questionnaire_coordinator_service.py
+tests/services/runtime/test_guild_ai_configuration_service.py
+tests/reporting/test_discord_bootstrap_dm_reporter.py
+tests/reporting/test_discord_forum_reporter.py
+tests/reporting/test_discord_human_reporter.py
+tests/reporting/test_report_service.py
+tests/reporting/test_report_service_unavailable.py
+tests/runtime/test_bot_observability_wiring.py
+```
+
 ## Gate H3
 
 - consumer IA fail-closed si le rôle global configuré n'existe plus ;
-- comportement normal inchangé si le rôle IA existe ;
-- incident ADMIN routable vers un humain même si le forum persisté est cassé ;
-- tests ciblés sur les deux drifts ;
+- comportement normal inchangé si le rôle IA existe ou si l'IA est explicitement désactivée ;
+- incident actor-scoped routable vers un humain même si le forum persisté est cassé ;
+- pas de DM de secours pour l'activité INFO normale ;
+- reporting toujours best-effort vis-à-vis du métier ;
+- tests ciblés verts ;
 - aucune contamination inter-guild.
 
 ---
@@ -572,11 +635,11 @@ Tranche active :
 H3 — drift live restant
 ```
 
-Le HEAD a été vérifié et H3 est officiellement en cours.
+Le code H3 est présent et la tranche est en **🧪 À VALIDER**.
 
 Prochaine action :
 
-1. traiter le drift du rôle IA global dans le runtime questionnaire ;
-2. traiter le fallback humain du reporting ADMIN cassé ;
-3. ajouter les tests ciblés ;
-4. passer H3 en `🧪 À VALIDER` après implémentation.
+1. exécuter les tests ciblés H3 ;
+2. corriger toute régression éventuelle ;
+3. après validation locale, passer H3 en `✅ VALIDÉ` ;
+4. préparer H4 — Last Known Good + backups.

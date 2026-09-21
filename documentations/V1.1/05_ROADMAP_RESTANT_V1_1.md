@@ -437,7 +437,7 @@ H1  Sécurité DB et mode minimal               ✅ VALIDÉ
 └─ H1.2 Runtime normal/recovery/minimal        ✅ VALIDÉ
 
 H2  Mutations Discord partielles              ✅ VALIDÉ
-H3  Drift live restant                         ⏳ À FAIRE
+H3  Drift live restant                         🧪 À VALIDER
 H4  Last Known Good + backups                  ⏳ À FAIRE
 H5  Matrice de panne + smoke multi-guild       ⏳ À FAIRE
 ```
