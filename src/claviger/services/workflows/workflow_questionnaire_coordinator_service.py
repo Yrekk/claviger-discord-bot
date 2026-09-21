@@ -50,6 +50,19 @@ class WorkflowQuestionnaireNotFoundError(WorkflowQuestionnaireCoordinatorError):
 class WorkflowQuestionnaireAIUnavailableError(WorkflowQuestionnaireCoordinatorError):
     """Raised when persisted AI state is not usable in live Discord state."""
 
+    def __init__(
+        self,
+        *,
+        state: GuildAIConfigurationInspectionState,
+        ai_role_id: int | None,
+    ) -> None:
+        super().__init__(
+            "Guild AI configuration is unavailable for questionnaires: "
+            f"{state.value}."
+        )
+        self.state = state
+        self.ai_role_id = ai_role_id
+
 
 class WorkflowQuestionnaireCoordinatorService:
     """Coordinate generic questionnaire preparation, planning and execution."""
@@ -217,7 +230,13 @@ class WorkflowQuestionnaireCoordinatorService:
                     configuration.ai_role_id,
                 )
 
+        configuration = inspection.configuration
+
         raise WorkflowQuestionnaireAIUnavailableError(
-            "Guild AI configuration is unavailable for questionnaires: "
-            f"{inspection.state.value}."
+            state=inspection.state,
+            ai_role_id=(
+                configuration.ai_role_id
+                if configuration is not None
+                else None
+            ),
         )

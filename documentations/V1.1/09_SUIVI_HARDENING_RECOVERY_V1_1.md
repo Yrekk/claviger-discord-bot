@@ -451,6 +451,15 @@ BOT_MEMBER_UNAVAILABLE
 Ainsi, un consumer ne peut plus confondre « rôle IA supprimé » avec
 « préférence membre sans IA ».
 
+Le drift IA produit désormais un événement ADMIN dédié
+`workflow.ai_configuration_drift`. Pour `ENABLED_ROLE_NOT_FOUND`, le report
+indique explicitement :
+
+- que le rôle IA global configuré a disparu de Discord ;
+- l'ID du rôle attendu ;
+- qu'il faut recréer ou réaffecter le rôle IA depuis l'administration Claviger
+  avant de relancer les questionnaires.
+
 ### H3.2 — fallback reporting humain
 
 La chaîne Discord devient :
@@ -471,6 +480,7 @@ Les événements INFO ne déclenchent pas de DM de secours.
 
 ```text
 tests/services/workflows/test_workflow_questionnaire_coordinator_service.py
+tests/commands/workflows/test_generic_workflow_command_ai_drift.py
 tests/services/runtime/test_guild_ai_configuration_service.py
 tests/reporting/test_discord_bootstrap_dm_reporter.py
 tests/reporting/test_discord_forum_reporter.py

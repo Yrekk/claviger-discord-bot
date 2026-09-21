@@ -6,7 +6,11 @@ from discord import app_commands
 from claviger.models.workflows.workflow_definition_model import WorkflowDefinition
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
+from claviger.models.runtime.guild_ai_configuration_model import (
+    GuildAIConfigurationInspectionState,
+)
 from claviger.services.workflows.workflow_questionnaire_coordinator_service import (
+    WorkflowQuestionnaireAIUnavailableError,
     WorkflowQuestionnaireCoordinatorService,
 )
 from claviger.ui.workflows.workflow_questionnaire_view import (
@@ -73,6 +77,62 @@ def create_generic_workflow_command(
                 coordinator=coordinator,
                 questionnaire=questionnaire,
                 report_service=report_service,
+            )
+        except WorkflowQuestionnaireAIUnavailableError as error:
+            logger.error(
+                "AI configuration drift blocks workflow %s on guild %s: %s.",
+                workflow.workflow_key,
+                interaction.guild.id,
+                error.state.value,
+            )
+
+            if error.state is GuildAIConfigurationInspectionState.ENABLED_ROLE_NOT_FOUND:
+                title = "Rôle IA configuré introuvable"
+                summary = (
+                    "Le rôle IA global configuré n'existe plus sur Discord. "
+                    "Les questionnaires sont bloqués pour éviter de confondre "
+                    "ce drift avec une préférence IA désactivée."
+                )
+                action = (
+                    "Recréer ou réaffecter le rôle IA depuis l'administration "
+                    "Claviger avant de relancer les questionnaires."
+                )
+            else:
+                title = "Configuration IA live indisponible"
+                summary = (
+                    "La configuration IA persistée ne peut pas être utilisée "
+                    "en sécurité dans l'état Discord actuel."
+                )
+                action = (
+                    "Contrôler la configuration IA et la ressource Discord "
+                    "associée avant de relancer les questionnaires."
+                )
+
+            if report_service is not None:
+                await report_service.emit(
+                    ReportEvent(
+                        event_type="workflow.ai_configuration_drift",
+                        severity=ReportSeverity.ERROR,
+                        title=title,
+                        summary=summary,
+                        details=(
+                            f"state={error.state.value}\n"
+                            f"ai_role_id={error.ai_role_id}\n"
+                            f"action={action}"
+                        ),
+                        guild_id=interaction.guild.id,
+                        guild_label=interaction.guild.name,
+                        actor_id=interaction.user.id,
+                        actor_label=interaction.user.display_name,
+                    )
+                )
+
+            await interaction.response.send_message(
+                (
+                    "❌ La configuration IA du serveur est actuellement "
+                    "indisponible. L'administrateur a été prévenu."
+                ),
+                ephemeral=True,
             )
         except WorkflowQuestionnaireUIError as error:
             await interaction.response.send_message(

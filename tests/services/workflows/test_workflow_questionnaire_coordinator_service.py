@@ -236,11 +236,16 @@ async def test_coordinator_rejects_missing_live_ai_role_for_consumer_workflow() 
     with pytest.raises(
         WorkflowQuestionnaireAIUnavailableError,
         match="enabled_role_not_found",
-    ):
+    ) as exc_info:
         await coordinator.build_questionnaire(
             guild=guild,
             member=member,
             workflow_key="noctis",
         )
 
+    assert (
+        exc_info.value.state
+        is GuildAIConfigurationInspectionState.ENABLED_ROLE_NOT_FOUND
+    )
+    assert exc_info.value.ai_role_id == 900
     questionnaire_planner.build.assert_not_called()
