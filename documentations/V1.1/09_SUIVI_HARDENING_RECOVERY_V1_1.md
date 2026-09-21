@@ -52,7 +52,7 @@ l'historique depuis les conversations.
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
 | H2 | Mutations Discord partielles | ✅ VALIDÉ |
-| H3 | Drift live restant | ⏳ À FAIRE |
+| H3 | Drift live restant | 🔧 EN COURS |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
 
@@ -383,15 +383,49 @@ base du commit correctif.
 
 # 5. H3 — Drift live restant
 
-**État : ⏳ À FAIRE**
+**État : 🔧 EN COURS**
 
-Principaux sujets déjà identifiés :
+## Problèmes traités
 
-- rôle IA global disparu côté workflow consumer ;
-- fallback Discord lorsque la config ADMIN persistée est complète mais que le
-  forum réel est cassé ;
-- vérification des autres ressources live importantes sans transformer la
-  readiness persistée en mega-service.
+### H3.1 — rôle IA global disparu
+
+La persistence peut indiquer :
+
+```text
+ai_enabled = true
+ai_role_id = X
+```
+
+alors que le rôle `X` n'existe plus réellement dans Discord.
+
+Un workflow consumer ne doit pas interpréter cette disparition comme une simple
+préférence membre « sans IA ». La configuration est dégradée et doit être
+traitée fail-closed.
+
+### H3.2 — reporting ADMIN cassé malgré une config persistée complète
+
+Une configuration ADMIN peut être complète en SQLite alors que le forum Discord
+réel a disparu, changé de type ou n'est plus accessible.
+
+Le fallback humain doit dépendre de la capacité réelle à router l'incident, pas
+uniquement du fait que la persistence ADMIN est complète.
+
+## Contraintes
+
+- conserver la séparation :
+  `readiness persistée ≠ inspection live ≠ preflight` ;
+- ne pas transformer la readiness en scan Discord global ;
+- aucun drift ne doit être silencieusement interprété comme un autre état
+  métier valide ;
+- le reporting reste best-effort et ne doit jamais casser l'opération métier.
+
+## Gate H3
+
+- consumer IA fail-closed si le rôle global configuré n'existe plus ;
+- comportement normal inchangé si le rôle IA existe ;
+- incident ADMIN routable vers un humain même si le forum persisté est cassé ;
+- tests ciblés sur les deux drifts ;
+- aucune contamination inter-guild.
 
 ---
 
@@ -532,16 +566,17 @@ H2 est fermé :
 H2 — mutations Discord partielles      ✅ VALIDÉ
 ```
 
-Prochaine tranche :
+Tranche active :
 
 ```text
 H3 — drift live restant
 ```
 
-À l'ouverture de H3 :
+Le HEAD a été vérifié et H3 est officiellement en cours.
 
-1. vérifier le HEAD réel ;
-2. marquer H3 `🔧 EN COURS` ;
-3. reprendre les écarts déjà identifiés dans l'audit ;
-4. traiter en priorité le rôle IA global disparu côté consumer et le fallback
-   de reporting ADMIN cassé.
+Prochaine action :
+
+1. traiter le drift du rôle IA global dans le runtime questionnaire ;
+2. traiter le fallback humain du reporting ADMIN cassé ;
+3. ajouter les tests ciblés ;
+4. passer H3 en `🧪 À VALIDER` après implémentation.
