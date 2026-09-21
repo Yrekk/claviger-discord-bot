@@ -175,3 +175,34 @@ async def test_bootstrap_dm_rejects_actorless_incidents() -> None:
         )
 
     client.get_user.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_dm_force_bypasses_complete_admin_routing() -> None:
+    """Allow a real forum-routing failure to force an actor DM fallback."""
+
+    client = _client()
+    repository = _repository()
+    repository.get.return_value = GuildAdminConfiguration(
+        guild_id=123,
+        category_id=100,
+        command_channel_id=200,
+        activity_forum_id=201,
+        error_forum_id=202,
+    )
+
+    reporter = DiscordBootstrapDMReporter(
+        client=client,
+        repository=repository,
+    )
+
+    await reporter.report(
+        _event(),
+        force=True,
+    )
+
+    repository.get.assert_not_awaited()
+    client.get_user.assert_called_once_with(
+        42,
+    )
+    client.get_user.return_value.send.assert_awaited_once()

@@ -5,7 +5,11 @@ import discord
 import pytest
 
 from claviger.models.catalogs.catalog_definition_model import CatalogDefinition
-from claviger.models.runtime.guild_ai_configuration_model import GuildAIConfiguration
+from claviger.models.runtime.guild_ai_configuration_model import (
+    GuildAIConfiguration,
+    GuildAIConfigurationInspection,
+    GuildAIConfigurationInspectionState,
+)
 from claviger.models.workflows.workflow_definition_model import (
     WorkflowCatalogBinding,
     WorkflowDefinition,
@@ -20,9 +24,6 @@ from claviger.models.workflows.workflow_role_execution_result_model import (
 from claviger.repositories.catalogs.catalog_entry_repository import (
     CatalogEntryRepository,
 )
-from claviger.repositories.runtime.guild_ai_configuration_repository import (
-    GuildAIConfigurationRepository,
-)
 from claviger.repositories.runtime.guild_ai_questionnaire_owner_repository import (
     GuildAIQuestionnaireOwnerRepository,
 )
@@ -32,7 +33,11 @@ from claviger.repositories.workflows.workflow_definition_repository import (
 from claviger.services.catalogs.catalog_entry_synchronization_service import (
     CatalogEntrySynchronizationService,
 )
+from claviger.services.runtime.guild_ai_configuration_service import (
+    GuildAIConfigurationService,
+)
 from claviger.services.workflows.workflow_questionnaire_coordinator_service import (
+    WorkflowQuestionnaireAIUnavailableError,
     WorkflowQuestionnaireCoordinatorService,
 )
 from claviger.services.workflows.workflow_questionnaire_planner_service import (
@@ -93,12 +98,17 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
     catalog_sync_service = MagicMock(spec=CatalogEntrySynchronizationService)
     catalog_sync_service.synchronize = AsyncMock(return_value=())
 
-    ai_repository = MagicMock(spec=GuildAIConfigurationRepository)
-    ai_repository.get = AsyncMock(
-        return_value=GuildAIConfiguration(
+    ai_configuration_service = MagicMock(spec=GuildAIConfigurationService)
+    ai_configuration_service.inspect = AsyncMock(
+        return_value=GuildAIConfigurationInspection(
             guild_id=123,
-            ai_enabled=True,
-            ai_role_id=900,
+            state=GuildAIConfigurationInspectionState.READY,
+            configuration=GuildAIConfiguration(
+                guild_id=123,
+                ai_enabled=True,
+                ai_role_id=900,
+            ),
+            role_name="option-ia",
         )
     )
 
@@ -139,7 +149,7 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
         workflow_repository=workflow_repository,
         catalog_entry_repository=catalog_repository,
         catalog_sync_service=catalog_sync_service,
-        ai_repository=ai_repository,
+        ai_configuration_service=ai_configuration_service,
         owner_repository=owner_repository,
         questionnaire_planner=questionnaire_planner,
         role_planner=role_planner,
@@ -175,3 +185,62 @@ async def test_coordinator_rebuilds_questionnaire_before_submission_execution() 
     catalog_sync_service.synchronize.assert_awaited_once()
     role_planner.build_plan.assert_called_once()
     role_executor.execute.assert_awaited_once()
+
+
+async def test_coordinator_rejects_missing_live_ai_role_for_consumer_workflow() -> None:
+    """Do not reinterpret a deleted configured AI role as preference disabled."""
+
+    workflow_repository = MagicMock(spec=WorkflowDefinitionRepository)
+    workflow_repository.get = AsyncMock(return_value=_workflow())
+
+    catalog_repository = MagicMock(spec=CatalogEntryRepository)
+    catalog_sync_service = MagicMock(spec=CatalogEntrySynchronizationService)
+    catalog_sync_service.synchronize = AsyncMock(return_value=())
+
+    ai_configuration_service = MagicMock(spec=GuildAIConfigurationService)
+    ai_configuration_service.inspect = AsyncMock(
+        return_value=GuildAIConfigurationInspection(
+            guild_id=123,
+            state=GuildAIConfigurationInspectionState.ENABLED_ROLE_NOT_FOUND,
+            configuration=GuildAIConfiguration(
+                guild_id=123,
+                ai_enabled=True,
+                ai_role_id=900,
+            ),
+        )
+    )
+
+    owner_repository = MagicMock(spec=GuildAIQuestionnaireOwnerRepository)
+    owner_repository.get = AsyncMock(return_value="membre")
+
+    questionnaire_planner = MagicMock(spec=WorkflowQuestionnairePlannerService)
+    role_planner = MagicMock(spec=WorkflowRolePlannerService)
+    role_executor = MagicMock(spec=WorkflowRoleExecutorService)
+
+    coordinator = WorkflowQuestionnaireCoordinatorService(
+        workflow_repository=workflow_repository,
+        catalog_entry_repository=catalog_repository,
+        catalog_sync_service=catalog_sync_service,
+        ai_configuration_service=ai_configuration_service,
+        owner_repository=owner_repository,
+        questionnaire_planner=questionnaire_planner,
+        role_planner=role_planner,
+        role_executor=role_executor,
+    )
+
+    guild = MagicMock(spec=discord.Guild)
+    guild.id = 123
+    member = MagicMock(spec=discord.Member)
+    member.roles = []
+
+    with pytest.raises(
+        WorkflowQuestionnaireAIUnavailableError,
+        match="enabled_role_not_found",
+    ):
+        await coordinator.build_questionnaire(
+            guild=guild,
+            member=member,
+            workflow_key="noctis",
+        )
+
+    questionnaire_planner.build.assert_not_called()

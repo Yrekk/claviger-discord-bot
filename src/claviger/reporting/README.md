@@ -47,3 +47,28 @@ Sur un serveur non encore configuré, `report-activity` et `report-error` n'exis
 Les valeurs des arguments de commandes ne sont jamais journalisées par cette couche. Elles peuvent contenir des messages, prompts, secrets ou autres données utilisateur. Seuls l'identité de la commande et son contexte d'exécution sont enregistrés.
 
 L'autocomplétion ne déclenche pas l'événement de complétion d'une commande et ne produit donc aucun rapport d'activité à chaque frappe clavier.
+
+
+## Fallback humain sur drift ADMIN
+
+Les incidents Discord utilisent une chaîne humaine explicite :
+
+```text
+forum ADMIN configuré
+→ tentative de publication
+
+succès
+→ terminé
+
+échec réel du forum
+→ DM forcé à l'acteur de l'incident
+→ warning Python sur le fallback
+```
+
+Le fallback DM ne se base donc plus uniquement sur la présence d'une
+configuration ADMIN complète en SQLite. Une configuration persistée peut être
+stale alors que le forum Discord a été supprimé, a changé de type ou refuse
+l'opération.
+
+Les événements `INFO` ne déclenchent pas de DM de secours : une panne du forum
+d'activité reste observable dans les logs sans spammer les utilisateurs.

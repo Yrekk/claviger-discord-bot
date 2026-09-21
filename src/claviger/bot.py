@@ -63,6 +63,7 @@ from claviger.policies.policy_resolver import PolicyResolver
 from claviger.reporting.command_tree import ClavigerCommandTree
 from claviger.reporting.discord_bootstrap_dm import DiscordBootstrapDMReporter
 from claviger.reporting.discord_forum import DiscordForumReporter
+from claviger.reporting.discord_human import DiscordHumanReporter
 from claviger.reporting.python_logger import PythonLoggingReporter
 from claviger.reporting.reporter import Reporter
 from claviger.reporting.service import ReportService
@@ -393,7 +394,7 @@ class ClavigerBot(discord.Client):
                 workflow_repository=self.workflow_definition_repository,
                 catalog_entry_repository=self.catalog_entry_repository,
                 catalog_sync_service=self.catalog_entry_synchronization_service,
-                ai_repository=self.guild_ai_configuration_repository,
+                ai_configuration_service=self.guild_ai_configuration_service,
                 owner_repository=self.guild_ai_questionnaire_owner_repository,
                 questionnaire_planner=self.workflow_questionnaire_planner_service,
                 role_planner=self.workflow_role_planner_service,
@@ -452,15 +453,20 @@ class ClavigerBot(discord.Client):
         )
 
         # Reporting
+        discord_bootstrap_dm_reporter = DiscordBootstrapDMReporter(
+            client=self,
+            repository=self.guild_admin_configuration_repository,
+        )
+        discord_forum_reporter = DiscordForumReporter(
+            client=self,
+            repository=self.guild_admin_configuration_repository,
+        )
+
         reporters: list[Reporter] = [
             PythonLoggingReporter(),
-            DiscordForumReporter(
-                client=self,
-                repository=self.guild_admin_configuration_repository,
-            ),
-            DiscordBootstrapDMReporter(
-                client=self,
-                repository=self.guild_admin_configuration_repository,
+            DiscordHumanReporter(
+                forum_reporter=discord_forum_reporter,
+                fallback_dm_reporter=discord_bootstrap_dm_reporter,
             ),
         ]
 

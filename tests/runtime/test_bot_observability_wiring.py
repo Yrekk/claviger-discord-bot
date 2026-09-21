@@ -2,6 +2,7 @@ from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
 from claviger.reporting.command_tree import ClavigerCommandTree
 from claviger.reporting.discord_bootstrap_dm import DiscordBootstrapDMReporter
+from claviger.reporting.discord_human import DiscordHumanReporter
 from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
     GuildAIQuestionnaireOwnerService,
 )
@@ -44,10 +45,20 @@ def test_bot_wires_command_tree_and_configuration_inspection(
         bot.guild_ai_questionnaire_owner_service,
         GuildAIQuestionnaireOwnerService,
     )
-    assert any(
-        isinstance(
-            reporter,
-            DiscordBootstrapDMReporter,
-        )
-        for reporter in bot.report_service.reporters
+    human_reporter = next(
+        (
+            reporter
+            for reporter in bot.report_service.reporters
+            if isinstance(
+                reporter,
+                DiscordHumanReporter,
+            )
+        ),
+        None,
+    )
+
+    assert human_reporter is not None
+    assert isinstance(
+        human_reporter.fallback_dm_reporter,
+        DiscordBootstrapDMReporter,
     )

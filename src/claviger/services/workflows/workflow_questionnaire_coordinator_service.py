@@ -1,7 +1,10 @@
 import discord
 
 from claviger.models.catalogs.catalog_entry_model import CatalogEntry
-from claviger.models.runtime.guild_ai_configuration_model import GuildAIConfiguration
+from claviger.models.runtime.guild_ai_configuration_model import (
+    GuildAIConfigurationInspection,
+    GuildAIConfigurationInspectionState,
+)
 from claviger.models.workflows.workflow_definition_model import WorkflowDefinition
 from claviger.models.workflows.workflow_questionnaire_model import (
     WorkflowQuestionnaire,
@@ -13,9 +16,6 @@ from claviger.models.workflows.workflow_role_execution_result_model import (
 from claviger.repositories.catalogs.catalog_entry_repository import (
     CatalogEntryRepository,
 )
-from claviger.repositories.runtime.guild_ai_configuration_repository import (
-    GuildAIConfigurationRepository,
-)
 from claviger.repositories.runtime.guild_ai_questionnaire_owner_repository import (
     GuildAIQuestionnaireOwnerRepository,
 )
@@ -24,6 +24,9 @@ from claviger.repositories.workflows.workflow_definition_repository import (
 )
 from claviger.services.catalogs.catalog_entry_synchronization_service import (
     CatalogEntrySynchronizationService,
+)
+from claviger.services.runtime.guild_ai_configuration_service import (
+    GuildAIConfigurationService,
 )
 from claviger.services.workflows.workflow_questionnaire_planner_service import (
     WorkflowQuestionnairePlannerService,
@@ -44,6 +47,10 @@ class WorkflowQuestionnaireNotFoundError(WorkflowQuestionnaireCoordinatorError):
     """Raised when the requested workflow is absent or disabled."""
 
 
+class WorkflowQuestionnaireAIUnavailableError(WorkflowQuestionnaireCoordinatorError):
+    """Raised when persisted AI state is not usable in live Discord state."""
+
+
 class WorkflowQuestionnaireCoordinatorService:
     """Coordinate generic questionnaire preparation, planning and execution."""
 
@@ -53,7 +60,7 @@ class WorkflowQuestionnaireCoordinatorService:
         workflow_repository: WorkflowDefinitionRepository,
         catalog_entry_repository: CatalogEntryRepository,
         catalog_sync_service: CatalogEntrySynchronizationService,
-        ai_repository: GuildAIConfigurationRepository,
+        ai_configuration_service: GuildAIConfigurationService,
         owner_repository: GuildAIQuestionnaireOwnerRepository,
         questionnaire_planner: WorkflowQuestionnairePlannerService,
         role_planner: WorkflowRolePlannerService,
@@ -62,7 +69,7 @@ class WorkflowQuestionnaireCoordinatorService:
         self.workflow_repository = workflow_repository
         self.catalog_entry_repository = catalog_entry_repository
         self.catalog_sync_service = catalog_sync_service
-        self.ai_repository = ai_repository
+        self.ai_configuration_service = ai_configuration_service
         self.owner_repository = owner_repository
         self.questionnaire_planner = questionnaire_planner
         self.role_planner = role_planner
@@ -86,8 +93,8 @@ class WorkflowQuestionnaireCoordinatorService:
             workflow,
             guild=guild,
         )
-        ai_configuration = await self.ai_repository.get(
-            guild.id,
+        ai_inspection = await self.ai_configuration_service.inspect(
+            guild,
         )
         owner_workflow_key = await self.owner_repository.get(
             guild.id,
@@ -99,7 +106,7 @@ class WorkflowQuestionnaireCoordinatorService:
         }
 
         ai_enabled, ai_role_id = self._ai_state(
-            ai_configuration,
+            ai_inspection,
         )
 
         return self.questionnaire_planner.build(
@@ -191,21 +198,26 @@ class WorkflowQuestionnaireCoordinatorService:
 
     @staticmethod
     def _ai_state(
-        configuration: GuildAIConfiguration | None,
+        inspection: GuildAIConfigurationInspection,
     ) -> tuple[bool, int | None]:
-        if configuration is None or configuration.ai_enabled is not True:
+        """Resolve only live-safe AI states into questionnaire semantics."""
+
+        if inspection.state is GuildAIConfigurationInspectionState.DISABLED:
             return (
                 False,
                 None,
             )
 
-        if configuration.ai_role_id is None:
-            return (
-                False,
-                None,
-            )
+        if inspection.state is GuildAIConfigurationInspectionState.READY:
+            configuration = inspection.configuration
 
-        return (
-            True,
-            configuration.ai_role_id,
+            if configuration is not None and configuration.ai_role_id is not None:
+                return (
+                    True,
+                    configuration.ai_role_id,
+                )
+
+        raise WorkflowQuestionnaireAIUnavailableError(
+            "Guild AI configuration is unavailable for questionnaires: "
+            f"{inspection.state.value}."
         )

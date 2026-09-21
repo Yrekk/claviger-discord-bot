@@ -31,8 +31,10 @@ class DiscordBootstrapDMReporter:
     async def report(
         self,
         event: ReportEvent,
+        *,
+        force: bool = False,
     ) -> None:
-        """Send one bootstrap incident directly to the actor who triggered it."""
+        """Send one incident DM, optionally bypassing persisted ADMIN routing."""
 
         if event.severity == ReportSeverity.INFO:
             # INFO is normal operational traffic for the ADMIN activity forum,
@@ -49,19 +51,20 @@ class DiscordBootstrapDMReporter:
                 "Bootstrap DM reporting requires an actor-scoped event."
             )
 
-        try:
-            configuration = await self.repository.get(
-                event.guild_id,
-            )
-        except DatabaseUnavailableError:
-            # If persistence itself is unavailable, ADMIN routing cannot be
-            # trusted. The actor DM remains the safest Discord fallback.
-            configuration = None
+        if not force:
+            try:
+                configuration = await self.repository.get(
+                    event.guild_id,
+                )
+            except DatabaseUnavailableError:
+                # If persistence itself is unavailable, ADMIN routing cannot be
+                # trusted. The actor DM remains the safest Discord fallback.
+                configuration = None
 
-        if configuration is not None and configuration.is_complete:
-            # Normal ADMIN reporting has taken over. Silently decline instead
-            # of producing one warning for every successfully routed incident.
-            return
+            if configuration is not None and configuration.is_complete:
+                # Normal ADMIN reporting has taken over. Silently decline instead
+                # of producing one warning for every successfully routed incident.
+                return
 
         user = self.client.get_user(
             event.actor_id,
