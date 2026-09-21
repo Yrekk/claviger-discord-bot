@@ -432,9 +432,9 @@ Documents de référence :
 ## Avancement de la tranche H
 
 ```text
-H1  Sécurité DB et mode minimal               🔧 EN COURS
+H1  Sécurité DB et mode minimal               ✅ VALIDÉ
 ├─ H1.1 Disponibilité ≠ intégrité             ✅ VALIDÉ
-└─ H1.2 Runtime normal/recovery/minimal        ⏳ À FAIRE
+└─ H1.2 Runtime normal/recovery/minimal        ✅ VALIDÉ
 
 H2  Mutations Discord partielles              ⏳ À FAIRE
 H3  Drift live restant                         ⏳ À FAIRE
@@ -442,10 +442,16 @@ H4  Last Known Good + backups                  ⏳ À FAIRE
 H5  Matrice de panne + smoke multi-guild       ⏳ À FAIRE
 ```
 
-**H1.1 est fermé** : `PRAGMA quick_check`, état
-`INTEGRITY_FAILED`, distinction corruption explicite / indisponibilité,
-diagnostic fail-closed et tests ciblés validés. Le Ruff fix associé a été
-pushé par le développeur.
+**H1 est fermé**.
+
+H1.1 a ajouté `PRAGMA quick_check`, l'état `INTEGRITY_FAILED` et la
+distinction corruption explicite / indisponibilité.
+
+H1.2 a ajouté un état runtime applicatif explicite
+`NORMAL / RECOVERY / MINIMAL / HARD_STOP`, la distinction d'ownership
+`VALID / UNBOUND / MISMATCH / NOT_EVALUATED`, le recheck DB/ownership et la
+dégradation fail-closed vers `MINIMAL` en cas de mismatch. La validation
+locale a été confirmée par le développeur le 21 septembre 2026.
 
 L'audit initial reste la matrice de risques et de contrats ; le fichier 09 doit
 désormais être mis à jour au démarrage et à la clôture de chaque nouvelle
@@ -479,6 +485,32 @@ Le snapshot doit être :
 - mis à jour uniquement après validation d'un état cohérent ;
 - insuffisant à lui seul pour autoriser une mutation persistante si SQLite est
   indisponible.
+
+### Interaction prévue avec la V1.3
+
+La V1.3 doit centraliser les mutations structurelles via Claviger :
+
+```text
+interface admin
+→ commande/service Claviger
+→ vérification du mode runtime
+→ mutation autorisée ou refusée
+```
+
+En `RECOVERY / SNAPSHOT` :
+
+```text
+service courant / lecture utile
+→ autorisé si compatible snapshot
+
+création/suppression/modification structurelle
+→ refusée
+```
+
+Les modérateurs et utilisateurs de confiance ne doivent pas recevoir de droits
+Discord natifs permettant de contourner ce contrôle pour les opérations
+structurelles courantes. L'owner conserve les droits nécessaires mais la voie
+opérationnelle normale reste l'interface/les commandes Claviger.
 
 Séparer :
 

@@ -29,14 +29,17 @@ Au checkpoint du 19 septembre 2026 :
 - branche active : `feature/v11-hardening-recovery` ;
 - audit initial hardening/recovery terminé ;
 - **H1.1 — disponibilité ≠ intégrité : ✅ VALIDÉ** ;
-- H1 reste active ;
-- prochaine sous-tranche : **H1.2 — contrat runtime normal / recovery snapshot /
-  minimal**.
+- **H1.2 — runtime normal / recovery / minimal : ✅ VALIDÉ** ;
+- **H1 — sécurité DB et mode minimal : ✅ FERMÉ** ;
+- prochaine tranche : **H2 — mutations Discord partielles**.
 
 Décisions de continuité déjà actées :
 
 - SQLite reste la source de vérité ;
 - le snapshot Last Known Good sert de fallback/recovery ;
+- en recovery snapshot, les mutations structurelles doivent être refusées ;
+- la V1.3 doit faire passer les opérations structurelles officielles par
+  Claviger afin que le mode runtime puisse réellement jouer son rôle de garde-fou ;
 - le mode minimal doit garder Claviger partiellement opérationnel lorsqu'il
   reste possible de le faire en sécurité ;
 - en V2.0, l'IA conversationnelle minimale sera limitée à l'owner et à un rôle

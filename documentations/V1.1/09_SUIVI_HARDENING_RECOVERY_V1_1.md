@@ -50,7 +50,7 @@ l'historique depuis les conversations.
 
 | Tranche | Sujet | État |
 |---|---|---|
-| H1 | Sécurité DB et mode minimal | 🔧 EN COURS |
+| H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
 | H2 | Mutations Discord partielles | ⏳ À FAIRE |
 | H3 | Drift live restant | ⏳ À FAIRE |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
@@ -151,7 +151,7 @@ j'ai la preuve que son intégrité n'est pas valide
 
 ## H1.2 — Contrat runtime normal / recovery snapshot / minimal
 
-**État : 🧪 À VALIDER**
+**État : ✅ VALIDÉ**
 
 ### Décisions déjà prises
 
@@ -225,7 +225,24 @@ Le **snapshot Last Known Good lui-même reste H4**. Les valeurs `RECOVERY` et
 `HARD_STOP` font partie du vocabulaire runtime préparé par H1.2, mais la
 sélection/lecture du snapshot n'est pas implémentée dans cette tranche.
 
-### Validation ciblée à exécuter
+Décision fonctionnelle complémentaire pour la V1.3 :
+
+- les mutations structurelles officielles (rôles, salons, permissions,
+  workflows et opérations d'administration similaires) doivent passer par les
+  commandes/services Claviger plutôt que par des permissions Discord accordées
+  directement aux modérateurs ou utilisateurs de confiance ;
+- l'owner reste l'exception disposant des droits Discord natifs nécessaires ;
+- en mode `RECOVERY / SNAPSHOT`, Claviger doit refuser ces mutations
+  structurelles et rester essentiellement en lecture/diagnostic ;
+- ce garde-fou permet au service de continuer à fonctionner pendant l'analyse
+  d'un incident DB sans forcer une réparation précipitée.
+
+### Validation
+
+La sous-tranche H1.2 a été validée localement par le développeur le
+21 septembre 2026.
+
+Tests ciblés de référence :
 
 ```text
 tests/runtime/test_bot.py
@@ -331,17 +348,23 @@ déploiement.
 
 # 8. Prochaine action
 
-Sous-tranche active :
+H1 est fermé :
 
 ```text
-H1.2 — contrat runtime normal / recovery snapshot / minimal
+H1.1 — disponibilité ≠ intégrité       ✅ VALIDÉ
+H1.2 — runtime normal/minimal          ✅ VALIDÉ
+H1   — sécurité DB et mode minimal     ✅ VALIDÉ
 ```
 
-Le HEAD a été vérifié et la tranche est officiellement en cours.
+Prochaine tranche :
 
-Prochaine action immédiate :
+```text
+H2 — mutations Discord partielles
+```
 
-1. introduire l'état runtime explicite ;
-2. centraliser l'évaluation DB / ownership ;
-3. préserver les commandes de recovery en mode minimal ;
-4. adapter les tests runtime ciblés.
+Avant H2 :
+
+1. vérifier le HEAD réel ;
+2. marquer H2 `🔧 EN COURS` ;
+3. reprendre le contrat déjà défini dans l'audit ;
+4. implémenter sans recréer une phase de conception complète.
