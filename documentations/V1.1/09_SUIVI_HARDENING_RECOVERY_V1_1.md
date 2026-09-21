@@ -151,7 +151,7 @@ j'ai la preuve que son intégrité n'est pas valide
 
 ## H1.2 — Contrat runtime normal / recovery snapshot / minimal
 
-**État : 🔧 EN COURS**
+**État : 🧪 À VALIDER**
 
 ### Décisions déjà prises
 
@@ -194,25 +194,45 @@ Cible V2.0 déjà décidée :
 - uniquement pour l'owner et un rôle de secours dédié ;
 - cette fonctionnalité IA n'est pas à implémenter prématurément dans la V1.1.
 
-### Implémentation en cours
+### Implémentation réalisée
 
-La tranche ne recrée pas une nouvelle phase de conception complète : le contrat
-a déjà été décidé dans l'audit et dans ce fichier.
+Commit principal :
 
-La première implémentation H1.2 doit :
+```text
+e240af427f440c38892990b5ca33d9a5b28f6ada
+feat: model degraded application runtime state
+```
 
-- remplacer le booléen implicite de fonctionnement DB par un état runtime
-  explicite ;
-- conserver le comportement métier actuel pour éviter une régression large ;
-- permettre un recheck centralisé de la DB afin de préparer les transitions
-  futures ;
-- faire dégrader un ownership mismatch vers un runtime minimal sûr plutôt que
-  tuer entièrement l'application ;
-- conserver un hard stop pour les erreurs où même l'identité/runtime de base ne
-  peut pas être considéré fiable.
+La tranche a :
 
-Le **snapshot Last Known Good lui-même reste H4**. H1.2 prépare uniquement la
-machine d'état et les frontières nécessaires pour l'utiliser plus tard.
+- introduit `ApplicationRuntimeState` ;
+- introduit les modes `NORMAL`, `RECOVERY`, `MINIMAL`, `HARD_STOP` ;
+- distingué l'ownership DB `VALID`, `UNBOUND`, `MISMATCH`,
+  `NOT_EVALUATED` ;
+- remplacé le couple implicite `database_status + database_operational` du
+  runtime global par un état applicatif explicite ;
+- ajouté `refresh_application_runtime_state()` comme point central de recheck ;
+- ajouté un second contrôle immédiat lorsqu'un accès ownership échoue
+  temporairement ;
+- conservé `NORMAL` uniquement pour une DB READY avec ownership VALID ;
+- fait dégrader un mismatch vers `MINIMAL` au lieu d'arrêter Discord ;
+- conservé le fail-closed : aucun workflow DB normal en mode minimal ;
+- empêché l'exposition de `database bind` lorsque l'ownership est MISMATCH ;
+- adapté `config-server` pour expliquer le mismatch sans proposer de takeover ;
+- conservé les erreurs d'identité Discord comme hard stop réel.
+
+Le **snapshot Last Known Good lui-même reste H4**. Les valeurs `RECOVERY` et
+`HARD_STOP` font partie du vocabulaire runtime préparé par H1.2, mais la
+sélection/lecture du snapshot n'est pas implémentée dans cette tranche.
+
+### Validation ciblée à exécuter
+
+```text
+tests/runtime/test_bot.py
+tests/runtime/test_bot_multi_guild_lifecycle.py
+tests/commands/admin/test_database_command_availability.py
+tests/commands/admin/test_config_server.py
+```
 
 ### Gate H1.2
 
