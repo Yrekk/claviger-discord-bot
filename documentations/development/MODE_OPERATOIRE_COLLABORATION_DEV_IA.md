@@ -1,7 +1,7 @@
 # Mode opératoire de collaboration — Développement assisté par IA
 
 **Statut :** document de référence évolutif  
-**Version :** 0.3  
+**Version :** 0.4  
 **Portée :** tout projet de développement travaillé conjointement entre le développeur et l'assistante IA  
 **Objectif :** réduire les erreurs d'intégration, préserver la compréhension du projet et rendre le mode de travail reproductible d'une session à l'autre.
 
@@ -323,9 +323,32 @@ Commencer par expliquer :
 6. la stratégie de test ;
 7. ce qui est volontairement hors scope.
 
-Avant un nouveau développement substantiel, la solution technique doit être
-suffisamment claire pour que le développeur sache **ce que l'on va construire
-et pourquoi**.
+La formalisation d'une **solution technique complète** est particulièrement
+attendue avant :
+
+- une nouvelle version importante ;
+- une nouvelle fonctionnalité structurante ;
+- un nouveau sous-système ;
+- un refactor qui change les fondations du projet ;
+- un développement dont les choix risquent d'engager plusieurs versions
+  futures.
+
+L'objectif est d'éviter de découvrir l'architecture au fil du code et de laisser
+un développement grossir jusqu'à devenir beaucoup plus vaste que prévu.
+
+En revanche, une sous-tranche déjà couverte par une architecture, un audit ou un
+contrat validé n'a pas besoin d'une nouvelle solution technique complète à
+chaque étape. Dans ce cas :
+
+```text
+contrat existant
+→ rappel rapide du périmètre
+→ mise à jour du suivi
+→ implémentation
+```
+
+La documentation doit réduire le risque, pas devenir une couche de bureaucratie
+qui consomme plus de temps que le développement lui-même.
 
 Lorsqu'une idée utile apparaît mais n'est pas bloquante pour la version ou la
 tranche courante :
@@ -1448,6 +1471,8 @@ Ces précisions récentes complètent les règles précédentes :
   mis à jour au démarrage et à la clôture.
 - Le README, les README locaux, la roadmap et les documents de reprise sont mis
   à jour dès qu'un changement de tranche les rend obsolètes.
-- Une solution technique est fixée avant de démarrer un nouveau développement ;
-  les améliorations non bloquantes découvertes en cours de route vont au backlog
+- Une solution technique complète est fixée avant une nouvelle version ou un
+  nouveau développement structurant. Une sous-tranche déjà cadrée réutilise ce
+  contrat sans recréer artificiellement une phase de conception complète.
+- Les améliorations non bloquantes découvertes en cours de route vont au backlog
   plutôt que d'élargir silencieusement le scope.

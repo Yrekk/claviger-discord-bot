@@ -151,7 +151,7 @@ j'ai la preuve que son intégrité n'est pas valide
 
 ## H1.2 — Contrat runtime normal / recovery snapshot / minimal
 
-**État : ⏳ À FAIRE**
+**État : 🔧 EN COURS**
 
 ### Décisions déjà prises
 
@@ -194,16 +194,34 @@ Cible V2.0 déjà décidée :
 - uniquement pour l'owner et un rôle de secours dédié ;
 - cette fonctionnalité IA n'est pas à implémenter prématurément dans la V1.1.
 
-### Gate H1.2 à préciser avant code
+### Implémentation en cours
 
-Avant de démarrer H1.2, définir précisément :
+La tranche ne recrée pas une nouvelle phase de conception complète : le contrat
+a déjà été décidé dans l'audit et dans ce fichier.
 
-- le modèle d'état runtime qui porte NORMAL / RECOVERY / MINIMAL / HARD STOP ;
-- les événements qui provoquent une transition ;
-- la procédure de recheck DB ;
-- ce qui reste autorisé dans chaque état ;
-- comment exposer la proposition de snapshot à l'owner sans dépendre d'une DB
-  défaillante.
+La première implémentation H1.2 doit :
+
+- remplacer le booléen implicite de fonctionnement DB par un état runtime
+  explicite ;
+- conserver le comportement métier actuel pour éviter une régression large ;
+- permettre un recheck centralisé de la DB afin de préparer les transitions
+  futures ;
+- faire dégrader un ownership mismatch vers un runtime minimal sûr plutôt que
+  tuer entièrement l'application ;
+- conserver un hard stop pour les erreurs où même l'identité/runtime de base ne
+  peut pas être considéré fiable.
+
+Le **snapshot Last Known Good lui-même reste H4**. H1.2 prépare uniquement la
+machine d'état et les frontières nécessaires pour l'utiliser plus tard.
+
+### Gate H1.2
+
+- runtime NORMAL lorsque DB READY + ownership valide ;
+- runtime MINIMAL pour DB non opérationnelle, ownership absent ou mismatch ;
+- aucune mutation métier DB en mode MINIMAL ;
+- commandes de recovery toujours accessibles ;
+- identité Discord invalide / absente reste un hard stop ;
+- tests runtime ciblés verts.
 
 ---
 
@@ -293,15 +311,17 @@ déploiement.
 
 # 8. Prochaine action
 
-La prochaine sous-tranche prévue est :
+Sous-tranche active :
 
 ```text
 H1.2 — contrat runtime normal / recovery snapshot / minimal
 ```
 
-Avant toute modification de code H1.2 :
+Le HEAD a été vérifié et la tranche est officiellement en cours.
 
-1. mettre ce fichier à jour en `🔧 EN COURS` ;
-2. vérifier le HEAD réel ;
-3. fixer le contrat d'état runtime et le gate de sortie ;
-4. seulement ensuite implémenter.
+Prochaine action immédiate :
+
+1. introduire l'état runtime explicite ;
+2. centraliser l'évaluation DB / ownership ;
+3. préserver les commandes de recovery en mode minimal ;
+4. adapter les tests runtime ciblés.
