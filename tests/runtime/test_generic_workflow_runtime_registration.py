@@ -3,6 +3,9 @@ from pathlib import Path
 from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
 from claviger.database.status import DatabaseState, DatabaseStatus
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.models.runtime.discord_application_identity_model import (
     DiscordApplicationIdentity,
 )
@@ -76,6 +79,7 @@ def test_register_guild_commands_adds_enabled_persisted_workflows(
             target_version=12,
         ),
         database_operational=True,
+        database_ownership_state=DatabaseOwnershipState.VALID,
         guild_ready=True,
         admin_command_channel_id=202,
         workflow_definitions=(

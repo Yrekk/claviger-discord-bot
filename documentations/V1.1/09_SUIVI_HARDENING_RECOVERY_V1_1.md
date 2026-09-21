@@ -344,7 +344,26 @@ l'état persistant et les rôles réels du membre avant de recalculer le plan.
 tests/services/workflows/test_workflow_role_executor_service.py
 tests/ui/workflows/test_workflow_questionnaire_partial_failure.py
 tests/services/workflows/test_workflow_questionnaire_coordinator_service.py
+tests/runtime/test_bot.py
+tests/runtime/test_generic_workflow_runtime_registration.py
 ```
+
+### Correctif découvert pendant validation
+
+La validation complète a révélé deux tests runtime qui appelaient directement
+`ClavigerBot._register_guild_commands()` sans le nouvel argument explicite
+`database_ownership_state` introduit par H1.2.
+
+Le runtime applicatif passait déjà cet état correctement ; il s'agissait donc
+d'une régression de tests, pas d'un défaut du flux métier.
+
+Correction :
+
+- DB `MISSING` → `DatabaseOwnershipState.NOT_EVALUATED` ;
+- DB `READY` + runtime normal → `DatabaseOwnershipState.VALID`.
+
+Le Ruff fix poussé par le développeur avant cette correction est conservé comme
+base du commit correctif.
 
 ## Gate H2
 

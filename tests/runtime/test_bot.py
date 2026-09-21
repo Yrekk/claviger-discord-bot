@@ -487,6 +487,7 @@ def test_register_guild_commands_targets_supplied_guild_identity(
         guild_identity,
         database_status=_missing_database_status(),
         database_operational=False,
+        database_ownership_state=DatabaseOwnershipState.NOT_EVALUATED,
         guild_ready=False,
         admin_command_channel_id=None,
     )
