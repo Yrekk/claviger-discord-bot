@@ -166,8 +166,9 @@ Au moindre incident DB significatif :
 5. le basculement snapshot n'est jamais automatique ;
 6. si l'owner refuse le snapshot ou si le snapshot est invalide/inutilisable,
    Claviger passe en **mode minimal** ;
-7. le snapshot reste read-only côté recovery et ne devient jamais la source de
-   vérité persistante.
+7. le snapshot reste read-only comme **état de configuration/recovery** et ne
+   devient jamais la source de vérité persistante ; cela n'interdit pas les
+   mutations de rôles membres sur Discord nécessaires aux questionnaires.
 
 Hiérarchie cible :
 
@@ -178,7 +179,9 @@ NORMAL
 RECOVERY / SNAPSHOT
 → SQLite non fiable
 → Last Known Good explicitement accepté
-→ lecture / recovery seulement
+→ configuration persistée figée
+→ questionnaires métier maintenus
+→ mutations de rôles membres Discord autorisées si Discord est sain
 
 MINIMAL
 → DB non fiable et snapshot non choisi / inutilisable
@@ -387,8 +390,49 @@ Le snapshot doit être :
 - versionné ;
 - atomique ;
 - lisible sans SQLite ;
-- read-only en recovery ;
-- insuffisant seul pour autoriser les mutations persistantes normales.
+- read-only pour la configuration et les écritures persistantes normales ;
+- insuffisant seul pour autoriser une évolution de configuration ;
+- suffisamment riche pour permettre aux questionnaires existants de continuer
+  à fonctionner.
+
+### Contrat de service en mode snapshot
+
+Le mode snapshot doit préserver le cœur métier de Claviger :
+
+```text
+/membre, /adult et futurs questionnaires
+→ restent accessibles
+
+lecture du Last Known Good
+→ calcule les accès attendus
+
+Discord sain
+→ peut recevoir les mutations de rôles membres
+
+création/modification de workflows, rôles structurels, salons, permissions
+→ refusée tant que SQLite n'est pas fiable
+```
+
+Pendant cette fenêtre, Discord devient la **réalité opérationnelle temporaire**
+pour les rôles membres gérés par Claviger. La date d'entrée en recovery doit être
+connue afin de borner la période à réconcilier.
+
+Lors du retour en mode NORMAL, le futur moteur de résilience devra pouvoir
+réconcilier la persistence membre avec les rôles Discord observés pendant la
+fenêtre snapshot. La cible envisagée est un contrôle vers **22 h 30** ou au
+premier créneau sûr après retour de SQLite ; si SQLite reste indisponible, la
+réconciliation est différée.
+
+Un fichier/journal hors SQLite (par exemple JSON atomique) n'est **pas** la voie
+normale. Il n'est envisagé qu'en dernier filet lorsqu'on cumule :
+
+```text
+mode snapshot
++
+échec de mutation/communication Discord
+```
+
+et uniquement pour les membres/opérations réellement en anomalie.
 
 ### Backup SQLite
 
@@ -407,6 +451,30 @@ La plus ancienne n'est supprimée qu'après succès complet de la nouvelle.
 
 Le même moteur doit servir aux backups obligatoires avant migration et
 déploiement.
+
+---
+
+# 6.1 Orientation post-V1.1 — résilience des rôles membres
+
+Un développement dédié est désormais prévu après fermeture de la V1.1 pour
+conserver et réconcilier l'état attendu des rôles membres gérés par Claviger.
+
+La décision de versionnage est volontairement différée :
+
+```text
+fin V1.1
+→ évaluer l'importance / le volume du moteur de résilience
+→ soit l'intégrer à la future V1.3
+→ soit lui consacrer une version propre
+→ et décaler la V1.3 actuelle en V1.4 si nécessaire
+```
+
+Document de cadrage :
+
+`documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md`
+
+Ce sujet ne doit pas être glissé silencieusement dans H2/H4 : H4 doit seulement
+fournir les primitives recovery nécessaires.
 
 ---
 

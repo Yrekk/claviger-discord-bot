@@ -481,10 +481,29 @@ Le snapshot doit être :
 
 - versionné ;
 - écrit atomiquement ;
-- read-only côté recovery ;
+- read-only pour la configuration/persistence ;
 - mis à jour uniquement après validation d'un état cohérent ;
-- insuffisant à lui seul pour autoriser une mutation persistante si SQLite est
-  indisponible.
+- insuffisant à lui seul pour autoriser une évolution structurelle si SQLite est
+  indisponible ;
+- capable d'alimenter les questionnaires existants afin que l'attribution
+  autonome des accès reste disponible.
+
+En recovery snapshot :
+
+```text
+questionnaires membres
+→ autorisés
+
+mutations de rôles membres sur Discord
+→ autorisées après planning/preflight
+
+création/modification structurelle
+→ refusée
+```
+
+Discord sert alors temporairement de réalité opérationnelle pour les rôles
+membres gérés par Claviger. Au retour de SQLite, un futur moteur de résilience
+devra réconcilier ces rôles vers la persistence.
 
 ### Interaction prévue avec la V1.3
 
@@ -557,6 +576,42 @@ nouvelle. En cas d'échec, les deux sauvegardes précédentes restent intactes.
 
 Le même mécanisme devra servir aux backups obligatoires pré-migration et
 pré-déploiement.
+
+---
+
+# 5.1 Orientation post-V1.1 — état attendu des rôles membres
+
+Un nouveau développement de résilience est placé au backlog **après la V1.1**.
+
+Objectif :
+
+- conserver un état attendu des rôles membres gérés par Claviger ;
+- comparer régulièrement persistence et Discord ;
+- journaliser la provenance des divergences plutôt que se fier uniquement aux
+  timestamps ;
+- exploiter les incidents de mutation partielle et les fenêtres snapshot pour
+  déterminer quelle source doit être réconciliée ;
+- prévenir le membre lorsqu'une réparation automatique peut avoir affecté ses
+  accès ;
+- reporter les anomalies dans ADMIN `Activity` ou `Error` selon leur nature.
+
+Cible horaire envisagée pour le contrôle périodique : **22 h 30**, avant le
+backup nocturne de 23 h. Si SQLite n'est pas saine, aucune écriture n'est
+forcée et la réconciliation attend le retour en mode NORMAL.
+
+Le numéro de version n'est **pas décidé** :
+
+```text
+après fermeture V1.1
+→ estimation de la taille/importance
+→ intégration possible à la future V1.3
+OU
+→ version dédiée
+→ la V1.3 actuelle devient alors V1.4
+```
+
+Voir :
+`documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md`.
 
 ---
 

@@ -38,7 +38,10 @@ Décisions de continuité déjà actées :
 
 - SQLite reste la source de vérité ;
 - le snapshot Last Known Good sert de fallback/recovery ;
-- en recovery snapshot, les mutations structurelles doivent être refusées ;
+- en recovery snapshot, les questionnaires restent disponibles et peuvent
+  modifier les rôles membres sur Discord ;
+- en recovery snapshot, les mutations structurelles/configuration restent
+  refusées ;
 - la V1.3 doit faire passer les opérations structurelles officielles par
   Claviger afin que le mode runtime puisse réellement jouer son rôle de garde-fou ;
 - le mode minimal doit garder Claviger partiellement opérationnel lorsqu'il
@@ -49,7 +52,10 @@ Décisions de continuité déjà actées :
 - rotation de **deux sauvegardes validées** seulement ;
 - suppression de l'ancienne uniquement après création, validation et copie
   réussies de la nouvelle ;
-- backup obligatoire avant migration et déploiement.
+- backup obligatoire avant migration et déploiement ;
+- un moteur post-V1.1 de résilience/réconciliation des rôles membres est prévu,
+  sans numéro de version fixé à ce stade ; son cadrage est dans
+  `documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md`.
 
 ## Documents
 

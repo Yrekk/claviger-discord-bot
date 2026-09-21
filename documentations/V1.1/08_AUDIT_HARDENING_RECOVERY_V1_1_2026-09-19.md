@@ -1073,8 +1073,9 @@ preflight mutation
 La décision d'architecture est désormais confirmée :
 
 ```text
-SQLite = source de vérité
-snapshot = recovery read-only
+SQLite = source de vérité persistante
+snapshot = configuration Last Known Good read-only
+Discord = réalité opérationnelle temporaire des rôles membres en recovery
 ```
 
 ## Contraintes déjà retenues
@@ -1086,7 +1087,40 @@ Le snapshot devra être :
 - mis à jour uniquement après un état cohérent ;
 - lisible sans SQLite ;
 - strictement secondaire ;
-- insuffisant, seul, pour autoriser une nouvelle mutation persistante.
+- insuffisant, seul, pour autoriser une nouvelle mutation persistante de
+  configuration ;
+- suffisamment complet pour permettre aux questionnaires déjà configurés de
+  continuer à fonctionner.
+
+### Décision complémentaire — 21 septembre 2026
+
+Le terme « read-only » concerne le **snapshot et la configuration persistée**,
+pas l'ensemble du service Discord.
+
+En mode `RECOVERY / SNAPSHOT` :
+
+```text
+questionnaire existant
+→ lecture du Last Known Good
+→ planning / preflight
+→ mutation des rôles membre sur Discord autorisée
+
+mutation structurelle/configuration
+→ interdite
+```
+
+Le but du snapshot est précisément de maintenir l'attribution autonome des
+accès membres pendant que SQLite est diagnostiquée.
+
+Pour les rôles membres gérés par Claviger, Discord devient temporairement
+l'état opérationnel faisant foi pendant la fenêtre de recovery. Une future
+réconciliation devra comparer cet état à la persistence lorsque SQLite redevient
+saine.
+
+Un journal hors SQLite n'est envisagé qu'en **fallback exceptionnel** si
+Claviger se trouve simultanément en snapshot et incapable de confirmer une
+mutation Discord. Ce journal devra rester minimal, atomique et limité aux
+membres/opérations en anomalie.
 
 ## Question principale
 
@@ -1290,7 +1324,12 @@ Gate :
 
 - snapshot corrompu/non lisible géré ;
 - snapshot d'une autre version reconnu ;
-- aucune mutation autorisée sur snapshot seul ;
+- aucune mutation de configuration persistante autorisée sur snapshot seul ;
+- questionnaires existants encore utilisables avec mutation des rôles membres
+  lorsque Discord est sain ;
+- fenêtre recovery identifiable pour la future réconciliation membre ;
+- fallback hors SQLite prévu uniquement pour une double panne
+  snapshot + mutation Discord ;
 - multi-guild correctement représenté.
 
 ---
@@ -1348,7 +1387,9 @@ Les correctifs à venir ne doivent pas affaiblir les acquis suivants :
 1. **fail closed** en cas d'ambiguïté ;
 2. aucune mutation Discord avant preflight complet lorsque le plan est connu ;
 3. SQLite reste la source de vérité ;
-4. un snapshot reste read-only côté recovery ;
+4. le snapshot/configuration reste read-only côté recovery, tandis que les
+   mutations de rôles membres nécessaires aux questionnaires peuvent rester
+   autorisées si Discord est sain ;
 5. aucune réparation destructive automatique d'une DB absente ou incorrecte ;
 6. aucune contamination inter-guild ;
 7. ADMIN recovery reste accessible même si le routing normal est cassé ;
