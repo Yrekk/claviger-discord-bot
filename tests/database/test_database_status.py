@@ -3,7 +3,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from claviger.database.connection import DatabaseConnection
+from claviger.database.connection import (
+    DatabaseConnection,
+    DatabaseUnavailableError,
+)
 from claviger.database.schema import (
     CURRENT_SCHEMA_VERSION,
     DatabaseSchema,
@@ -118,7 +121,6 @@ async def test_database_status_stops_before_schema_read_when_quick_check_fails()
 
     database = Mock(spec=DatabaseConnection)
     database.exists.return_value = True
-    database.is_available = AsyncMock(return_value=True)
     database.check_integrity = AsyncMock(return_value=False)
 
     schema = Mock(spec=DatabaseSchema)
@@ -168,7 +170,11 @@ async def test_database_status_reports_unavailable_database() -> None:
     """Report an existing database that cannot currently be accessed."""
     database = Mock(spec=DatabaseConnection)
     database.exists.return_value = True
-    database.is_available = AsyncMock(return_value=False)
+    database.check_integrity = AsyncMock(
+        side_effect=DatabaseUnavailableError(
+            "Database unavailable during integrity inspection."
+        )
+    )
 
     schema = Mock(spec=DatabaseSchema)
 
@@ -182,7 +188,7 @@ async def test_database_status_reports_unavailable_database() -> None:
     assert status.state is DatabaseState.UNAVAILABLE
     assert status.current_version is None
 
-    database.check_integrity.assert_not_awaited()
+    database.check_integrity.assert_awaited_once()
     schema.get_version.assert_not_called()
 
 

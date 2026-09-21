@@ -55,24 +55,11 @@ class DatabaseStatusService:
                 target_version=CURRENT_SCHEMA_VERSION,
             )
 
-        if not await self.database.is_available():
-            return DatabaseStatus(
-                state=DatabaseState.UNAVAILABLE,
-                current_version=None,
-                target_version=CURRENT_SCHEMA_VERSION,
-            )
-
         try:
             integrity_valid = await self.database.check_integrity()
         except DatabaseUnavailableError:
             return DatabaseStatus(
                 state=DatabaseState.UNAVAILABLE,
-                current_version=None,
-                target_version=CURRENT_SCHEMA_VERSION,
-            )
-        except aiosqlite.Error:
-            return DatabaseStatus(
-                state=DatabaseState.INTEGRITY_FAILED,
                 current_version=None,
                 target_version=CURRENT_SCHEMA_VERSION,
             )

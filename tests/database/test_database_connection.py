@@ -78,6 +78,24 @@ async def test_database_integrity_check_accepts_valid_sqlite_database(
 
 
 @pytest.mark.asyncio
+async def test_database_integrity_check_rejects_non_sqlite_file(
+    tmp_path: Path,
+) -> None:
+    """Reject a present file that is not a valid SQLite database."""
+
+    database_path = tmp_path / "claviger.db"
+    database_path.write_bytes(
+        b"this is not a valid sqlite database"
+    )
+
+    database = DatabaseConnection(
+        database_path,
+    )
+
+    assert await database.check_integrity() is False
+
+
+@pytest.mark.asyncio
 async def test_database_raises_when_path_is_unavailable(
     tmp_path: Path,
 ) -> None:

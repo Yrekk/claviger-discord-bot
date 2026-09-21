@@ -1,12 +1,19 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sqlite3
 
 import aiosqlite
 
 
 class DatabaseUnavailableError(RuntimeError):
     """Raised when Claviger cannot access its SQLite database."""
+
+
+_INTEGRITY_ERROR_CODES = {
+    sqlite3.SQLITE_CORRUPT,
+    sqlite3.SQLITE_NOTADB,
+}
 
 
 class DatabaseConnection:
@@ -60,9 +67,21 @@ class DatabaseConnection:
         if not self.exists():
             return False
 
-        async with self.connect() as connection:
-            cursor = await connection.execute("PRAGMA quick_check")
-            rows = await cursor.fetchall()
+        try:
+            async with self.connect() as connection:
+                cursor = await connection.execute("PRAGMA quick_check")
+                rows = await cursor.fetchall()
+        except DatabaseUnavailableError:
+            raise
+        except aiosqlite.Error as error:
+            error_code = getattr(error, "sqlite_errorcode", None)
+
+            if error_code in _INTEGRITY_ERROR_CODES:
+                return False
+
+            raise DatabaseUnavailableError(
+                f"Unable to inspect SQLite database integrity: {self.database_path}"
+            ) from error
 
         return len(rows) == 1 and str(rows[0][0]).casefold() == "ok"
 
