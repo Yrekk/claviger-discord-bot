@@ -3,9 +3,6 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState
-from claviger.models.runtime.application_runtime_state_model import (
-    DatabaseOwnershipState,
-)
 from claviger.models.admin.admin_configuration_coordination_model import (
     AdminConfigurationCoordinationResult,
 )
@@ -22,6 +19,9 @@ from claviger.models.admin.admin_structure_provisioning_model import (
 )
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
+)
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
 )
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.ui.admin.admin_configuration_view import (
