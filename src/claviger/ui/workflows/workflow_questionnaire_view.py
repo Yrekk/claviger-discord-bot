@@ -12,6 +12,9 @@ from claviger.reporting.service import ReportService
 from claviger.services.workflows.workflow_questionnaire_coordinator_service import (
     WorkflowQuestionnaireCoordinatorService,
 )
+from claviger.services.workflows.workflow_role_executor_service import (
+    WorkflowRoleExecutionPartialError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +131,48 @@ async def _apply(
             workflow_key=questionnaire.workflow_key,
             submission=submission,
         )
+    except WorkflowRoleExecutionPartialError as error:
+        logger.exception(
+            "Questionnaire partially applied for guild %s workflow %s.",
+            questionnaire.guild_id,
+            questionnaire.workflow_key,
+        )
+
+        cause = error.__cause__
+        cause_details = (
+            f"{type(cause).__name__}: {cause}"
+            if cause is not None
+            else "Unknown cause"
+        )
+
+        await _emit_event(
+            report_service=report_service,
+            interaction=interaction,
+            event_type="workflow.questionnaire.partial_failure",
+            severity=ReportSeverity.ERROR,
+            title="Application partielle du questionnaire workflow",
+            summary=(
+                f"Le questionnaire /{questionnaire.command_name} "
+                "a été interrompu après au moins une mutation Discord."
+            ),
+            details=(
+                f"added_role_ids={error.added_role_ids}\n"
+                f"removed_role_ids={error.removed_role_ids}\n"
+                f"cause={cause_details}"
+            ),
+        )
+
+        await interaction.edit_original_response(
+            content=(
+                "⚠️ La mise à jour a été partiellement appliquée : certains "
+                "rôles ont déjà changé avant l'erreur. "
+                f"Relance /{questionnaire.command_name} pour réconcilier "
+                "tes rôles avec tes choix."
+            ),
+            view=None,
+        )
+        return
+
     except Exception as error:
         logger.exception(
             "Questionnaire failed for guild %s workflow %s.",

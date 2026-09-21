@@ -6,6 +6,7 @@ import pytest
 from claviger.models.workflows.workflow_role_plan_model import WorkflowRolePlan
 from claviger.services.roles.role_manager_service import RoleManager
 from claviger.services.workflows.workflow_role_executor_service import (
+    WorkflowRoleExecutionPartialError,
     WorkflowRoleExecutorService,
     WorkflowRoleNotManageableError,
 )
@@ -76,3 +77,114 @@ async def test_executor_preflights_all_roles_before_first_mutation() -> None:
 
     role_manager.add_role.assert_not_awaited()
     role_manager.remove_role.assert_not_awaited()
+
+
+async def test_executor_reports_successful_removal_before_partial_failure() -> None:
+    """Preserve removals already applied before a later Discord failure."""
+
+    member, _ = _member(
+        10,
+        20,
+    )
+
+    role_manager = MagicMock(spec=RoleManager)
+    role_manager.remove_role = AsyncMock(
+        side_effect=(
+            True,
+            RuntimeError("Discord removal failed."),
+        )
+    )
+    role_manager.add_role = AsyncMock()
+
+    executor = WorkflowRoleExecutorService(
+        role_manager,
+    )
+
+    with pytest.raises(
+        WorkflowRoleExecutionPartialError,
+    ) as exc_info:
+        await executor.execute(
+            member,
+            WorkflowRolePlan(
+                remove_role_ids=(10, 20),
+            ),
+        )
+
+    error = exc_info.value
+
+    assert error.removed_role_ids == (10,)
+    assert error.added_role_ids == ()
+    assert isinstance(error.__cause__, RuntimeError)
+
+    role_manager.add_role.assert_not_awaited()
+
+
+async def test_executor_reports_removal_and_addition_before_partial_failure() -> None:
+    """Preserve every successful mutation before a later addition fails."""
+
+    member, _ = _member(
+        10,
+        20,
+        30,
+    )
+
+    role_manager = MagicMock(spec=RoleManager)
+    role_manager.remove_role = AsyncMock(
+        return_value=True,
+    )
+    role_manager.add_role = AsyncMock(
+        side_effect=(
+            True,
+            RuntimeError("Discord addition failed."),
+        )
+    )
+
+    executor = WorkflowRoleExecutorService(
+        role_manager,
+    )
+
+    with pytest.raises(
+        WorkflowRoleExecutionPartialError,
+    ) as exc_info:
+        await executor.execute(
+            member,
+            WorkflowRolePlan(
+                remove_role_ids=(10,),
+                add_role_ids=(20, 30),
+            ),
+        )
+
+    error = exc_info.value
+
+    assert error.removed_role_ids == (10,)
+    assert error.added_role_ids == (20,)
+    assert isinstance(error.__cause__, RuntimeError)
+
+
+async def test_executor_keeps_first_mutation_failure_non_partial() -> None:
+    """Do not claim partial mutation when Discord failed before any change."""
+
+    member, _ = _member(
+        10,
+    )
+
+    role_manager = MagicMock(spec=RoleManager)
+    role_manager.remove_role = AsyncMock(
+        side_effect=RuntimeError("Discord failed before changing anything."),
+    )
+    role_manager.add_role = AsyncMock()
+
+    executor = WorkflowRoleExecutorService(
+        role_manager,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="before changing anything",
+    ):
+        await executor.execute(
+            member,
+            WorkflowRolePlan(
+                remove_role_ids=(10,),
+            ),
+        )
