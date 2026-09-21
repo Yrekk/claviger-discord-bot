@@ -436,7 +436,7 @@ H1  Sécurité DB et mode minimal               ✅ VALIDÉ
 ├─ H1.1 Disponibilité ≠ intégrité             ✅ VALIDÉ
 └─ H1.2 Runtime normal/recovery/minimal        ✅ VALIDÉ
 
-H2  Mutations Discord partielles              🧪 À VALIDER
+H2  Mutations Discord partielles              ✅ VALIDÉ
 H3  Drift live restant                         ⏳ À FAIRE
 H4  Last Known Good + backups                  ⏳ À FAIRE
 H5  Matrice de panne + smoke multi-guild       ⏳ À FAIRE
@@ -452,6 +452,12 @@ H1.2 a ajouté un état runtime applicatif explicite
 `VALID / UNBOUND / MISMATCH / NOT_EVALUATED`, le recheck DB/ownership et la
 dégradation fail-closed vers `MINIMAL` en cas de mismatch. La validation
 locale a été confirmée par le développeur le 21 septembre 2026.
+
+**H2 est fermé** : mutation partielle distinguée explicitement, IDs réellement
+ajoutés/retirés reportés, aucun faux succès utilisateur, aucune compensation
+automatique, et réconciliation par rebuild frais du questionnaire. Les tests
+ciblés et les régressions runtime associées ont été validés localement le
+21 septembre 2026.
 
 L'audit initial reste la matrice de risques et de contrats ; le fichier 09 doit
 désormais être mis à jour au démarrage et à la clôture de chaque nouvelle

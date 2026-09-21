@@ -51,7 +51,7 @@ l'historique depuis les conversations.
 | Tranche | Sujet | État |
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
-| H2 | Mutations Discord partielles | 🧪 À VALIDER |
+| H2 | Mutations Discord partielles | ✅ VALIDÉ |
 | H3 | Drift live restant | ⏳ À FAIRE |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
@@ -267,7 +267,7 @@ tests/commands/admin/test_config_server.py
 
 # 4. H2 — Mutations Discord partielles
 
-**État : 🧪 À VALIDER**
+**État : ✅ VALIDÉ**
 
 ## Problème traité
 
@@ -338,7 +338,11 @@ Le mécanisme de recovery repose sur le comportement déjà existant du
 `WorkflowQuestionnaireCoordinatorService` : chaque nouvelle soumission rebuild
 l'état persistant et les rôles réels du membre avant de recalculer le plan.
 
-## Validation ciblée à exécuter
+## Validation
+
+Validation locale confirmée par le développeur le 21 septembre 2026.
+
+Suites ciblées validées :
 
 ```text
 tests/services/workflows/test_workflow_role_executor_service.py
@@ -522,17 +526,22 @@ H1.2 — runtime normal/minimal          ✅ VALIDÉ
 H1   — sécurité DB et mode minimal     ✅ VALIDÉ
 ```
 
-Tranche active :
+H2 est fermé :
 
 ```text
-H2 — mutations Discord partielles
+H2 — mutations Discord partielles      ✅ VALIDÉ
 ```
 
-Le code H2 est présent et la tranche est en **🧪 À VALIDER**.
+Prochaine tranche :
 
-Prochaine action :
+```text
+H3 — drift live restant
+```
 
-1. exécuter les tests ciblés H2 ;
-2. corriger toute régression éventuelle ;
-3. après validation locale, passer H2 en `✅ VALIDÉ` ;
-4. préparer ensuite H3 — drift live restant.
+À l'ouverture de H3 :
+
+1. vérifier le HEAD réel ;
+2. marquer H3 `🔧 EN COURS` ;
+3. reprendre les écarts déjà identifiés dans l'audit ;
+4. traiter en priorité le rôle IA global disparu côté consumer et le fallback
+   de reporting ADMIN cassé.
