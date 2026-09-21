@@ -142,7 +142,10 @@ def test_bot_composes_generic_questionnaire_runtime(
         coordinator.catalog_sync_service
         is bot.catalog_entry_synchronization_service
     )
-    assert coordinator.ai_repository is bot.guild_ai_configuration_repository
+    assert (
+        coordinator.ai_configuration_service
+        is bot.guild_ai_configuration_service
+    )
     assert (
         coordinator.owner_repository
         is bot.guild_ai_questionnaire_owner_repository

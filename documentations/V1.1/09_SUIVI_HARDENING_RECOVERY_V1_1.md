@@ -490,6 +490,25 @@ tests/reporting/test_report_service_unavailable.py
 tests/runtime/test_bot_observability_wiring.py
 ```
 
+### Correctif découvert pendant validation
+
+La validation a révélé une assertion de composition restée sur l'ancienne
+dépendance du questionnaire :
+
+```text
+avant H3
+coordinator.ai_repository
+→ lecture SQLite directe
+
+après H3
+coordinator.ai_configuration_service
+→ configuration persistée + inspection Discord live
+```
+
+Le test `test_bot_composes_generic_questionnaire_runtime` vérifie désormais la
+nouvelle dépendance de service. Les autres `ai_repository` des diagnostics
+read-only restent inchangés : ils n'appartiennent pas au runtime questionnaire.
+
 ## Gate H3
 
 - consumer IA fail-closed si le rôle global configuré n'existe plus ;
