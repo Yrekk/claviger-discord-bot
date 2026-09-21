@@ -25,7 +25,10 @@ from claviger.config import (
 )
 
 # Database
-from claviger.database.connection import DatabaseConnection
+from claviger.database.connection import (
+    DatabaseConnection,
+    DatabaseUnavailableError,
+)
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
@@ -39,6 +42,11 @@ from claviger.models.runtime.discord_application_identity_model import (
 )
 from claviger.models.runtime.discord_guild_identity_model import (
     DiscordGuildIdentity,
+)
+from claviger.models.runtime.application_runtime_state_model import (
+    ApplicationRuntimeMode,
+    ApplicationRuntimeState,
+    DatabaseOwnershipState,
 )
 from claviger.models.runtime.guild_configuration_readiness_model import (
     GuildConfigurationReadiness,
@@ -115,6 +123,7 @@ from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.services.roles.role_manager_service import RoleManager
 from claviger.services.runtime.authorization import AuthorizationService
 from claviger.services.runtime.database_ownership_service import (
+    DatabaseOwnershipMismatchError,
     DatabaseOwnershipService,
     DatabaseOwnershipUnboundError,
 )
@@ -212,8 +221,7 @@ class ClavigerBot(discord.Client):
         # Discord identity and application runtime state
         self.discord_identity_service = DiscordIdentityService()
         self.application_identity: DiscordApplicationIdentity | None = None
-        self.database_status: DatabaseStatus | None = None
-        self.database_operational: bool | None = None
+        self.application_runtime_state: ApplicationRuntimeState | None = None
 
         # Guild runtime state is authoritative per guild.
         self.guild_runtime_states: dict[int, GuildRuntimeState] = {}
@@ -475,15 +483,19 @@ class ClavigerBot(discord.Client):
                 f"but Discord authenticated user ID {self.user.id}."
             )
 
-    async def _database_is_operational(
+    async def _resolve_application_runtime_state(
         self,
         application_identity: DiscordApplicationIdentity,
         status: DatabaseStatus,
-    ) -> bool:
-        """Return whether database-backed application operations are allowed."""
+    ) -> ApplicationRuntimeState:
+        """Resolve DB trust into an explicit application runtime state."""
 
-        if status.state != DatabaseState.READY:
-            return False
+        if status.state is not DatabaseState.READY:
+            return ApplicationRuntimeState(
+                mode=ApplicationRuntimeMode.MINIMAL,
+                database_status=status,
+                database_ownership_state=DatabaseOwnershipState.NOT_EVALUATED,
+            )
 
         try:
             await self.database_ownership_service.validate(
@@ -491,9 +503,85 @@ class ClavigerBot(discord.Client):
             )
 
         except DatabaseOwnershipUnboundError:
-            return False
+            return ApplicationRuntimeState(
+                mode=ApplicationRuntimeMode.MINIMAL,
+                database_status=status,
+                database_ownership_state=DatabaseOwnershipState.UNBOUND,
+            )
 
-        return True
+        except DatabaseOwnershipMismatchError:
+            logger.error(
+                "Base READY mais ownership incompatible avec l'application %s : "
+                "passage en mode minimal sans rebind automatique.",
+                application_identity.application_id,
+            )
+
+            return ApplicationRuntimeState(
+                mode=ApplicationRuntimeMode.MINIMAL,
+                database_status=status,
+                database_ownership_state=DatabaseOwnershipState.MISMATCH,
+            )
+
+        return ApplicationRuntimeState(
+            mode=ApplicationRuntimeMode.NORMAL,
+            database_status=status,
+            database_ownership_state=DatabaseOwnershipState.VALID,
+        )
+
+    async def refresh_application_runtime_state(
+        self,
+        application_identity: DiscordApplicationIdentity | None = None,
+    ) -> ApplicationRuntimeState:
+        """Re-evaluate DB status and ownership with one immediate recheck."""
+
+        identity = application_identity or self.application_identity
+
+        if identity is None:
+            raise RuntimeError(
+                "Application identity is unavailable for runtime state refresh."
+            )
+
+        status = await self.database_status_service.check()
+
+        try:
+            runtime_state = await self._resolve_application_runtime_state(
+                identity,
+                status,
+            )
+
+        except DatabaseUnavailableError:
+            logger.warning(
+                "Accès ownership DB interrompu : nouveau contrôle immédiat "
+                "avant dégradation du runtime."
+            )
+
+            status = await self.database_status_service.check()
+
+            try:
+                runtime_state = await self._resolve_application_runtime_state(
+                    identity,
+                    status,
+                )
+
+            except DatabaseUnavailableError:
+                runtime_state = ApplicationRuntimeState(
+                    mode=ApplicationRuntimeMode.MINIMAL,
+                    database_status=status,
+                    database_ownership_state=(
+                        DatabaseOwnershipState.NOT_EVALUATED
+                    ),
+                )
+
+        self.application_runtime_state = runtime_state
+
+        logger.info(
+            "Mode runtime application : %s (DB=%s, ownership=%s).",
+            runtime_state.mode.value,
+            runtime_state.database_status.state.value,
+            runtime_state.database_ownership_state.value,
+        )
+
+        return runtime_state
 
     def _build_command_tree_signature(
         self,
@@ -596,6 +684,7 @@ class ClavigerBot(discord.Client):
         *,
         database_status: DatabaseStatus,
         database_operational: bool,
+        database_ownership_state: DatabaseOwnershipState,
         guild_ready: bool,
         admin_command_channel_id: int | None,
         workflow_definitions: tuple[WorkflowDefinition, ...] = (),
@@ -683,7 +772,7 @@ class ClavigerBot(discord.Client):
                 application_name=application_identity.application_name,
                 application_id=application_identity.application_id,
                 database_state=database_status.state,
-                database_ownership_bound=database_operational,
+                database_ownership_state=database_ownership_state,
                 restart_callback=self.request_restart,
                 admin_command_channel_id=admin_command_channel_id,
                 maintenance_only=not normal_runtime_enabled,
@@ -716,13 +805,11 @@ class ClavigerBot(discord.Client):
         """Ensure one guild has a current runtime configuration."""
 
         application_identity = self.application_identity
-        database_status = self.database_status
-        database_operational = self.database_operational
+        application_runtime_state = self.application_runtime_state
 
         if (
             application_identity is None
-            or database_status is None
-            or database_operational is None
+            or application_runtime_state is None
         ):
             raise RuntimeError(
                 "Application runtime state is unavailable for guild configuration."
@@ -764,8 +851,13 @@ class ClavigerBot(discord.Client):
             return await self._configure_guild(
                 application_identity,
                 guild_id,
-                database_status=database_status,
-                database_operational=database_operational,
+                database_status=application_runtime_state.database_status,
+                database_operational=(
+                    application_runtime_state.database_operational
+                ),
+                database_ownership_state=(
+                    application_runtime_state.database_ownership_state
+                ),
                 previous_command_tree_signature=previous_command_tree_signature,
             )
 
@@ -776,6 +868,7 @@ class ClavigerBot(discord.Client):
         *,
         database_status: DatabaseStatus,
         database_operational: bool,
+        database_ownership_state: DatabaseOwnershipState,
         previous_command_tree_signature: str | None = None,
     ) -> GuildRuntimeState:
         """Configure and synchronize runtime state for one Discord guild."""
@@ -848,6 +941,7 @@ class ClavigerBot(discord.Client):
             guild_identity,
             database_status=database_status,
             database_operational=database_operational,
+            database_ownership_state=database_ownership_state,
             guild_ready=guild_ready,
             admin_command_channel_id=admin_command_channel_id,
             workflow_definitions=workflow_definitions,
@@ -947,16 +1041,11 @@ class ClavigerBot(discord.Client):
 
         step_started = perf_counter()
 
-        database_status = await self.database_status_service.check()
-
-        database_operational = await self._database_is_operational(
+        await self.refresh_application_runtime_state(
             application_identity,
-            database_status,
         )
 
         self.application_identity = application_identity
-        self.database_status = database_status
-        self.database_operational = database_operational
 
         logger.debug(
             "Timing startup — validation base / ownership : %.3f s",
@@ -987,10 +1076,7 @@ class ClavigerBot(discord.Client):
         if self.application_identity is None:
             return
 
-        if self.database_status is None:
-            return
-
-        if self.database_operational is None:
+        if self.application_runtime_state is None:
             return
 
         for guild in self.guilds:

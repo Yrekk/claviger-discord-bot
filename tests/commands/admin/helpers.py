@@ -9,6 +9,9 @@ from claviger.database.status import (
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.models.runtime.guild_ai_configuration_model import (
     GuildAIConfiguration,
     GuildAIConfigurationInspection,
@@ -110,6 +113,7 @@ def create_test_group(
     application_id: int = 789,
     database_state: DatabaseState = DatabaseState.READY,
     database_ownership_bound: bool = True,
+    database_ownership_state: DatabaseOwnershipState | None = None,
 ):
     """Create the admin command group with mocked external services."""
 
@@ -142,6 +146,13 @@ def create_test_group(
     report_service = Mock(spec=ReportService)
     report_service.emit = AsyncMock()
 
+    if database_ownership_state is None:
+        database_ownership_state = (
+            DatabaseOwnershipState.VALID
+            if database_ownership_bound
+            else DatabaseOwnershipState.UNBOUND
+        )
+
     if guild_policy_bootstrap_service is None:
         guild_policy_bootstrap_service = Mock(spec=GuildPolicyBootstrapService)
         guild_policy_bootstrap_service.bootstrap = AsyncMock()
@@ -149,9 +160,12 @@ def create_test_group(
     if database_ownership_service is None:
         database_ownership_service = Mock(spec=DatabaseOwnershipService)
 
-        initial_owner_application_id = (
-            application_id if database_ownership_bound else None
-        )
+        if database_ownership_state is DatabaseOwnershipState.VALID:
+            initial_owner_application_id = application_id
+        elif database_ownership_state is DatabaseOwnershipState.MISMATCH:
+            initial_owner_application_id = application_id + 1
+        else:
+            initial_owner_application_id = None
 
         database_ownership_service.get_owner_application_id = AsyncMock(
             return_value=initial_owner_application_id,
@@ -234,7 +248,7 @@ def create_test_group(
         application_name=application_name,
         application_id=application_id,
         database_state=database_state,
-        database_ownership_bound=database_ownership_bound,
+        database_ownership_state=database_ownership_state,
         restart_callback=restart_callback,
     )
 
@@ -360,6 +374,7 @@ def get_config_server_command(
     *,
     database_state: DatabaseState = DatabaseState.READY,
     database_ownership_bound: bool = True,
+    database_ownership_state: DatabaseOwnershipState | None = None,
     ai_configuration_coordinator_service: (
         GuildAIConfigurationCoordinatorService | None
     ) = None,
@@ -375,6 +390,7 @@ def get_config_server_command(
         ai_configuration_coordinator_service=ai_configuration_coordinator_service,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,
+        database_ownership_state=database_ownership_state,
     )
 
     command = group.get_command("config-server")

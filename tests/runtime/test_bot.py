@@ -11,6 +11,7 @@ from claviger import bot as bot_module
 from claviger.bot import ClavigerBot
 
 # Database
+from claviger.database.connection import DatabaseUnavailableError
 from claviger.database.schema import CURRENT_SCHEMA_VERSION
 from claviger.database.status import (
     DatabaseState,
@@ -21,6 +22,11 @@ from claviger.models.admin.guild_admin_configuration_model import (
 )
 
 # Models
+from claviger.models.runtime.application_runtime_state_model import (
+    ApplicationRuntimeMode,
+    ApplicationRuntimeState,
+    DatabaseOwnershipState,
+)
 from claviger.models.runtime.discord_application_identity_model import (
     DiscordApplicationIdentity,
 )
@@ -171,6 +177,21 @@ def _missing_database_status() -> DatabaseStatus:
         state=DatabaseState.MISSING,
         current_version=None,
         target_version=CURRENT_SCHEMA_VERSION,
+    )
+
+
+def _application_runtime_state(
+    *,
+    database_status: DatabaseStatus | None = None,
+    mode: ApplicationRuntimeMode = ApplicationRuntimeMode.NORMAL,
+    ownership: DatabaseOwnershipState = DatabaseOwnershipState.VALID,
+) -> ApplicationRuntimeState:
+    """Create deterministic application runtime state for bot tests."""
+
+    return ApplicationRuntimeState(
+        mode=mode,
+        database_status=database_status or _ready_database_status(),
+        database_ownership_state=ownership,
     )
 
 
@@ -370,6 +391,7 @@ def test_claviger_bot_composition(
 
     assert bot.discord_identity_service is not None
     assert bot.application_identity is None
+    assert bot.application_runtime_state is None
     assert bot.guild_runtime_states == {}
     assert bot.restart_requested is False
 
@@ -567,6 +589,7 @@ async def test_configure_guild_builds_and_stores_supplied_guild_runtime_state(
         999,
         database_status=_ready_database_status(),
         database_operational=True,
+        database_ownership_state=DatabaseOwnershipState.VALID,
     )
 
     resolve_application.assert_not_awaited()
@@ -699,8 +722,14 @@ async def test_setup_hook_prepares_application_before_ready_configures_guild(
     sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
-    assert bot.database_status == database_status
-    assert bot.database_operational is True
+    assert bot.application_runtime_state is not None
+    assert bot.application_runtime_state.mode is ApplicationRuntimeMode.NORMAL
+    assert bot.application_runtime_state.database_status == database_status
+    assert (
+        bot.application_runtime_state.database_ownership_state
+        is DatabaseOwnershipState.VALID
+    )
+    assert bot.application_runtime_state.database_operational is True
     assert bot.guild_runtime_states == {}
 
     commands_before_ready = bot.tree.get_commands(
@@ -981,6 +1010,13 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_missing(
     sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
+    assert bot.application_runtime_state is not None
+    assert bot.application_runtime_state.mode is ApplicationRuntimeMode.MINIMAL
+    assert (
+        bot.application_runtime_state.database_ownership_state
+        is DatabaseOwnershipState.NOT_EVALUATED
+    )
+    assert bot.application_runtime_state.database_operational is False
     assert bot.guild_runtime_states == {}
 
     _cache_available_guild(
@@ -1126,6 +1162,13 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
     sync.assert_not_awaited()
 
     assert bot.application_identity == application_identity
+    assert bot.application_runtime_state is not None
+    assert bot.application_runtime_state.mode is ApplicationRuntimeMode.MINIMAL
+    assert (
+        bot.application_runtime_state.database_ownership_state
+        is DatabaseOwnershipState.UNBOUND
+    )
+    assert bot.application_runtime_state.database_bind_allowed is True
     assert bot.guild_runtime_states == {}
 
     _cache_available_guild(
@@ -1185,11 +1228,11 @@ async def test_setup_hook_uses_maintenance_commands_when_database_is_unbound(
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_rejects_database_owned_by_another_application(
+async def test_setup_hook_uses_minimal_mode_for_database_ownership_mismatch(
     monkeypatch,
     tmp_path,
 ) -> None:
-    """Fail closed before guild work when another application owns the DB."""
+    """Keep Discord recovery alive without trusting a foreign-owned database."""
 
     _patch_bot_configuration(
         monkeypatch,
@@ -1208,23 +1251,15 @@ async def test_setup_hook_rejects_database_owned_by_another_application(
         application_name="Intruder",
         admin_command_name="intruder",
     )
-
-    resolve_application = AsyncMock(
-        return_value=application_identity,
+    guild_identity = _create_guild_identity(
+        bot_display_name="Intruder",
     )
 
-    resolve_guild = AsyncMock()
-
-    monkeypatch.setattr(
-        bot.discord_identity_service,
-        "resolve_application",
-        resolve_application,
-    )
-
-    monkeypatch.setattr(
-        bot.discord_identity_service,
-        "resolve_guild",
-        resolve_guild,
+    resolve_application, resolve_guild = _patch_identity_resolution(
+        monkeypatch,
+        bot,
+        application_identity=application_identity,
+        guild_identity=guild_identity,
     )
 
     status_check = AsyncMock(
@@ -1264,37 +1299,177 @@ async def test_setup_hook_rejects_database_owned_by_another_application(
         sync,
     )
 
-    with pytest.raises(
-        DatabaseOwnershipMismatchError,
-        match="belongs to another Discord application",
-    ):
-        await bot.setup_hook()
+    await bot.setup_hook()
 
     resolve_application.assert_awaited_once_with(
         bot,
     )
-
     resolve_guild.assert_not_awaited()
-    readiness_inspect.assert_not_awaited()
-
     status_check.assert_awaited_once()
-
     validate.assert_awaited_once_with(
         999,
     )
-
+    readiness_inspect.assert_not_awaited()
     sync.assert_not_awaited()
 
-    assert bot.application_identity is None
-    assert bot.guild_runtime_states == {}
+    assert bot.application_identity == application_identity
+    assert bot.application_runtime_state is not None
+    assert bot.application_runtime_state.mode is ApplicationRuntimeMode.MINIMAL
+    assert (
+        bot.application_runtime_state.database_ownership_state
+        is DatabaseOwnershipState.MISMATCH
+    )
+    assert bot.application_runtime_state.database_operational is False
 
-    commands = bot.tree.get_commands(
-        guild=bot_module.discord.Object(
-            id=123,
-        ),
+    _cache_available_guild(
+        bot,
+        guild_id=123,
     )
 
-    assert commands == []
+    await bot.on_ready()
+
+    resolve_guild.assert_awaited_once_with(
+        bot,
+        123,
+    )
+    readiness_inspect.assert_not_awaited()
+    sync.assert_awaited_once()
+
+    commands = {
+        command.name: command
+        for command in bot.tree.get_commands(
+            guild=bot_module.discord.Object(
+                id=123,
+            ),
+        )
+    }
+
+    assert set(commands) == {
+        "say",
+        "intruder",
+    }
+
+    admin_group = commands["intruder"]
+
+    assert {command.name for command in admin_group.commands} == {
+        "database",
+        "restart",
+        "config-server",
+        "config",
+    }
+
+    database_group = admin_group.get_command(
+        "database",
+    )
+
+    assert database_group is not None
+    assert {command.name for command in database_group.commands} == {
+        "status",
+    }
+
+
+@pytest.mark.asyncio
+async def test_runtime_state_rechecks_transient_ownership_access_failure(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Recover NORMAL mode when the immediate ownership recheck succeeds."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+    application_identity = _create_application_identity()
+    ready_status = _ready_database_status()
+
+    status_check = AsyncMock(
+        side_effect=(
+            ready_status,
+            ready_status,
+        )
+    )
+    validate = AsyncMock(
+        side_effect=(
+            DatabaseUnavailableError("Temporary ownership read failure."),
+            None,
+        )
+    )
+
+    monkeypatch.setattr(
+        bot.database_status_service,
+        "check",
+        status_check,
+    )
+    monkeypatch.setattr(
+        bot.database_ownership_service,
+        "validate",
+        validate,
+    )
+
+    runtime_state = await bot.refresh_application_runtime_state(
+        application_identity,
+    )
+
+    assert status_check.await_count == 2
+    assert validate.await_count == 2
+    assert runtime_state.mode is ApplicationRuntimeMode.NORMAL
+    assert runtime_state.database_ownership_state is DatabaseOwnershipState.VALID
+    assert runtime_state.database_operational is True
+
+
+@pytest.mark.asyncio
+async def test_runtime_state_degrades_after_repeated_ownership_access_failure(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Enter MINIMAL mode when ownership cannot be verified after recheck."""
+
+    _patch_bot_configuration(
+        monkeypatch,
+        tmp_path,
+    )
+
+    bot = ClavigerBot()
+    application_identity = _create_application_identity()
+    ready_status = _ready_database_status()
+
+    status_check = AsyncMock(
+        side_effect=(
+            ready_status,
+            ready_status,
+        )
+    )
+    validate = AsyncMock(
+        side_effect=DatabaseUnavailableError(
+            "Persistent ownership read failure."
+        )
+    )
+
+    monkeypatch.setattr(
+        bot.database_status_service,
+        "check",
+        status_check,
+    )
+    monkeypatch.setattr(
+        bot.database_ownership_service,
+        "validate",
+        validate,
+    )
+
+    runtime_state = await bot.refresh_application_runtime_state(
+        application_identity,
+    )
+
+    assert status_check.await_count == 2
+    assert validate.await_count == 2
+    assert runtime_state.mode is ApplicationRuntimeMode.MINIMAL
+    assert (
+        runtime_state.database_ownership_state
+        is DatabaseOwnershipState.NOT_EVALUATED
+    )
+    assert runtime_state.database_operational is False
 
 
 @pytest.mark.asyncio
@@ -1763,8 +1938,7 @@ async def test_guild_available_does_not_duplicate_in_flight_configuration(
 
     bot = ClavigerBot()
     bot.application_identity = _create_application_identity()
-    bot.database_status = _ready_database_status()
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state()
 
     started = asyncio.Event()
     release = asyncio.Event()
@@ -1838,8 +2012,7 @@ async def test_guild_available_reconfigures_after_unavailable_invalidates_state(
 
     bot = ClavigerBot()
     bot.application_identity = _create_application_identity()
-    bot.database_status = _ready_database_status()
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state()
 
     old_state = GuildRuntimeState(
         identity=_create_guild_identity(

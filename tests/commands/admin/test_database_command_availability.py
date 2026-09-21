@@ -3,6 +3,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 
 from .helpers import create_test_group
@@ -12,6 +15,7 @@ def _get_database_command_names(
     *,
     database_state: DatabaseState,
     database_ownership_bound: bool,
+    database_ownership_state: DatabaseOwnershipState | None = None,
 ) -> set[str]:
     """Return exposed database commands for one runtime state."""
 
@@ -31,6 +35,7 @@ def _get_database_command_names(
         role_discovery_service,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,
+        database_ownership_state=database_ownership_state,
     )
 
     database_group = group.get_command(
@@ -84,6 +89,18 @@ def test_database_bind_is_exposed_for_ready_unbound_database() -> None:
     ) == {
         "status",
         "bind",
+    }
+
+
+def test_ready_mismatched_database_never_exposes_bind() -> None:
+    """Never offer ownership takeover when another application owns the DB."""
+
+    assert _get_database_command_names(
+        database_state=DatabaseState.READY,
+        database_ownership_bound=False,
+        database_ownership_state=DatabaseOwnershipState.MISMATCH,
+    ) == {
+        "status",
     }
 
 

@@ -20,6 +20,9 @@ from claviger.database.status import (
     DatabaseState,
     DatabaseStatusService,
 )
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
@@ -56,7 +59,7 @@ def _configure_database_command_availability(
     database_group: app_commands.Group,
     *,
     database_state: DatabaseState,
-    database_ownership_bound: bool,
+    database_ownership_state: DatabaseOwnershipState,
 ) -> None:
     """Expose only database actions that make sense for the current state."""
 
@@ -77,7 +80,10 @@ def _configure_database_command_availability(
             "migrate",
         )
 
-    elif database_state == DatabaseState.READY and not database_ownership_bound:
+    elif (
+        database_state == DatabaseState.READY
+        and database_ownership_state is DatabaseOwnershipState.UNBOUND
+    ):
         available_commands.add(
             "bind",
         )
@@ -115,7 +121,7 @@ def create_claviger_group(
     application_name: str,
     application_id: int,
     database_state: DatabaseState,
-    database_ownership_bound: bool,
+    database_ownership_state: DatabaseOwnershipState,
     restart_callback: RestartCallback,
     admin_command_channel_id: int | None = None,
     maintenance_only: bool = False,
@@ -124,7 +130,10 @@ def create_claviger_group(
 
     routing_inspector = (
         admin_configuration_coordinator_service.inspect
-        if database_state == DatabaseState.READY and database_ownership_bound
+        if (
+            database_state == DatabaseState.READY
+            and database_ownership_state is DatabaseOwnershipState.VALID
+        )
         else None
     )
 
@@ -149,7 +158,7 @@ def create_claviger_group(
     _configure_database_command_availability(
         database_group,
         database_state=database_state,
-        database_ownership_bound=database_ownership_bound,
+        database_ownership_state=database_ownership_state,
     )
 
     restart_command = create_restart_command(
@@ -162,7 +171,7 @@ def create_claviger_group(
         workflow_configuration_coordinator_service,
         admin_command_name=command_name,
         database_state=database_state,
-        database_ownership_bound=database_ownership_bound,
+        database_ownership_state=database_ownership_state,
         report_service=report_service,
         ai_questionnaire_owner_service=ai_questionnaire_owner_service,
     )

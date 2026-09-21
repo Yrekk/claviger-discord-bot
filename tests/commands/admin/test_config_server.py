@@ -3,6 +3,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from claviger.database.status import DatabaseState
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.models.admin.admin_configuration_coordination_model import (
     AdminConfigurationCoordinationResult,
 )
@@ -236,6 +239,32 @@ async def test_config_server_requires_database_ownership() -> None:
 
     assert "/claviger database bind" in message
     assert "/claviger restart" in message
+
+
+@pytest.mark.asyncio
+async def test_config_server_rejects_ownership_mismatch_without_bind_guidance() -> None:
+    """Keep mismatch recovery fail-closed without suggesting database takeover."""
+
+    command, coordinator = get_config_server_command(
+        _role_discovery_service(),
+        database_state=DatabaseState.READY,
+        database_ownership_bound=False,
+        database_ownership_state=DatabaseOwnershipState.MISMATCH,
+    )
+
+    interaction = create_interaction()
+
+    await command.callback(
+        interaction,
+    )
+
+    coordinator.configure.assert_not_awaited()
+
+    message = interaction.response.send_message.await_args.args[0]
+
+    assert "autre application Discord" in message
+    assert "mode minimal" in message
+    assert "database bind" not in message
 
 
 @pytest.mark.asyncio

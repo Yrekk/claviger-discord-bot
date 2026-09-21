@@ -10,6 +10,8 @@ Modèles décrivant l'état d'exécution et de diagnostic de l'application :
 
 - identité Discord de l'application ;
 - identité locale d'une guild ;
+- état runtime global de l'application (normal / recovery / minimal / hard stop) ;
+- confiance dans l'ownership de la base applicative ;
 - readiness ;
 - état runtime par guild ;
 - configuration IA partagée au niveau d'une guild ;

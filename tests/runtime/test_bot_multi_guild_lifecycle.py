@@ -19,6 +19,11 @@ from claviger.models.admin.guild_admin_configuration_model import (
 )
 
 # Models
+from claviger.models.runtime.application_runtime_state_model import (
+    ApplicationRuntimeMode,
+    ApplicationRuntimeState,
+    DatabaseOwnershipState,
+)
 from claviger.models.runtime.discord_application_identity_model import (
     DiscordApplicationIdentity,
 )
@@ -76,6 +81,18 @@ def _ready_database_status() -> DatabaseStatus:
         state=DatabaseState.READY,
         current_version=CURRENT_SCHEMA_VERSION,
         target_version=CURRENT_SCHEMA_VERSION,
+    )
+
+
+def _application_runtime_state(
+    database_status: DatabaseStatus | None = None,
+) -> ApplicationRuntimeState:
+    """Create a normal application runtime state for lifecycle tests."""
+
+    return ApplicationRuntimeState(
+        mode=ApplicationRuntimeMode.NORMAL,
+        database_status=database_status or _ready_database_status(),
+        database_ownership_state=DatabaseOwnershipState.VALID,
     )
 
 
@@ -158,8 +175,7 @@ async def test_configure_runtime_guild_reuses_existing_state(
     bot = ClavigerBot()
 
     bot.application_identity = _application_identity()
-    bot.database_status = _ready_database_status()
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state()
 
     existing_state = _guild_runtime_state(
         999,
@@ -202,8 +218,9 @@ async def test_configure_runtime_guild_force_rebuild_uses_previous_signature(
     database_status = _ready_database_status()
 
     bot.application_identity = application_identity
-    bot.database_status = database_status
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state(
+        database_status,
+    )
 
     existing_state = _guild_runtime_state(
         999,
@@ -239,6 +256,7 @@ async def test_configure_runtime_guild_force_rebuild_uses_previous_signature(
         999,
         database_status=database_status,
         database_operational=True,
+        database_ownership_state=DatabaseOwnershipState.VALID,
         previous_command_tree_signature="existing-tree",
     )
 
@@ -278,8 +296,9 @@ async def test_configure_runtime_guild_uses_matching_restart_signature(
     database_status = _ready_database_status()
 
     bot.application_identity = application_identity
-    bot.database_status = database_status
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state(
+        database_status,
+    )
 
     replacement_state = _guild_runtime_state(
         999,
@@ -307,6 +326,7 @@ async def test_configure_runtime_guild_uses_matching_restart_signature(
         999,
         database_status=database_status,
         database_operational=True,
+        database_ownership_state=DatabaseOwnershipState.VALID,
         previous_command_tree_signature="guild-999-tree",
     )
 
@@ -330,8 +350,7 @@ async def test_on_ready_configures_every_available_cached_guild(
     )
 
     bot.application_identity = _application_identity()
-    bot.database_status = _ready_database_status()
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state()
 
     bot._connection._guilds = {
         123: SimpleNamespace(
@@ -484,8 +503,7 @@ async def test_multi_guild_runtime_keeps_guild_state_isolated_across_lifecycle(
     )
 
     bot.application_identity = _application_identity()
-    bot.database_status = _ready_database_status()
-    bot.database_operational = True
+    bot.application_runtime_state = _application_runtime_state()
 
     guild_identities = {
         123: DiscordGuildIdentity(

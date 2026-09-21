@@ -2,6 +2,9 @@ import discord
 from discord import app_commands
 
 from claviger.database.status import DatabaseState
+from claviger.models.runtime.application_runtime_state_model import (
+    DatabaseOwnershipState,
+)
 from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
@@ -33,7 +36,7 @@ def create_config_server_command(
     *,
     admin_command_name: str,
     database_state: DatabaseState,
-    database_ownership_bound: bool,
+    database_ownership_state: DatabaseOwnershipState,
     report_service: ReportService | None = None,
     ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
 ) -> app_commands.Command:
@@ -80,9 +83,8 @@ def create_config_server_command(
             )
             return
 
-        # A READY schema still remains unusable until ownership has explicitly
-        # been bound to the authenticated Discord application.
-        if not database_ownership_bound:
+        # A READY schema remains unusable until ownership is both known and valid.
+        if database_ownership_state is DatabaseOwnershipState.UNBOUND:
             await interaction.response.send_message(
                 (
                     "La base de données est prête mais n'est pas encore liée "
@@ -90,6 +92,31 @@ def create_config_server_command(
                     f"Utilise `/{admin_command_name} database bind`, puis "
                     f"`/{admin_command_name} restart` avant de configurer "
                     "le serveur."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if database_ownership_state is DatabaseOwnershipState.MISMATCH:
+            await interaction.response.send_message(
+                (
+                    "La base de données est prête mais appartient à une autre "
+                    "application Discord. Claviger reste en mode minimal et "
+                    "n'effectuera aucun rebind automatique. "
+                    f"Utilise `/{admin_command_name} database status` et "
+                    "vérifie la base ou la configuration de l'application."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if database_ownership_state is not DatabaseOwnershipState.VALID:
+            await interaction.response.send_message(
+                (
+                    "La base de données est prête mais son ownership n'a pas "
+                    "pu être validé. Claviger reste en mode minimal. "
+                    f"Utilise `/{admin_command_name} database status` puis "
+                    "réessaie après diagnostic."
                 ),
                 ephemeral=True,
             )
