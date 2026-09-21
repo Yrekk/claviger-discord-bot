@@ -1,7 +1,7 @@
+import sqlite3
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-import sqlite3
 
 import aiosqlite
 
