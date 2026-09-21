@@ -1,7 +1,7 @@
 # Mode opératoire de collaboration — Développement assisté par IA
 
 **Statut :** document de référence évolutif  
-**Version :** 0.2  
+**Version :** 0.3  
 **Portée :** tout projet de développement travaillé conjointement entre le développeur et l'assistante IA  
 **Objectif :** réduire les erreurs d'intégration, préserver la compréhension du projet et rendre le mode de travail reproductible d'une session à l'autre.
 
@@ -152,6 +152,28 @@ Lorsqu'un test est ajouté ou modifié, expliquer :
 
 Le développeur doit pouvoir ouvrir un test et comprendre pourquoi il existe.
 
+### 3.4 Question de contrôle pédagogique
+
+Après une tranche de développement cohérente ou un choix architectural
+important, l'assistante doit poser une **courte question de contrôle** permettant
+de vérifier que le développeur suit encore le raisonnement.
+
+La question doit :
+
+- porter sur le contrat ou l'architecture qui vient réellement d'être modifié ;
+- rester proportionnée au niveau de détail utile au développeur ;
+- éviter les questions de trivia ou les détails internes sans intérêt pratique ;
+- pouvoir recevoir comme réponse légitime « je ne sais pas ».
+
+Si le développeur ne sait pas répondre :
+
+1. expliquer la notion clairement ;
+2. reformuler ensuite une question plus accessible ;
+3. ne jamais transformer l'exercice en examen ou en blocage artificiel.
+
+L'objectif est de détecter une perte de compréhension avant qu'elle ne devienne
+une dépendance à l'IA.
+
 ---
 
 ## 4. Hiérarchie des sources de vérité
@@ -212,6 +234,42 @@ alors, sauf indication contraire :
 
 Le mode par défaut est le développement incrémental.
 
+### 6.1 Suivi d'avancement obligatoire
+
+Toute tranche de développement significative doit disposer d'un **fichier de
+suivi dédié** dans la documentation du projet.
+
+Ce fichier sert de point de reprise inter-session et indique au minimum :
+
+- objectif de la tranche ;
+- état : à faire / en cours / à valider / validé / bloqué ;
+- solution technique retenue ;
+- sous-tranches éventuelles ;
+- décisions structurantes ;
+- commits importants ;
+- tests / smoke réalisés ;
+- prochaine action.
+
+Pour une tranche longue composée de plusieurs sous-tranches, on conserve un
+même fichier de suivi vivant plutôt que de créer un nouveau document à chaque
+micro-commit.
+
+Règle de cycle :
+
+```text
+nouvelle tranche
+→ créer / mettre à jour le suivi
+→ marquer EN COURS
+→ développer
+→ expliquer
+→ tester / valider
+→ marquer VALIDÉ
+→ documenter la prochaine étape
+```
+
+Ce fichier doit être mis à jour **au démarrage et à la fermeture** de chaque
+sous-tranche significative.
+
 Une tranche doit idéalement être :
 
 - cohérente ;
@@ -243,7 +301,7 @@ Le code jetable sans trajectoire claire ne l'est pas.
 
 ---
 
-## 7. Ne pas coder avant d'avoir défini le problème
+## 7. Établir la solution technique avant de coder
 
 Lorsqu'une demande porte d'abord sur :
 
@@ -258,15 +316,36 @@ ne pas sauter automatiquement à une implémentation complète.
 Commencer par expliquer :
 
 1. le problème ;
-2. la solution recommandée ;
-3. l'architecture ou le flux proposé ;
+2. la solution technique recommandée ;
+3. le contrat ou l'architecture proposée ;
 4. les impacts ;
 5. les risques ou compromis ;
-6. la stratégie de test.
+6. la stratégie de test ;
+7. ce qui est volontairement hors scope.
 
-Le code est ensuite produit lorsque le développeur demande explicitement l'implémentation, le patch, le fichier ou la correction.
+Avant un nouveau développement substantiel, la solution technique doit être
+suffisamment claire pour que le développeur sache **ce que l'on va construire
+et pourquoi**.
 
-Exception : si la demande consiste explicitement à corriger ou produire du code, l'implémentation fait directement partie de la mission.
+Lorsqu'une idée utile apparaît mais n'est pas bloquante pour la version ou la
+tranche courante :
+
+```text
+bonne idée non bloquante
+→ backlog explicite
+→ ne pas élargir silencieusement le scope
+```
+
+Les changements de fond qui conditionnent les futures versions doivent en
+revanche être traités avant d'empiler de nouvelles fonctionnalités sur de
+mauvaises fondations.
+
+Le code est ensuite produit lorsque le développeur demande explicitement
+l'implémentation, le patch, le fichier ou la correction.
+
+Exception : si la demande consiste déjà explicitement à corriger ou produire du
+code, l'implémentation fait directement partie de la mission, mais le contrat
+technique doit quand même être explicité avant ou pendant la livraison.
 
 ---
 
@@ -724,6 +803,14 @@ Adapter les commandes au projet, mais suivre généralement :
 4. seulement ensuite smoke test réel ;
 5. commit lorsque la tranche est cohérente et verte.
 
+L'assistante doit toujours indiquer les **tests ciblés directement liés au
+changement qu'elle vient de produire**.
+
+En revanche, si le développeur a déjà établi qu'il exécute systématiquement
+certaines vérifications globales comme le linting ou la suite complète, il est
+inutile de les répéter mécaniquement à chaque réponse sauf lorsqu'elles ont un
+rôle particulier dans le diagnostic ou la gate de la tranche.
+
 ### 18.2 Compréhension des tests
 
 Lorsqu'un test est créé, l'assistante explique ce qu'il garantit.
@@ -784,7 +871,7 @@ observation réelle
 
 ---
 
-## 20. Commits
+## 20. Commits, push et merges
 
 Après chaque tranche cohérente et verte, fournir systématiquement :
 
@@ -807,6 +894,29 @@ Ne pas terminer une tranche uniquement par :
 
 Le développeur doit pouvoir copier directement le titre et le corps dans son outil Git.
 
+### 20.1 Écriture directe sur le dépôt
+
+Lorsque les outils permettent à l'assistante de modifier directement le dépôt :
+
+- elle ne commit / push que lorsque le développeur l'a explicitement autorisé à
+  le faire pour la tranche concernée ;
+- avant toute écriture, elle vérifie le HEAD réel de la branche ;
+- si le développeur annonce avoir push entre-temps, elle relit le HEAD avant de
+  continuer ;
+- elle ne force jamais une mise à jour de branche sans justification et accord ;
+- elle ne merge jamais une branche sans acceptation explicite du développeur.
+
+Après une manipulation Git distante ou une intégration importante, rappeler au
+développeur de vérifier :
+
+```bash
+git diff --check
+git status --short
+```
+
+Le but n'est pas de multiplier les commandes, mais de conserver un contrôle
+local simple sur l'état réellement récupéré.
+
 ---
 
 ## 21. Documentation vivante
@@ -826,6 +936,20 @@ Mettre à jour ou proposer de mettre à jour la documentation lorsqu'un jalon r�
 - la méthode d'utilisation.
 
 Éviter que plusieurs milestones s'accumulent avant de mettre à jour le README ou le document de référence.
+
+À la fermeture d'une tranche, vérifier explicitement si les éléments suivants
+doivent évoluer dans **la même tranche documentaire** :
+
+- README principal ;
+- README locaux des dossiers concernés ;
+- roadmap ;
+- fichier de suivi d'avancement ;
+- documentation d'architecture ;
+- passation / index de reprise.
+
+Une modification fonctionnelle ou architecturale significative ne doit pas être
+considérée complètement fermée si la documentation de référence décrit encore
+l'état précédent.
 
 ### 21.1 Différents niveaux de documentation
 
@@ -947,6 +1071,9 @@ Le nom d'un projet public ou un concept métier non personnel peut être conserv
 
 Une session longue ne doit pas devenir une dépendance invisible.
 
+Lorsqu'un projet possède un fichier de suivi actif pour la tranche en cours,
+celui-ci devient le **premier point de reprise** avant les documents historiques.
+
 Lorsqu'une passation est nécessaire, elle doit transmettre au minimum :
 
 - dépôt ;
@@ -1054,6 +1181,10 @@ Avant d'envoyer un changement, l'assistante vérifie mentalement :
 - [ ] Ai-je lu l'état actuel ?
 - [ ] Suis-je sur la bonne branche / bonne version ?
 - [ ] Ai-je compris le problème avant de corriger ?
+- [ ] La solution technique a-t-elle été explicitée avant le DEV ?
+- [ ] Les améliorations non bloquantes ont-elles été mises en backlog plutôt
+      qu'ajoutées silencieusement au scope ?
+- [ ] Le fichier de suivi de la tranche est-il créé / à jour ?
 - [ ] Le changement respecte-t-il l'architecture ?
 - [ ] Est-ce la plus petite tranche cohérente ?
 - [ ] Patch manuel ou fichier complet : ai-je choisi le format le moins risqué ?
@@ -1066,6 +1197,10 @@ Avant d'envoyer un changement, l'assistante vérifie mentalement :
 - [ ] Ai-je évité de complexifier inutilement ?
 - [ ] Ai-je pris en compte sécurité et effets de bord ?
 - [ ] Une documentation vivante doit-elle être mise à jour ?
+- [ ] README / roadmap / suivi de tranche reflètent-ils le nouvel état si
+      nécessaire ?
+- [ ] Ai-je expliqué ce que j'ai fait de manière pédagogique ?
+- [ ] Une question de contrôle adaptée doit-elle être posée ?
 - [ ] La tranche peut-elle recevoir un commit cohérent ?
 
 ---
@@ -1295,13 +1430,24 @@ Ne jamais déplacer toute l'application et toute la suite de tests en une seule 
 
 
 
-## Complément de collaboration — 17 septembre 2026
+## Complément de collaboration — 17 septembre 2026, révisé le 21 septembre 2026
 
 Ces précisions récentes complètent les règles précédentes :
 
-- L'assistante prépare une copie de travail et livre les fichiers ; elle ne commit ni ne push sur le dépôt distant. Le développeur intègre, teste, commit et push. Une préparation locale ne doit jamais être présentée comme une modification de la branche GitHub.
+- Lorsque l'assistante ne dispose pas d'une autorisation explicite d'écriture,
+  elle prépare la proposition / livraison sans prétendre que le dépôt distant a
+  été modifié. Lorsqu'une autorisation explicite de commit/push est donnée et
+  que les outils le permettent, elle peut effectuer directement l'opération en
+  respectant les règles du §20.1.
 - Avant chaque livraison de code, annoncer le nombre total de fichiers concernés, puis pour chacun le nombre de modifications logiques et l'action attendue (création, remplacement complet, patch). Un remplacement complet reste une seule opération de copie même s'il contient plusieurs modifications logiques.
-- Pour toute création, fournir `touch chemin/fichier`. Si un dossier est nécessaire, fournir `mkdir -p chemin` et son mini-README. Préférer les fichiers complets lorsqu'il y a plusieurs interventions manuelles ; conserver les commentaires utiles et les conventions existantes.
-- Poser occasionnellement une courte question pédagogique sur le pourquoi architectural. Une réponse incorrecte ou « je ne sais pas » est recevable. Tant qu'une question posée reste sans réponse, ne pas livrer la tranche de code suivante.
+- Pour toute création manuelle, fournir `touch chemin/fichier`. Si un dossier est nécessaire, fournir `mkdir -p chemin` et son mini-README. Préférer les fichiers complets lorsqu'il y a plusieurs interventions manuelles ; conserver les commentaires utiles et les conventions existantes.
+- Poser régulièrement une courte question pédagogique sur le pourquoi architectural ou le contrat qui vient d'être modifié. Une réponse incorrecte ou « je ne sais pas » est recevable : l'assistante explique puis reformule au niveau utile.
 - Documenter les décisions tardives et leur justification, notamment les règles de robustesse. Distinguer explicitement le comportement implémenté, la décision validée encore à réaliser, et les vérifications locales de celles du développeur.
-- Avant de produire une tranche, vérifier le HEAD réel de la branche ; le revérifier après un push annoncé par le développeur. Un changement de HEAD impose de comparer les fichiers avant remplacement.
+- Avant de produire une tranche ou d'écrire sur le dépôt, vérifier le HEAD réel de la branche ; le revérifier après un push annoncé par le développeur. Un changement de HEAD impose de comparer les fichiers avant remplacement.
+- Chaque tranche significative possède un suivi d'avancement dédié et vivant,
+  mis à jour au démarrage et à la clôture.
+- Le README, les README locaux, la roadmap et les documents de reprise sont mis
+  à jour dès qu'un changement de tranche les rend obsolètes.
+- Une solution technique est fixée avant de démarrer un nouveau développement ;
+  les améliorations non bloquantes découvertes en cours de route vont au backlog
+  plutôt que d'élargir silencieusement le scope.
