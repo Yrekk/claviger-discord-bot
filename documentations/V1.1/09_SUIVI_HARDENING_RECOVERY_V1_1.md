@@ -51,7 +51,7 @@ l'historique depuis les conversations.
 | Tranche | Sujet | État |
 |---|---|---|
 | H1 | Sécurité DB et mode minimal | ✅ VALIDÉ |
-| H2 | Mutations Discord partielles | 🔧 EN COURS |
+| H2 | Mutations Discord partielles | 🧪 À VALIDER |
 | H3 | Drift live restant | ⏳ À FAIRE |
 | H4 | Last Known Good + backups | ⏳ À FAIRE |
 | H5 | Matrice de panne + smoke multi-guild | ⏳ À FAIRE |
@@ -264,7 +264,7 @@ tests/commands/admin/test_config_server.py
 
 # 4. H2 — Mutations Discord partielles
 
-**État : 🔧 EN COURS**
+**État : 🧪 À VALIDER**
 
 ## Problème traité
 
@@ -305,6 +305,43 @@ En cas de process kill/restart entre deux mutations, aucun handler Python ne
 peut garantir un report immédiat. Le recovery fonctionnel reste le même :
 relancer le questionnaire reconstruit l'état actuel du membre depuis Discord,
 sans supposer que l'exécution précédente s'est terminée.
+
+## Implémentation réalisée
+
+Commit principal :
+
+```text
+89f5aba26ab637bf91870b142c7d9ed339144a03
+feat: report partial workflow role mutations
+```
+
+La tranche a :
+
+- conservé `WorkflowRoleExecutionPartialError` comme contrat d'exécution
+  partielle ;
+- ajouté des tests dédiés lorsqu'une panne survient pendant les removals ;
+- ajouté des tests lorsqu'une panne survient après removal puis pendant les
+  additions ;
+- vérifié qu'un échec sur la toute première mutation reste un échec normal et
+  n'est pas faussement classé « partiel » ;
+- ajouté un traitement UI spécifique aux mutations partielles ;
+- ajouté un report `workflow.questionnaire.partial_failure` contenant les
+  `added_role_ids`, `removed_role_ids` et la cause d'origine ;
+- remplacé le message générique par une consigne explicite de relance et
+  réconciliation ;
+- confirmé qu'aucun rollback compensatoire automatique n'est effectué.
+
+Le mécanisme de recovery repose sur le comportement déjà existant du
+`WorkflowQuestionnaireCoordinatorService` : chaque nouvelle soumission rebuild
+l'état persistant et les rôles réels du membre avant de recalculer le plan.
+
+## Validation ciblée à exécuter
+
+```text
+tests/services/workflows/test_workflow_role_executor_service.py
+tests/ui/workflows/test_workflow_questionnaire_partial_failure.py
+tests/services/workflows/test_workflow_questionnaire_coordinator_service.py
+```
 
 ## Gate H2
 
@@ -404,11 +441,11 @@ Tranche active :
 H2 — mutations Discord partielles
 ```
 
-Le HEAD a été vérifié et H2 est officiellement en cours.
+Le code H2 est présent et la tranche est en **🧪 À VALIDER**.
 
 Prochaine action :
 
-1. ajouter les tests dédiés de mutation partielle ;
-2. exploiter les IDs de mutation dans le reporting ;
-3. distinguer l'échec partiel dans l'UX questionnaire ;
-4. valider le chemin de réconciliation sans rollback automatique.
+1. exécuter les tests ciblés H2 ;
+2. corriger toute régression éventuelle ;
+3. après validation locale, passer H2 en `✅ VALIDÉ` ;
+4. préparer ensuite H3 — drift live restant.

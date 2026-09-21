@@ -31,7 +31,8 @@ Au checkpoint du 19 septembre 2026 :
 - **H1.1 — disponibilité ≠ intégrité : ✅ VALIDÉ** ;
 - **H1.2 — runtime normal / recovery / minimal : ✅ VALIDÉ** ;
 - **H1 — sécurité DB et mode minimal : ✅ FERMÉ** ;
-- prochaine tranche : **H2 — mutations Discord partielles**.
+- **H2 — mutations Discord partielles : 🧪 À VALIDER** ;
+- prochaine étape : validation locale H2, puis H3 — drift live restant.
 
 Décisions de continuité déjà actées :
 
