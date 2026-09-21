@@ -423,9 +423,33 @@ questionnaire.
 
 **Tranche active :** `feature/v11-hardening-recovery`.
 
-L'audit initial est terminé et sert de matrice de travail :
+Documents de référence :
 
-`08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md`
+- audit : `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` ;
+- suivi opérationnel inter-session :
+  `09_SUIVI_HARDENING_RECOVERY_V1_1.md`.
+
+## Avancement de la tranche H
+
+```text
+H1  Sécurité DB et mode minimal               🔧 EN COURS
+├─ H1.1 Disponibilité ≠ intégrité             ✅ VALIDÉ
+└─ H1.2 Runtime normal/recovery/minimal        ⏳ À FAIRE
+
+H2  Mutations Discord partielles              ⏳ À FAIRE
+H3  Drift live restant                         ⏳ À FAIRE
+H4  Last Known Good + backups                  ⏳ À FAIRE
+H5  Matrice de panne + smoke multi-guild       ⏳ À FAIRE
+```
+
+**H1.1 est fermé** : `PRAGMA quick_check`, état
+`INTEGRITY_FAILED`, distinction corruption explicite / indisponibilité,
+diagnostic fail-closed et tests ciblés validés. Le Ruff fix associé a été
+pushé par le développeur.
+
+L'audit initial reste la matrice de risques et de contrats ; le fichier 09 doit
+désormais être mis à jour au démarrage et à la clôture de chaque nouvelle
+sous-tranche hardening.
 
 Après validation fonctionnelle :
 

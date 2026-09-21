@@ -6,11 +6,12 @@ Ce dossier contient les documents de continuité fonctionnelle et architecturale
 
 Pour reprendre le projet après une coupure de session, lire d'abord :
 
-1. `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` ;
-2. `05_ROADMAP_RESTANT_V1_1.md` ;
-3. `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` pour l'historique
+1. `09_SUIVI_HARDENING_RECOVERY_V1_1.md` — **état opérationnel courant** ;
+2. `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` — audit/contrats ;
+3. `05_ROADMAP_RESTANT_V1_1.md` — ordre global de fermeture ;
+4. `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` pour l'historique
    de la tranche précédente ;
-4. le HEAD réel de `feature/v11-hardening-recovery`.
+5. le HEAD réel de `feature/v11-hardening-recovery`.
 
 Le code courant et les décisions les plus récentes priment sur les documents historiques.
 
@@ -27,7 +28,10 @@ Au checkpoint du 19 septembre 2026 :
   s'ajoute lorsque l'IA est activée ;
 - branche active : `feature/v11-hardening-recovery` ;
 - audit initial hardening/recovery terminé ;
-- prochaine tranche : **H1 — sécurité DB et mode minimal**.
+- **H1.1 — disponibilité ≠ intégrité : ✅ VALIDÉ** ;
+- H1 reste active ;
+- prochaine sous-tranche : **H1.2 — contrat runtime normal / recovery snapshot /
+  minimal**.
 
 Décisions de continuité déjà actées :
 
@@ -53,7 +57,8 @@ Décisions de continuité déjà actées :
 - `05_ROADMAP_RESTANT_V1_1.md` : roadmap actuelle ;
 - `06_Migration_V11_Contrat_et_Passation.md` : contrat initial de la tranche migration V11 ;
 - `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` : passation de la tranche configuration/workflows ;
-- `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` : **audit et contrat de reprise courant pour le hardening**.
+- `08_AUDIT_HARDENING_RECOVERY_V1_1_2026-09-19.md` : audit et contrats de hardening ;
+- `09_SUIVI_HARDENING_RECOVERY_V1_1.md` : **journal opérationnel courant et point de reprise inter-session**.
 
 Les branches de configuration/workflows précédentes ont été intégrées dans
 `develop`. La branche active est `feature/v11-hardening-recovery`, créée
