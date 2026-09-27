@@ -1,142 +1,177 @@
-# Complément Claviger — workflow par branches feature
+# Complément Claviger — workflow de développement
 
 **Statut :** règle projet active  
-**Date :** 17 septembre 2026  
-**Portée :** développement Claviger V1.1 jusqu'à fermeture de la branche `refactor/generic-workflows-v11`.
+**Portée :** Claviger V1.1 et promotions jusqu'à production  
+**Socle transverse :**
+[NexusPrincipia — Mode opératoire Dev + IA](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/ai-development-operating-model.md)
 
-Ce document complète `MODE_OPERATOIRE_COLLABORATION_DEV_IA.md` pour Claviger. En cas de contradiction avec l'ancien « Complément de collaboration — 17 septembre 2026 » présent dans ce document générique, **le présent fichier prévaut pour Claviger**.
+Ce document contient uniquement les règles propres à Claviger ou les
+précisions nécessaires au workflow courant.
+
+## Branche active et point de reprise
+
+Branche de développement actuelle :
+
+```text
+feature/v11-hardening-recovery
+```
+
+Point de reprise opérationnel :
+
+```text
+documentations/V1.1/09_SUIVI_HARDENING_RECOVERY_V1_1.md
+```
+
+L'ancienne branche `refactor/generic-workflows-v11` est historique. Elle ne
+doit plus recevoir les changements courants de la V1.1.
+
+Avant toute écriture distante :
+
+1. vérifier le HEAD réel de la branche active ;
+2. si le développeur annonce un push, relire immédiatement le HEAD ;
+3. comparer avant remplacement si le HEAD a bougé.
 
 ## Workflow courant
 
-Pour toute tranche significative :
+Pour une tranche significative :
 
 ```text
-branche feature dédiée
-→ production code/tests/docs par l'assistante
-→ commit/push sur la feature
-→ pull local du développeur
-→ brief pédagogique
-→ validation locale du développeur
-→ smoke Discord si nécessaire
-→ corrections sur la feature
-→ PR/merge uniquement après acceptation explicite du développeur
+besoin / contrat déjà cadré
+→ rappel du scope et des risques
+→ validation architecturale si nécessaire
+→ production code + tests + docs
+→ commit/push sur la branche de travail autorisée
+→ pull/review locale du développeur
+→ tests ciblés
+→ Ruff + pytest complet par le développeur
+→ smoke réel si nécessaire
+→ acceptation explicite
+→ fermeture documentaire de la tranche
 ```
 
-La branche d'intégration actuelle est :
+Une Solution Technique complète n'est pas recréée pour chaque sous-tranche déjà
+couverte par l'audit, la roadmap ou un contrat validé. Elle est attendue pour
+une nouvelle version, un nouveau sous-système, une fonctionnalité structurante
+ou un refactor de fond.
+
+## Écriture Git directe
+
+Lorsque le développeur autorise explicitement l'écriture sur la tranche
+courante, l'assistante peut :
+
+- modifier les fichiers nécessaires ;
+- créer un commit cohérent ;
+- pousser sur la branche de travail active.
+
+Cette autorisation ne vaut jamais autorisation de merge, de promotion ou de
+déploiement.
+
+Aucun merge vers `develop`, `deploy/succumbrae` ou `main` sans décision
+explicite du développeur.
+
+## Chaîne de promotion V1.1
+
+Après fermeture et acceptation de la branche hardening :
 
 ```text
-refactor/generic-workflows-v11
+feature/v11-hardening-recovery
+→ develop
+→ deploy/succumbrae
+→ déploiement réel sur Succumbrae
+→ smoke production
+→ main
 ```
 
-`develop` reste hors périmètre jusqu'à la fermeture fonctionnelle de V1.1.
+`main` représente un état déjà validé en conditions réelles.
 
-## Chaîne de branches après fermeture V1.1
+`deploy/succumbrae` est la branche de release/déploiement ; elle ne doit pas
+être contournée pour publier directement depuis `develop` ou `main`.
 
-La chaîne de promotion validée pour Claviger est :
+## Validation locale
+
+Pour Claviger, l'assistante fournit en priorité les **tests ciblés** qui
+protègent le changement qu'elle vient de produire.
+
+Le développeur exécute de son côté, selon la convention établie :
 
 ```text
-feature/*
-→ PR vers refactor/generic-workflows-v11
-→ fermeture fonctionnelle V1.1
-→ PR vers develop
-→ PR/promotion vers deploy/succumbrae
-→ déploiement sur Succumbrae
-→ smoke et validation production
-→ seulement après validation à 100 % : promotion vers main
+Ruff
+pytest complet
 ```
 
-`main` est la branche **STABLE**. Elle ne sert pas de branche de validation de déploiement et ne reçoit pas du code simplement parce que `develop` est vert.
+Il n'est donc pas nécessaire de répéter mécaniquement ces deux commandes après
+chaque micro-correction, sauf si elles font partie d'un diagnostic précis ou si
+le développeur les demande.
 
-`deploy/succumbrae` est la branche de release/déploiement du serveur Succumbrae. Le CD doit donc cibler cette branche, pas `main`.
-
-Une anomalie découverte sur Succumbrae doit être corrigée avant promotion vers `main` ; `main` doit rester représentative d'un état déjà validé en conditions réelles.
-
-## Environnements `.env`
-
-Claviger utilise désormais un sélecteur d'environnement (`CLAVIGER_ENV`) afin de distinguer notamment développement et production.
-
-Le déploiement ne doit plus reconstruire un `.env` de production à partir d'un `.env` de développement. La procédure cible est :
-
-```text
-configuration production existante
-→ copie/reprise du profil de production (.env.production)
-→ adaptation du .env / sélecteur d'environnement pour le conteneur cible
-→ validation docker compose
-→ démarrage
-```
-
-Les secrets restent hors Git et hors image Docker. Lors d'une évolution des variables attendues, comparer la configuration de production avec `.env.example` et mettre à jour le serveur avant le nouveau conteneur.
-
-## Répartition des responsabilités
-
-### Assistante
-
-- vérifier le HEAD distant avant de travailler ;
-- produire les modifications substantielles ;
-- écrire/adapter les tests ;
-- documenter la tranche ;
-- créer des commits cohérents sur la branche feature ;
-- expliquer les responsabilités, flux et risques ;
-- ne jamais merger seule vers la branche d'intégration ;
-- ne jamais promouvoir vers `develop`, `deploy/succumbrae` ou `main` sans décision explicite du développeur.
-
-### Développeur
-
-- arbitrer produit et architecture ;
-- pull/review localement ;
-- exécuter les tests et smoke tests ;
-- challenger les choix ;
-- décider si la tranche est acceptée ;
-- décider des PR/merges et de chaque promotion de branche ;
-- valider le déploiement réel avant toute promotion vers `main`.
-
-## Ordre de validation
-
-Donner d'abord :
-
-```text
-tests ciblés
-→ Ruff
-→ pytest complet
-```
-
-Si cette séquence est verte, donner ensuite séparément :
+Après une manipulation du dépôt, rappeler :
 
 ```text
 git diff --check
-```
-
-puis :
-
-```text
 git status --short
 ```
 
-Si le développeur indique avoir atteint les dernières étapes sans signaler d'échec, considérer la séquence précédente comme exécutée et verte.
+Pour la synchronisation locale, indiquer simplement **git pull**.
 
-## Brief avant smoke
+## Revue pédagogique
 
-Avant un smoke réel, rappeler au minimum :
+Après une tranche cohérente :
 
-- objectif du changement ;
-- principaux fichiers/responsabilités ;
-- flux avant/après ;
-- résultat attendu ;
+- expliquer ce qui a changé et pourquoi ;
+- identifier les fichiers/responsabilités importants ;
+- expliquer le flux avant/après ;
+- préciser le risque évité et ce que couvrent les tests ;
+- poser une courte question conceptuelle lorsqu'elle aide réellement à
+  conserver la carte mentale du système.
+
+La question n'est ni un examen ni une gate.
+
+## Hardening V1.1
+
+Pendant H1–H5 :
+
+- le fichier
+  `documentations/V1.1/09_SUIVI_HARDENING_RECOVERY_V1_1.md` est mis à jour
+  au démarrage et à la fermeture d'une sous-tranche significative ;
+- les décisions de recovery/sécurité sont documentées dans l'audit et/ou le
+  suivi ;
+- une bonne idée non bloquante va au backlog plutôt que d'élargir
+  silencieusement la tranche ;
+- H4/H5 doivent rester compatibles avec la direction d'observabilité partagée
+  dans NexusPrincipia sans anticiper la Web Admin.
+
+## Smoke réel
+
+Avant un smoke Discord ou Succumbrae, rappeler :
+
+- objectif ;
+- principaux composants concernés ;
+- comportement attendu ;
+- scénario à exécuter ;
 - point d'arrêt en cas d'anomalie.
 
-## Questions pédagogiques
+Les smokes Laboratorium, seconde guild et Succumbrae complètent les tests
+automatisés ; ils ne sont pas remplacés par eux.
 
-Poser occasionnellement une question courte quand elle aide réellement à conserver le modèle mental du système. Ne pas répéter une question déjà traitée ni transformer chaque tranche en quiz obligatoire.
+## Environnements et secrets
 
-## Continuité de session
+Les secrets restent hors Git et hors image Docker.
 
-Quand une session devient longue ou approche de sa limite :
+Le déploiement production doit utiliser son profil de configuration propre ; il
+ne doit jamais reconstruire implicitement une configuration production à
+partir du profil de développement.
 
-1. mettre à jour la passation V1.1 courante ;
-2. noter branche et dernier commit fonctionnel validé ;
-3. distinguer clairement `validé`, `implémenté mais pas smoké`, `décidé mais pas implémenté` ;
-4. écrire la prochaine tranche exacte ;
-5. conserver les anomalies observées et les smoke tests restant à faire ;
-6. rappeler la chaîne de promotion jusqu'à `main` si la session approche de la fermeture/release.
+## Continuité intersession
 
-Une nouvelle session doit relire la passation puis vérifier le code réel avant de continuer.
+Une nouvelle session suit le socle NexusPrincipia puis applique le delta
+Claviger :
+
+```text
+README projet
+→ suivi/handoff V1.1 courant
+→ tranche active
+→ branche + HEAD réel
+→ documents de décision nécessaires
+→ fichiers concernés
+```
+
+La conversation n'est jamais la seule mémoire opérationnelle.

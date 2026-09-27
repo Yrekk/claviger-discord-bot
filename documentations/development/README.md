@@ -1,57 +1,55 @@
 # Développement et méthode de collaboration
 
-Ce dossier contient les documents qui expliquent **comment travailler sur le projet**, plutôt que le fonctionnement fonctionnel d'une version précise de Claviger.
+Les conventions générales de développement assisté par IA sont centralisées
+dans [NexusPrincipia](https://github.com/Yrekk/NexusPrincipia).
 
-## Documents actifs
+## Références communes
 
-### `MODE_OPERATOIRE_COLLABORATION_DEV_IA.md`
+- [Mode opératoire Dev + IA](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/ai-development-operating-model.md)
+- [Bootstrap projet / ST / prompt maître](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/project-bootstrap.md)
+- [Continuité intersession](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/session-continuity.md)
+- [Conventions de documentation](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/documentation-conventions.md)
+- [Conventions Python](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/languages/python.md)
+- [Debug & Observabilité](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/architecture/debug-observability.md)
 
-Socle générique de collaboration entre le développeur et l'assistante IA :
+Le fichier
+[MODE_OPERATOIRE_COLLABORATION_DEV_IA.md](MODE_OPERATOIRE_COLLABORATION_DEV_IA.md)
+reste comme point d'entrée local, mais il ne recopie plus le corpus partagé.
 
-- source de vérité ;
-- petites tranches ;
-- diagnostic avant correction ;
-- niveau d'explication attendu ;
-- tests et smoke tests ;
-- documentation vivante ;
-- passations ;
-- README locaux ;
-- miroir entre `src/` et `tests/`.
+## Compléments Claviger
 
 ### `CLAVIGER_WORKFLOW_FEATURE_BRANCHES.md`
 
-**Complément projet actif pour Claviger V1.1.**
+Complément projet actif :
 
-Il définit le fonctionnement réellement utilisé depuis le 17 septembre 2026 :
-
-```text
-feature branch dédiée
-→ production + commit/push par l'assistante
-→ pull/review/tests/smoke par le développeur
-→ merge uniquement après acceptation explicite
-```
-
-Pour Claviger, ce complément prévaut sur l'ancien paragraphe du mode opératoire générique indiquant que l'assistante ne commit/push jamais. Cette ancienne règle correspond à une phase de travail antérieure.
+- branche de travail courante ;
+- règles de commit/push par l'assistante ;
+- validation locale par le développeur ;
+- chaîne de promotion jusqu'à `main` ;
+- conventions de tests et de smoke propres à Claviger.
 
 ### `ADMIN_RUNTIME_DIAGNOSTICS_V1_3.md`
 
-Passation de direction pour la future console runtime de l'Admin Web :
+Direction propre à Claviger pour la future console runtime Admin :
 
-- logs structurés communs à console/fichier/Admin ;
-- flux live INFO → CRITICAL ;
-- DEBUG local par défaut, activable temporairement depuis Admin avec TTL ;
-- filtres de type runtime manager ;
-- adaptations préparatoires possibles pendant le hardening uniquement si elles servent directement la robustesse ;
-- implémentation du streaming/UI différée à la V1.3.
+- événements structurés ;
+- persistance locale ;
+- flux live futur ;
+- DEBUG temporaire avec TTL ;
+- frontières entre métier, logging et Admin.
 
-## Reprise après coupure de session
+La référence transverse d'observabilité reste NexusPrincipia ; ce document ne
+conserve que la cible spécifique à Claviger.
 
-La méthode de collaboration ne suffit pas à connaître l'état fonctionnel du projet.
+## Point de reprise V1.1
 
-Pour reprendre Claviger V1.1, consulter aussi :
+Pour reprendre le développement courant, lire en priorité :
 
 ```text
-documentations/V1.1/07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md
+documentations/V1.1/09_SUIVI_HARDENING_RECOVERY_V1_1.md
 ```
 
-La passation donne la branche, le dernier commit fonctionnel validé, les smoke tests effectués, les anomalies connues et la prochaine tranche exacte.
+Puis vérifier la branche et le HEAD distants réels.
+
+Le document `07_PASSATION_V11_CONFIG_SERVER_ET_SUITE_2026-09-17.md` reste
+historique : il ne doit plus servir de point de reprise principal.
