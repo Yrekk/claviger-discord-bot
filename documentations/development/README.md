@@ -1,23 +1,14 @@
 # Développement et méthode de collaboration
 
-Ce dossier contient les documents qui expliquent **comment travailler sur le projet**, plutôt que le fonctionnement fonctionnel d'une version précise de Claviger.
+Les conventions générales de développement assisté par IA sont maintenant centralisées dans NexusPrincipia.
 
-## Document principal
+## Références communes
 
-`MODE_OPERATOIRE_COLLABORATION_DEV_IA.md`
+- [Mode opératoire Dev + IA](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/ai-development-operating-model.md)
+- [Conventions Python](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/languages/python.md)
+- [Documentation](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/documentation-conventions.md)
+- [Passation entre sessions](https://github.com/Yrekk/NexusPrincipia/blob/main/docs/development/session-continuity.md)
 
-Ce fichier définit le mode de collaboration utilisé entre le développeur et l'assistante IA :
+Le fichier [MODE_OPERATOIRE_COLLABORATION_DEV_IA.md](MODE_OPERATOIRE_COLLABORATION_DEV_IA.md) reste comme point d'entrée local, mais il renvoie désormais vers la source commune.
 
-- source de vérité ;
-- travail par petites tranches ;
-- choix entre patch manuel, fichier complet et ZIP ;
-- niveau d'explication attendu ;
-- stratégie de tests ;
-- smoke tests ;
-- documentation du code ;
-- commits ;
-- passations ;
-- README locaux ;
-- miroir entre `src/` et `tests/`.
-
-Ce document est volontairement générique afin de pouvoir être réutilisé sur d'autres projets.
+Les documents propres à Claviger restent ici lorsqu'ils concernent l'architecture, les versions, les workflows, les migrations, Discord ou les règles fonctionnelles du bot.
