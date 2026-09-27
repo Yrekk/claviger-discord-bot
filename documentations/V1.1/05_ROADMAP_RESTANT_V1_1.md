@@ -639,6 +639,10 @@ Effectuer une passe dédiée :
 - permissions Discord ;
 - persistence / migrations ;
 - logs / reporting ;
+  - vérifier qu'aucune information critique n'existe uniquement dans stdout ;
+  - conserver un logging local persistant même si Discord/Admin est indisponible ;
+  - préparer des événements/champs structurés utiles à la future console Admin sans implémenter le streaming Web en V1.1 ;
+  - passation : `documentations/development/ADMIN_RUNTIME_DIAGNOSTICS_V1_3.md` ;
 - imports et compatibilités legacy ;
 - documentation ;
 - cohérence `src/` ↔ `tests/`.

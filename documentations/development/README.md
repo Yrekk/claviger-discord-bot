@@ -33,6 +33,17 @@ feature branch dédiée
 
 Pour Claviger, ce complément prévaut sur l'ancien paragraphe du mode opératoire générique indiquant que l'assistante ne commit/push jamais. Cette ancienne règle correspond à une phase de travail antérieure.
 
+### `ADMIN_RUNTIME_DIAGNOSTICS_V1_3.md`
+
+Passation de direction pour la future console runtime de l'Admin Web :
+
+- logs structurés communs à console/fichier/Admin ;
+- flux live INFO → CRITICAL ;
+- DEBUG local par défaut, activable temporairement depuis Admin avec TTL ;
+- filtres de type runtime manager ;
+- adaptations préparatoires possibles pendant le hardening uniquement si elles servent directement la robustesse ;
+- implémentation du streaming/UI différée à la V1.3.
+
 ## Reprise après coupure de session
 
 La méthode de collaboration ne suffit pas à connaître l'état fonctionnel du projet.
