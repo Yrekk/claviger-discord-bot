@@ -1367,6 +1367,62 @@ Cette tranche doit alimenter l'audit final V1.1.
 
 ---
 
+## Décision complémentaire — observabilité H4/H5 et fermeture V1.1
+
+La direction de la future console Admin ne doit pas élargir le scope du
+hardening, mais elle impose de ne pas créer de nouvelle dette d'observabilité.
+
+### H4
+
+Les opérations de recovery, snapshot et backup doivent produire des événements
+structurés lorsqu'elles représentent un changement d'état ou une étape
+opérationnelle importante.
+
+Le socle existant `ReportEvent → ReportService → reporters` reste la frontière
+préférée. Les étapes critiques ne doivent pas exister uniquement sous forme de
+`print()` ou de chaînes console non structurées.
+
+Un `correlation_id` est autorisé pendant H4 seulement si la complexité réelle
+du flux le justifie ; il n'est pas ajouté préventivement.
+
+### H5
+
+La matrice de panne doit vérifier :
+
+- qu'un reporter Discord défaillant ne casse pas le métier ;
+- que la trace locale subsiste quand les destinations externes sont cassées ;
+- que recovery/snapshot/backup produisent un diagnostic local exploitable en
+  cas de refus ou d'échec ;
+- que l'isolation multi-guild reste vraie également pour l'observabilité.
+
+### Audit final V1.1
+
+Avant production, la passe logs/reporting doit fermer un point aujourd'hui non
+garanti par le code applicatif audité : `configure_logging()` configure la
+sortie Python/console, mais le dépôt ne garantit pas encore à lui seul une
+persistance locale rotative.
+
+La fermeture V1.1 doit donc choisir et valider une stratégie unique :
+
+```text
+handler fichier applicatif
+OU
+persistance/rotation assurée par Docker / l'hôte
+```
+
+avec les propriétés suivantes :
+
+- survie au restart/recreate du conteneur selon la stratégie retenue ;
+- rotation bornée ;
+- disponibilité même si Discord et la future Admin sont indisponibles ;
+- redaction des secrets et données sensibles ;
+- absence d'information critique uniquement portée par un reporter externe.
+
+La V1.1 ne doit pas implémenter le transport temps réel Admin, l'interface de
+diagnostic ni l'activation DEBUG distante avec TTL. Ces éléments restent V1.3.
+
+---
+
 # 23. Tests existants particulièrement utiles pour cette tranche
 
 Liste non exhaustive des suites déjà directement pertinentes :

@@ -592,6 +592,43 @@ nouvelle. En cas d'échec, les deux sauvegardes précédentes restent intactes.
 Le même mécanisme devra servir aux backups obligatoires pré-migration et
 pré-déploiement.
 
+### Observabilité H4 / préparation de la future Admin
+
+Les opérations H4 doivent privilégier des `ReportEvent` / `event_type`
+structurés et stables pour les étapes significatives de recovery, snapshot et
+backup.
+
+À minima, la future console doit pouvoir distinguer conceptuellement :
+
+- entrée / sortie de recovery ;
+- création / rejet d'un snapshot ;
+- démarrage / validation / échec de copie d'un backup ;
+- rotation terminée ou refusée.
+
+Ne pas ajouter de transport live, d'API Admin ou d'activation DEBUG distante en
+V1.1.
+
+Ajouter un `correlation_id` seulement si le flux multi-étapes H4 montre un
+besoin réel de rattacher plusieurs événements à une même opération.
+
+---
+
+## Contrat d'observabilité H5
+
+La matrice de panne doit tester l'observabilité en même temps que la résilience :
+
+```text
+reporter Discord cassé / destination supprimée
+→ opération métier indépendante
+→ trace locale conservée
+
+snapshot invalide / backup en échec
+→ refus ou échec explicite
+→ diagnostic local exploitable
+```
+
+Un canal de reporting externe ne doit jamais être l'unique preuve d'un incident.
+
 ---
 
 # 5.1 Orientation post-V1.1 — état attendu des rôles membres
@@ -639,9 +676,22 @@ Effectuer une passe dédiée :
 - permissions Discord ;
 - persistence / migrations ;
 - logs / reporting ;
-  - vérifier qu'aucune information critique n'existe uniquement dans stdout ;
-  - conserver un logging local persistant même si Discord/Admin est indisponible ;
-  - préparer des événements/champs structurés utiles à la future console Admin sans implémenter le streaming Web en V1.1 ;
+  - inventorier console, logger Python, `ReportService` et reporters ;
+  - vérifier qu'aucune information critique n'existe uniquement dans un canal
+    externe ou dans une sortie non persistée ;
+  - garantir un logging local persistant et rotatif même si Discord/Admin est
+    indisponible ;
+  - décider explicitement si cette persistance relève d'un handler fichier
+    applicatif ou du déploiement Docker/hôte, sans dupliquer deux mécanismes
+    concurrents ;
+  - vérifier sur Succumbrae que la persistance survit à la recréation du
+    conteneur et que la rotation est bornée ;
+  - vérifier la redaction des secrets/données sensibles avant sortie locale ou
+    distante ;
+  - inventorier les `event_type` importants et préférer des champs structurés
+    aux messages ad hoc ;
+  - préparer les frontières utiles à la future console Admin sans implémenter
+    streaming Web, API runtime ni DEBUG distant en V1.1 ;
   - passation : `documentations/development/ADMIN_RUNTIME_DIAGNOSTICS_V1_3.md` ;
 - imports et compatibilités legacy ;
 - documentation ;

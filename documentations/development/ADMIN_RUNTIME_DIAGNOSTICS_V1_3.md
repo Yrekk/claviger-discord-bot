@@ -124,6 +124,55 @@ Implémenter réellement :
 
 Le choix SSE/WebSocket/autre n'est pas décidé ici : il doit être choisi quand l'API Admin et ses contraintes seront concrètes.
 
+## Implications V1.1 confirmées après revue du code actuel
+
+La revue du 27 septembre 2026 confirme que Claviger possède déjà une base
+adaptée à cette direction :
+
+```text
+ReportEvent structuré
+→ ReportService
+→ PythonLoggingReporter
+→ reporters Discord
+```
+
+Les champs actuels couvrent déjà notamment `event_type`, `severity`,
+`guild_id`, `actor_id`, `target_id` et `occurred_at`.
+
+Il n'est donc pas nécessaire de refondre le reporting pendant la V1.1.
+
+### Implication H4
+
+Les nouveaux flux recovery/snapshot/backup doivent utiliser cette frontière
+structurée pour leurs étapes significatives. Un `correlation_id` ne sera
+introduit que si l'implémentation H4 démontre un besoin réel.
+
+### Implication H5
+
+Les tests de panne doivent confirmer que les traces locales restent disponibles
+quand Discord ou un reporter externe échoue.
+
+### Point à fermer pendant l'audit final V1.1
+
+Le code actuel configure principalement le logging Python/console. La
+persistance locale et sa rotation ne sont pas encore garanties par le dépôt
+applicatif lui-même.
+
+La V1.1 doit donc choisir et tester une stratégie unique de persistance locale
+(handler applicatif ou mécanisme Docker/hôte), avec rotation bornée et survie
+adaptée aux restarts/recréations de conteneur.
+
+Cette fermeture ne doit pas anticiper :
+
+- le streaming Web ;
+- l'API de logs runtime ;
+- l'UI Diagnostics ;
+- le DEBUG distant avec TTL.
+
+Ces fonctionnalités restent V1.3.
+
+---
+
 ## Invariant
 
 Le mécanisme de diagnostics ne doit jamais devenir une dépendance du métier :

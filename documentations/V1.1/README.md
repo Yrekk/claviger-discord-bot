@@ -59,7 +59,14 @@ Décisions de continuité déjà actées :
   `documentations/development/RESILIENCE_ETAT_ROLES_MEMBRES_POST_V1_1.md` ;
 - aucune ressource Discord divergente ne doit être remappée automatiquement par
   simple ressemblance ; une proposition future par IA devra rester soumise à
-  validation explicite de l'admin.
+  validation explicite de l'admin ;
+- H4/H5 doivent produire et tester des événements structurés sans dépendre d'un
+  futur transport Admin ;
+- l'audit final V1.1 doit garantir une persistance locale rotative des logs,
+  y compris lorsque Discord/Admin sont indisponibles, puis valider cette
+  persistance sur Succumbrae ;
+- streaming runtime, filtres Web et DEBUG distant avec TTL restent strictement
+  différés à la V1.3.
 
 ## Documents
 

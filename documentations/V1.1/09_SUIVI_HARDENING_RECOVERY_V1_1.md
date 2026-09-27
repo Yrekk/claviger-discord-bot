@@ -634,6 +634,49 @@ La plus ancienne n'est supprimée qu'après succès complet de la nouvelle.
 Le même moteur doit servir aux backups obligatoires avant migration et
 déploiement.
 
+### Observabilité attendue pendant H4
+
+H4 ne doit pas anticiper la console Web Admin, mais ses opérations de recovery
+et de backup doivent produire des événements structurés exploitables à la fois
+par le logging local actuel et, plus tard, par l'Admin.
+
+Cible de nommage pour les événements significatifs :
+
+```text
+runtime.recovery.entered
+runtime.recovery.exited
+
+snapshot.created
+snapshot.validation_failed
+
+database.backup.started
+database.backup.validated
+database.backup.copy_failed
+database.backup.rotation_completed
+```
+
+Les noms exacts pourront être ajustés pendant l'implémentation si le découpage
+réel l'exige, mais les étapes critiques ne doivent pas reposer uniquement sur
+des chaînes ad hoc ou des `print()`.
+
+Un `correlation_id` n'est pas obligatoire par principe. Il doit être ajouté
+uniquement si le flux H4 devient réellement ambigu à diagnostiquer
+(opérations multi-étapes concurrentes ou événements difficiles à rattacher à
+une même exécution).
+
+Le canal de diagnostic reste non bloquant :
+
+```text
+métier / recovery / backup
+→ ne dépend pas de Discord ni de la future Admin
+
+trace locale
+→ doit rester disponible
+
+reporter externe
+→ best effort
+```
+
 ---
 
 # 6.1 Orientation post-V1.1 — résilience des rôles membres
@@ -671,7 +714,11 @@ fournir les primitives recovery nécessaires.
 - restart / retour après incident ;
 - Guild A cassée volontairement ;
 - Guild B toujours fonctionnelle ;
-- validation Linux / Succumbrae des mécanismes de recovery.
+- validation Linux / Succumbrae des mécanismes de recovery ;
+- vérifier qu'un incident reste observable localement lorsque le reporter
+  Discord est indisponible ou cassé ;
+- vérifier qu'un échec de destination externe ne supprime jamais la trace
+  Python locale ni ne casse l'opération métier observée.
 
 ---
 
