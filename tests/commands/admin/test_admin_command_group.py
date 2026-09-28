@@ -18,6 +18,7 @@ from claviger.models.admin.admin_structure_discovery_model import (
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
+from claviger.models.inspection import InspectionFinding
 
 
 async def _dummy_command(
@@ -70,7 +71,12 @@ def _unready_inspection() -> AdminConfigurationInspectionResult:
         reconciliation=AdminConfigurationReconciliationResult(
             decision=AdminConfigurationReconciliationDecision.CREATE,
             category=None,
-            issues=("Configured ADMIN category disappeared.",),
+            findings=(
+                InspectionFinding(
+                    "admin.category.configured_missing",
+                    details={"category_id": 100},
+                ),
+            ),
         ),
     )
 
