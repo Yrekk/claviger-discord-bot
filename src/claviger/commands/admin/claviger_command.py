@@ -1,7 +1,6 @@
 from discord import app_commands
 
 from claviger.commands.admin.admin_command_group import GuildAdminCommandGroup
-from claviger.commands.admin.catalog_command import create_catalog_group
 from claviger.commands.admin.config_command import create_config_group
 from claviger.commands.admin.config_server_command import (
     create_config_server_command,
@@ -14,7 +13,6 @@ from claviger.commands.admin.restart_command import (
     create_restart_command,
 )
 from claviger.commands.admin.roles import create_roles_group
-from claviger.commands.admin.workflow import create_workflow_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
     DatabaseState,
@@ -24,29 +22,14 @@ from claviger.reporting.service import ReportService
 from claviger.services.admin.admin_configuration_coordinator_service import (
     AdminConfigurationCoordinatorService,
 )
-from claviger.services.catalogs.catalog_administration_service import (
-    CatalogAdministrationService,
-)
 from claviger.services.roles.role_discovery import RoleDiscoveryService
 from claviger.services.runtime.database_ownership_service import (
     DatabaseOwnershipService,
-)
-from claviger.services.runtime.guild_ai_configuration_coordinator_service import (
-    GuildAIConfigurationCoordinatorService,
-)
-from claviger.services.runtime.guild_ai_questionnaire_owner_service import (
-    GuildAIQuestionnaireOwnerService,
 )
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
 from claviger.services.runtime.guild_policy_bootstrap import GuildPolicyBootstrapService
-from claviger.services.runtime.guild_role_diagnostic_service import (
-    GuildRoleDiagnosticService,
-)
-from claviger.services.runtime.workflow_catalog_diagnostic_service import (
-    WorkflowCatalogDiagnosticService,
-)
 from claviger.services.workflows.workflow_configuration_coordinator_service import (
     WorkflowConfigurationCoordinatorService,
 )
@@ -55,7 +38,7 @@ from claviger.services.workflows.workflow_configuration_coordinator_service impo
 def _configure_database_command_availability(
     database_group: app_commands.Group,
     *,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
 ) -> None:
     """Expose only database actions that make sense for the current state."""
@@ -102,19 +85,14 @@ def create_claviger_group(
     report_service: ReportService,
     *,
     admin_configuration_coordinator_service: AdminConfigurationCoordinatorService,
-    ai_configuration_coordinator_service: GuildAIConfigurationCoordinatorService,
     workflow_configuration_coordinator_service: WorkflowConfigurationCoordinatorService,
-    ai_questionnaire_owner_service: GuildAIQuestionnaireOwnerService | None = None,
     guild_configuration_inspection_service: (
         GuildConfigurationInspectionService | None
     ) = None,
-    role_diagnostic_service: GuildRoleDiagnosticService | None = None,
-    catalog_diagnostic_service: WorkflowCatalogDiagnosticService | None = None,
-    catalog_administration_service: CatalogAdministrationService | None = None,
     command_name: str,
     application_name: str,
     application_id: int,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
     restart_callback: RestartCallback,
     admin_command_channel_id: int | None = None,
@@ -158,13 +136,11 @@ def create_claviger_group(
 
     config_server_command = create_config_server_command(
         admin_configuration_coordinator_service,
-        ai_configuration_coordinator_service,
         workflow_configuration_coordinator_service,
         admin_command_name=command_name,
         database_state=database_state,
         database_ownership_bound=database_ownership_bound,
         report_service=report_service,
-        ai_questionnaire_owner_service=ai_questionnaire_owner_service,
     )
 
     admin_group.add_command(
@@ -205,27 +181,7 @@ def create_claviger_group(
     roles_group = create_roles_group(
         role_discovery_service,
         report_service,
-        diagnostic_service=role_diagnostic_service,
     )
-
-    if catalog_diagnostic_service is not None:
-        catalog_group = create_catalog_group(
-            catalog_diagnostic_service,
-            report_service,
-            administration_service=catalog_administration_service,
-        )
-        admin_group.add_command(
-            catalog_group,
-        )
-
-    if ai_questionnaire_owner_service is not None:
-        workflow_group = create_workflow_group(
-            ai_questionnaire_owner_service,
-            report_service,
-        )
-        admin_group.add_command(
-            workflow_group,
-        )
 
     admin_group.add_command(
         roles_group,
