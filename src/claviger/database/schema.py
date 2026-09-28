@@ -7,6 +7,22 @@ from claviger.database.migration_v11 import MIGRATION_11_STATEMENTS, migrate_v11
 
 CURRENT_SCHEMA_VERSION = 11
 
+APPLICATION_TABLE_NAMES = frozenset(
+    {
+        "guild_settings",
+        "guild_member_interests",
+        "guild_adult_accesses",
+        "guild_catalogs",
+        "guild_workflows",
+        "guild_workflow_catalogs",
+        "guild_workflow_channels",
+        "guild_context_definitions",
+        "guild_workflow_contexts",
+        "database_ownership",
+        "guild_admin_configuration",
+    }
+)
+
 
 class UnsupportedSchemaVersionError(RuntimeError):
     """Raised when the database schema is newer than this Claviger version."""

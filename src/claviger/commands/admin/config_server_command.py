@@ -22,7 +22,7 @@ def create_config_server_command(
     workflow_coordinator: WorkflowConfigurationCoordinatorService,
     *,
     admin_command_name: str,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
     report_service: ReportService | None = None,
 ) -> app_commands.Command:

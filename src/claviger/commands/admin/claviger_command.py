@@ -38,7 +38,7 @@ from claviger.services.workflows.workflow_configuration_coordinator_service impo
 def _configure_database_command_availability(
     database_group: app_commands.Group,
     *,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
 ) -> None:
     """Expose only database actions that make sense for the current state."""
@@ -92,7 +92,7 @@ def create_claviger_group(
     command_name: str,
     application_name: str,
     application_id: int,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
     restart_callback: RestartCallback,
     admin_command_channel_id: int | None = None,

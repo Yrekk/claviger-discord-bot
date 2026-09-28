@@ -16,7 +16,9 @@ Les règles communes à plusieurs applications sont maintenant maintenues dans [
 - conventions de documentation ;
 - continuité/passation ;
 - conventions Python ;
-- Debug & Observabilité.
+- Debug & Observabilité ;
+- inspection / classification / autorité ;
+- findings structurés et lifecycle/readiness des bases.
 
 Claviger ne doit pas maintenir une copie divergente de ces règles.
 

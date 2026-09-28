@@ -218,6 +218,8 @@ Le schéma est versionné avec :
 PRAGMA user_version
 ```
 
+L'inspection BDD suit le contrat Nexus commun : faits observés, findings structurés code + details, états candidats et suggestion. Les phrases Discord ne constituent plus le contrat applicatif.
+
 Les migrations sont explicites et appliquées successivement jusqu'à la version courante.
 
 La base appartient à l'application Discord, pas à une guild.
@@ -227,6 +229,11 @@ Un ownership applicatif protège donc le runtime contre l'utilisation accidentel
 ```text
 DB absente
 → initialize
+
+DB existante sans identité Claviger prouvée
+→ inspection structurée
+→ candidats compatibles + suggestion
+→ aucune mutation tant qu'une classification ADMIN est nécessaire
 
 DB historique
 → migrate

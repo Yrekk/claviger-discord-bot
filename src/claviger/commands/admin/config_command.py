@@ -123,13 +123,27 @@ def _format_database_lines(
     status = result.database_status
     current_version = "—" if status.current_version is None else str(status.current_version)
 
+    resolved_state = status.state
+
     lines = [
         "**Base de données**",
-        f"- État : `{status.state.value.upper()}`",
+        (
+            f"- État : `{resolved_state.value.upper()}`"
+            if resolved_state is not None
+            else f"- Suggestion : `{status.suggested_state.value.upper()}`"
+        ),
         f"- Schéma : `{current_version}` / cible `{status.target_version}`",
     ]
 
-    if status.state != DatabaseState.READY:
+    if status.requires_administrator_classification:
+        candidates = ", ".join(
+            state.value.upper()
+            for state in status.candidate_states
+        )
+        lines.append(f"- Classifications compatibles : `{candidates}`")
+        lines.append("- Décision ADMIN requise avant toute mutation BDD.")
+
+    if resolved_state != DatabaseState.READY:
         lines.append("- Ownership : ⏸ non évalué tant que la BDD n'est pas READY")
         return lines
 

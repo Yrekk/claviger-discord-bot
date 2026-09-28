@@ -5,10 +5,12 @@ import discord
 from claviger.commands.admin.claviger_command import create_claviger_group
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
+    DatabaseInspectionFacts,
     DatabaseState,
     DatabaseStatus,
     DatabaseStatusService,
 )
+from claviger.models.inspection import InspectionFinding
 from claviger.models.workflows.workflow_structure_discovery_model import (
     WorkflowStructureDiscoveryResult,
 )
@@ -93,7 +95,7 @@ def create_test_group(
     command_name: str = "claviger",
     application_name: str = "Claviger",
     application_id: int = 789,
-    database_state: DatabaseState = DatabaseState.READY,
+    database_state: DatabaseState | None = DatabaseState.READY,
     database_ownership_bound: bool = True,
 ):
     """Create the admin command group with mocked external services."""
@@ -108,8 +110,32 @@ def create_test_group(
     database_schema.migrate = AsyncMock()
 
     database_status_service = Mock(spec=DatabaseStatusService)
-    database_status_service.check = AsyncMock(
-        return_value=DatabaseStatus(
+
+    if database_state is None:
+        database_status = DatabaseStatus(
+            facts=DatabaseInspectionFacts(
+                file_exists=True,
+                path_occupied_by_non_file=False,
+                accessible=True,
+                integrity_valid=True,
+                current_version=0,
+                target_version=2,
+                user_object_count=0,
+                application_object_count=0,
+            ),
+            candidate_states=(
+                DatabaseState.UNINITIALIZED,
+                DatabaseState.INVALID,
+            ),
+            suggested_state=DatabaseState.UNINITIALIZED,
+            findings=(
+                InspectionFinding(
+                    "database.schema.uninitialized",
+                ),
+            ),
+        )
+    else:
+        database_status = DatabaseStatus(
             state=database_state,
             current_version=(
                 2
@@ -122,6 +148,9 @@ def create_test_group(
             ),
             target_version=2,
         )
+
+    database_status_service.check = AsyncMock(
+        return_value=database_status,
     )
 
     report_service = Mock(spec=ReportService)
@@ -190,7 +219,7 @@ def create_test_group(
         command_name=command_name,
         application_name=application_name,
         application_id=application_id,
-        database_state=database_state,
+        database_state=database_status.state,
         database_ownership_bound=database_ownership_bound,
         restart_callback=restart_callback,
     )
