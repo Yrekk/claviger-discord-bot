@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 
-from claviger.commands.admin.diagnostic_output import send_ephemeral_diagnostic
 from claviger.database.status import DatabaseState
 from claviger.models.admin.admin_configuration_inspection_model import (
     AdminConfigurationInspectionResult,
@@ -13,11 +12,19 @@ from claviger.models.admin.admin_structure_discovery_model import (
 from claviger.models.runtime.guild_configuration_inspection_model import (
     GuildConfigurationInspectionResult,
 )
+from claviger.models.runtime.guild_policy_inspection_model import GuildPolicySource
 from claviger.reporting.event import ReportEvent, ReportSeverity
 from claviger.reporting.service import ReportService
 from claviger.services.runtime.guild_configuration_inspection_service import (
     GuildConfigurationInspectionService,
 )
+
+_POLICY_SOURCE_LABELS = {
+    GuildPolicySource.SAFE_DEFAULT: "SAFE_DEFAULT_POLICY",
+    GuildPolicySource.SQLITE_OVERRIDES: "SAFE_DEFAULT_POLICY + overrides SQLite",
+    GuildPolicySource.HISTORICAL_FALLBACK: "HISTORICAL_FALLBACK_POLICY",
+    GuildPolicySource.SAFE_DATABASE_FALLBACK: "SAFE_DEFAULT_POLICY (fallback BDD)",
+}
 
 
 def _find_configured_category(
@@ -60,7 +67,7 @@ def _format_admin_category(
     category: AdminCategoryCandidate | None,
 ) -> str:
     if category is None:
-        return "❌ référence BDD introuvable sur Discord"
+        return f"❌ ID `{category_id}` introuvable sur Discord"
 
     issues: list[str] = []
 
@@ -73,7 +80,7 @@ def _format_admin_category(
     status = "✅" if not issues else "⚠️"
     suffix = "" if not issues else " — " + ", ".join(issues)
 
-    return f"{status} {category.category_name}{suffix}"
+    return f"{status} {category.category_name} (`{category.category_id}`){suffix}"
 
 
 def _format_admin_channel(
@@ -91,7 +98,7 @@ def _format_admin_channel(
     )
 
     if channel is None:
-        return "❌ référence BDD introuvable dans la catégorie ADMIN"
+        return f"❌ ID `{channel_id}` introuvable dans la catégorie ADMIN"
 
     issues: list[str] = []
 
@@ -107,7 +114,7 @@ def _format_admin_channel(
     status = "✅" if not issues else "⚠️"
     suffix = "" if not issues else " — " + ", ".join(issues)
 
-    return f"{status} #{channel.channel_name}{suffix}"
+    return f"{status} #{channel.channel_name} (`{channel.channel_id}`){suffix}"
 
 
 def _format_database_lines(
@@ -116,13 +123,27 @@ def _format_database_lines(
     status = result.database_status
     current_version = "—" if status.current_version is None else str(status.current_version)
 
+    resolved_state = status.state
+
     lines = [
         "**Base de données**",
-        f"- État : `{status.state.value.upper()}`",
+        (
+            f"- État : `{resolved_state.value.upper()}`"
+            if resolved_state is not None
+            else f"- Suggestion : `{status.suggested_state.value.upper()}`"
+        ),
         f"- Schéma : `{current_version}` / cible `{status.target_version}`",
     ]
 
-    if status.state != DatabaseState.READY:
+    if status.requires_administrator_classification:
+        candidates = ", ".join(
+            state.value.upper()
+            for state in status.candidate_states
+        )
+        lines.append(f"- Classifications compatibles : `{candidates}`")
+        lines.append("- Décision ADMIN requise avant toute mutation BDD.")
+
+    if resolved_state != DatabaseState.READY:
         lines.append("- Ownership : ⏸ non évalué tant que la BDD n'est pas READY")
         return lines
 
@@ -132,11 +153,13 @@ def _format_database_lines(
         lines.append("- Ownership : ❌ aucune application liée")
     elif result.database_owned_by_application:
         lines.append(
-            "- Ownership : ✅ application courante"
+            "- Ownership : ✅ application courante "
+            f"(`{result.application_id}`)"
         )
     else:
         lines.append(
-            "- Ownership : ❌ autre application"
+            "- Ownership : ❌ autre application "
+            f"(`{owner_application_id}`)"
         )
 
     return lines
@@ -207,6 +230,39 @@ def _format_admin_lines(
     ]
 
 
+def _format_policy_lines(
+    result: GuildConfigurationInspectionResult,
+) -> list[str]:
+    inspection = result.policy
+
+    if inspection is None:
+        return [
+            "**Policy effective**",
+            "- ⏸ non évaluée tant que la BDD n'est pas READY et correctement liée",
+        ]
+
+    policy = inspection.effective
+    source = _POLICY_SOURCE_LABELS[inspection.source]
+    override_count = inspection.persisted_override_count
+    override_label = "aucun" if override_count == 0 else str(override_count)
+
+    return [
+        "**Policy effective — compatibilité actuelle**",
+        f"- Source : `{source}`",
+        f"- Overrides persistés : {override_label}",
+        f"- `member_role_name` : {policy.member_role_name}",
+        f"- `adult_role_name` : {policy.adult_role_name}",
+        f"- `member_interest_prefix` : {policy.member_interest_prefix}",
+        f"- `adult_access_prefix` : {policy.adult_access_prefix}",
+        f"- `salutations_channel_name` : {policy.salutations_channel_name}",
+        f"- `adult_access_channel_name` : {policy.adult_access_channel_name}",
+        "- `role_management_enabled` : "
+        + ("true" if policy.role_management_enabled else "false"),
+        "- `adult_access_enabled` : "
+        + ("true" if policy.adult_access_enabled else "false"),
+    ]
+
+
 def _format_metrics_lines(
     result: GuildConfigurationInspectionResult,
 ) -> list[str]:
@@ -225,234 +281,6 @@ def _format_metrics_lines(
         f"- Contextes partagés activés : {metrics.context_count}",
     ]
 
-
-def _format_ai_lines(
-    result: GuildConfigurationInspectionResult,
-    guild: discord.Guild,
-) -> list[str]:
-    configuration = result.ai_configuration
-
-    if result.workflows is None:
-        return []
-
-    if configuration is None:
-        state = "non configurée"
-        role_label = "aucun"
-    elif configuration.ai_enabled is None:
-        state = "non configurée"
-        role_label = "aucun"
-    elif configuration.ai_enabled is False:
-        state = "désactivée"
-        role = (
-            guild.get_role(
-                configuration.ai_role_id,
-            )
-            if configuration.ai_role_id is not None
-            else None
-        )
-        if configuration.ai_role_id is None:
-            role_label = "aucun"
-        elif role is None:
-            role_label = "⚠️ rôle conservé introuvable"
-        else:
-            role_label = f"{role.name} (conservé)"
-    else:
-        state = "activée"
-        role = (
-            guild.get_role(
-                configuration.ai_role_id,
-            )
-            if configuration.ai_role_id is not None
-            else None
-        )
-
-        if configuration.ai_role_id is None:
-            role_label = "❌ aucun rôle configuré"
-        elif role is None:
-            role_label = "❌ rôle configuré introuvable"
-        else:
-            role_label = role.name
-
-    owner_key = result.ai_questionnaire_owner_workflow_key
-    owner_label = "aucun"
-
-    if owner_key is not None:
-        owner_workflow = next(
-            (
-                workflow
-                for workflow in result.workflows
-                if workflow.workflow_key == owner_key
-            ),
-            None,
-        )
-
-        owner_label = (
-            f"/{owner_workflow.command_name}"
-            if owner_workflow is not None
-            else f"{owner_key} (workflow introuvable)"
-        )
-
-    return [
-        "**IA globale**",
-        f"- État : {state}",
-        f"- Rôle IA : {role_label}",
-        f"- Workflow propriétaire de la question IA : {owner_label}",
-    ]
-
-
-def _configured_commands_for_candidate(
-    result: GuildConfigurationInspectionResult,
-    *,
-    category_id: int,
-    protected_channel_ids: set[int],
-    interactive_channel_ids: set[int],
-) -> tuple[str, ...]:
-    """Return persisted commands already using one discovered Discord structure."""
-
-    workflows = result.workflows or ()
-
-    return tuple(
-        sorted(
-            {
-                workflow.command_name
-                for workflow in workflows
-                if workflow.category_id == category_id
-                and workflow.management_channel_id in protected_channel_ids
-                and bool(
-                    interactive_channel_ids.intersection(
-                        workflow.channel_ids,
-                    )
-                )
-            },
-            key=str.casefold,
-        )
-    )
-
-
-def _format_workflow_lines(
-    result: GuildConfigurationInspectionResult,
-) -> list[str]:
-    workflows = result.workflows
-    discovery = result.workflow_discovery
-
-    if workflows is None:
-        return []
-
-    categories_by_id = (
-        {
-            category.category_id: category.category_name
-            for category in discovery.categories
-        }
-        if discovery is not None
-        else {}
-    )
-
-    lines = [
-        f"**Workflows configurés ({len(workflows)})**",
-    ]
-
-    if not workflows:
-        lines.append(
-            "- Aucun"
-        )
-
-    for workflow in workflows:
-        category_name = (
-            categories_by_id.get(
-                workflow.category_id,
-            )
-            if workflow.category_id is not None
-            else None
-        )
-
-        workflow_state = (
-            "✅ actif"
-            if workflow.enabled
-            else "⏸ désactivé"
-        )
-
-        lines.extend(
-            [
-                "=============",
-                (
-                    f"- **{workflow.title}** — /{workflow.command_name} "
-                    f"— {workflow_state}"
-                ),
-                (
-                    f"  Catégorie : {category_name}"
-                    if category_name is not None
-                    else "  Catégorie : ❌ absente ou non configurée"
-                ),
-            ]
-        )
-
-    if discovery is None:
-        return lines
-
-    candidates = discovery.workflow_candidates
-
-    lines.extend(
-        [
-            "",
-            f"**Workflows potentiels détectés ({len(candidates)})**",
-            (
-                "- Structures reconnues uniquement depuis l'organisation "
-                "Discord et les permissions explicites."
-            ),
-        ]
-    )
-
-    if not candidates:
-        lines.append(
-            "- Aucun"
-        )
-        return lines
-
-    for candidate in candidates:
-        protected_ids = {
-            channel.channel_id
-            for channel in candidate.protected_channels
-        }
-        interactive_ids = {
-            channel.channel_id
-            for channel in candidate.interactive_channels
-        }
-        configured_commands = _configured_commands_for_candidate(
-            result,
-            category_id=candidate.category.category_id,
-            protected_channel_ids=protected_ids,
-            interactive_channel_ids=interactive_ids,
-        )
-
-        protected = ", ".join(
-            f"#{channel.channel_name}"
-            for channel in candidate.protected_channels
-        )
-        interactive = ", ".join(
-            f"#{channel.channel_name}"
-            for channel in candidate.interactive_channels
-        )
-
-        configured_label = (
-            ", ".join(
-                f"/{command_name}"
-                for command_name in configured_commands
-            )
-            if configured_commands
-            else "aucun — structure disponible"
-        )
-
-        lines.extend(
-            [
-                "=============",
-                f"- **{candidate.category.category_name}**",
-                f"  Salons protégés : {protected or 'aucun'}",
-                f"  Salons interactifs : {interactive or 'aucun'}",
-                f"  Workflow(s) configuré(s) : {configured_label}",
-            ]
-        )
-
-    return lines
 
 def create_config_group(
     inspection_service: GuildConfigurationInspectionService,
@@ -526,38 +354,23 @@ def create_config_group(
         sections = [
             [
                 f"**Application — {application_name}**",
-                f"- Serveur : {interaction.guild.name}",
+                f"- Application ID : `{application_id}`",
+                f"- Serveur : {interaction.guild.name} (`{interaction.guild.id}`)",
             ],
             _format_database_lines(result),
             _format_admin_lines(result),
+            _format_policy_lines(result),
             _format_metrics_lines(result),
-            _format_ai_lines(
-                result,
-                interaction.guild,
-            ),
-            _format_workflow_lines(
-                result,
-            ),
         ]
 
-        lines: list[str] = []
+        message = "\n\n".join(
+            "\n".join(section)
+            for section in sections
+        )
 
-        for section in sections:
-            if not section:
-                continue
-
-            if lines:
-                lines.append(
-                    "",
-                )
-
-            lines.extend(
-                section,
-            )
-
-        await send_ephemeral_diagnostic(
-            interaction,
-            lines,
+        await interaction.followup.send(
+            message,
+            ephemeral=True,
         )
 
     return config_group

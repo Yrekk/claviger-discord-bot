@@ -10,7 +10,7 @@ from .helpers import create_test_group
 
 def _get_database_command_names(
     *,
-    database_state: DatabaseState,
+    database_state: DatabaseState | None,
     database_ownership_bound: bool,
 ) -> set[str]:
     """Return exposed database commands for one runtime state."""
@@ -112,6 +112,18 @@ def test_unsafe_database_states_expose_status_only(
 
     assert _get_database_command_names(
         database_state=database_state,
+        database_ownership_bound=False,
+    ) == {
+        "status",
+    }
+
+
+
+def test_ambiguous_database_exposes_status_only() -> None:
+    """Do not expose mutations while Admin classification is still required."""
+
+    assert _get_database_command_names(
+        database_state=None,
         database_ownership_bound=False,
     ) == {
         "status",

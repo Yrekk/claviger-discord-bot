@@ -5,6 +5,7 @@ from discord import app_commands
 
 from claviger.database.schema import DatabaseSchema
 from claviger.database.status import (
+    DatabaseFindingCode,
     DatabaseState,
     DatabaseStatus,
     DatabaseStatusService,
@@ -22,10 +23,72 @@ from claviger.ui.admin.admin_configuration_view import AdminConfigurationStartVi
 logger = logging.getLogger(__name__)
 
 
+def _format_database_finding(status: DatabaseStatus, code: str) -> str:
+    finding = next(
+        (
+            item
+            for item in status.findings
+            if item.code == code
+        ),
+        None,
+    )
+
+    if finding is None:
+        return code
+
+    if code == DatabaseFindingCode.RESOURCE_MISSING.value:
+        return "Le fichier de base de données n'existe pas."
+
+    if code == DatabaseFindingCode.RESOURCE_PATH_NOT_FILE.value:
+        return (
+            "Le chemin configuré est occupé par une ressource "
+            "qui n'est pas un fichier."
+        )
+
+    if code == DatabaseFindingCode.RESOURCE_UNAVAILABLE.value:
+        return "Le fichier existe mais n'est pas accessible de manière fiable."
+
+    if code == DatabaseFindingCode.INTEGRITY_FAILED.value:
+        return "Le contrôle d'intégrité SQLite a échoué."
+
+    if code == DatabaseFindingCode.SCHEMA_UNINITIALIZED.value:
+        return "Aucun schéma applicatif initialisé n'est déclaré."
+
+    if code == DatabaseFindingCode.APPLICATION_HISTORY_ABSENT.value:
+        return "Aucun historique de schéma Claviger n'est déclaré."
+
+    if code == DatabaseFindingCode.USER_OBJECTS_ABSENT.value:
+        return "Aucun objet SQLite utilisateur n'a été détecté."
+
+    if code == DatabaseFindingCode.NON_APPLICATION_OBJECTS_PRESENT.value:
+        count = finding.details.get("object_count", "?")
+        return (
+            f"{count} objet(s) SQLite non attribué(s) à Claviger "
+            "ont été détectés."
+        )
+
+    if code == DatabaseFindingCode.SCHEMA_CURRENT.value:
+        return "Le schéma Claviger correspond à cette version de l'application."
+
+    if code == DatabaseFindingCode.SCHEMA_OUTDATED.value:
+        return "Le schéma Claviger est plus ancien que cette version."
+
+    if code == DatabaseFindingCode.SCHEMA_NEWER_THAN_RUNTIME.value:
+        return "Le schéma est plus récent que cette version de Claviger."
+
+    if code == DatabaseFindingCode.SCHEMA_HISTORY_INCONSISTENT.value:
+        return "L'état du schéma est incohérent avec l'historique Claviger."
+
+    if code == DatabaseFindingCode.SCHEMA_READ_FAILED.value:
+        return "Le schéma Claviger n'a pas pu être lu de manière cohérente."
+
+    return code
+
+
 def _format_database_status(
     status: DatabaseStatus,
 ) -> str:
-    """Format a database status for an administrative Discord response."""
+    """Format a structured database inspection for Discord."""
 
     state_labels = {
         DatabaseState.MISSING: "Absente",
@@ -34,18 +97,24 @@ def _format_database_status(
         DatabaseState.MIGRATION_REQUIRED: "Migration requise",
         DatabaseState.TOO_NEW: "Version trop récente",
         DatabaseState.UNAVAILABLE: "Indisponible",
+        DatabaseState.INVALID: "Invalide",
     }
 
     recommendations = {
         DatabaseState.MISSING: "Initialiser manuellement la base de données.",
-        DatabaseState.UNINITIALIZED: ("Initialiser le schéma de la base de données."),
-        DatabaseState.READY: "Aucune action nécessaire.",
-        DatabaseState.MIGRATION_REQUIRED: ("Exécuter manuellement les migrations."),
+        DatabaseState.UNINITIALIZED: (
+            "Initialiser le schéma après validation ADMIN."
+        ),
+        DatabaseState.READY: "Aucune action de schéma nécessaire.",
+        DatabaseState.MIGRATION_REQUIRED: "Exécuter manuellement les migrations.",
         DatabaseState.TOO_NEW: (
             "Ne pas modifier la base. Vérifier la version de Claviger."
         ),
         DatabaseState.UNAVAILABLE: (
-            "Vérifier le fichier, les permissions et l'environnement d'exécution."
+            "Vérifier le fichier, les permissions et l'environnement."
+        ),
+        DatabaseState.INVALID: (
+            "Ne pas modifier la base avant diagnostic/choix administratif."
         ),
     }
 
@@ -53,18 +122,55 @@ def _format_database_status(
         str(status.current_version) if status.current_version is not None else "N/A"
     )
 
-    return "\n".join(
+    lines = [
+        "**Base de données Claviger**",
+        "",
+    ]
+
+    if status.state is None:
+        lines.extend(
+            [
+                f"- Suggestion : **{state_labels[status.suggested_state]}**",
+                "- Choix compatibles : "
+                + ", ".join(
+                    f"**{state_labels[state]}**"
+                    for state in status.candidate_states
+                ),
+                "- Classification ADMIN : **requise avant toute mutation**",
+            ]
+        )
+    else:
+        lines.append(f"- État : **{state_labels[status.state]}**")
+
+    lines.extend(
         [
-            "**Base de données Claviger**",
+            f"- Version actuelle : \`{current_version}\`",
+            f"- Version attendue : \`{status.target_version}\`",
             "",
-            f"- État : **{state_labels[status.state]}**",
-            f"- Version actuelle : `{current_version}`",
-            f"- Version attendue : `{status.target_version}`",
-            "",
-            (f"**Action recommandée :** {recommendations[status.state]}"),
+            "**Constats :**",
         ]
     )
 
+    lines.extend(
+        f"- {_format_database_finding(status, finding.code)}"
+        for finding in status.findings
+    )
+
+    lines.extend(
+        [
+            "",
+            (
+                "**Action recommandée :** "
+                + (
+                    "valider explicitement la classification avant toute opération."
+                    if status.requires_administrator_classification
+                    else recommendations[status.suggested_state]
+                )
+            ),
+        ]
+    )
+
+    return "\n".join(lines)
 
 async def _send_database_ready_guidance(
     interaction: discord.Interaction,
@@ -236,6 +342,16 @@ def create_database_group(
         try:
             status = await database_status_service.check()
 
+            if status.requires_administrator_classification:
+                await interaction.followup.send(
+                    (
+                        "La base de données nécessite une classification ADMIN "
+                        "explicite avant toute initialisation."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
             if status.state == DatabaseState.READY:
                 await interaction.followup.send(
                     (
@@ -264,8 +380,19 @@ def create_database_group(
                     "plus récente que cette version de Claviger."
                 )
 
-            if status.state == DatabaseState.UNAVAILABLE:
-                raise RuntimeError("La base de données est actuellement indisponible.")
+            if status.state in (
+                DatabaseState.UNAVAILABLE,
+                DatabaseState.INVALID,
+            ):
+                raise RuntimeError(
+                    "La base de données n'est pas initialisable en sécurité."
+                )
+
+            if status.state not in (
+                DatabaseState.MISSING,
+                DatabaseState.UNINITIALIZED,
+            ):
+                raise RuntimeError(f"Unexpected database state: {status.state}.")
 
             await database_schema.initialize()
 
@@ -362,6 +489,16 @@ def create_database_group(
         try:
             status = await database_status_service.check()
 
+            if status.requires_administrator_classification:
+                await interaction.followup.send(
+                    (
+                        "La base de données nécessite une classification ADMIN "
+                        "explicite avant toute migration."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
             if status.state == DatabaseState.READY:
                 await interaction.followup.send(
                     (
@@ -392,8 +529,13 @@ def create_database_group(
                     "plus récente que cette version de Claviger."
                 )
 
-            if status.state == DatabaseState.UNAVAILABLE:
-                raise RuntimeError("La base de données est actuellement indisponible.")
+            if status.state in (
+                DatabaseState.UNAVAILABLE,
+                DatabaseState.INVALID,
+            ):
+                raise RuntimeError(
+                    "La base de données n'est pas migrable en sécurité."
+                )
 
             if status.state != DatabaseState.MIGRATION_REQUIRED:
                 raise RuntimeError(f"Unexpected database state: {status.state.value}.")
@@ -493,6 +635,16 @@ def create_database_group(
 
         try:
             status = await database_status_service.check()
+
+            if status.requires_administrator_classification:
+                await interaction.followup.send(
+                    (
+                        "La base de données nécessite une classification ADMIN "
+                        "explicite avant toute liaison."
+                    ),
+                    ephemeral=True,
+                )
+                return
 
             if status.state != DatabaseState.READY:
                 await interaction.followup.send(
