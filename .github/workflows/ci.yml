@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - main
+      - ci/validate-v11-nexus-contract
 
   pull_request:
     branches:
