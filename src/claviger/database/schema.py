@@ -13,6 +13,8 @@ APPLICATION_TABLE_NAMES = frozenset(
         "guild_member_interests",
         "guild_adult_accesses",
         "guild_catalogs",
+        "guild_catalog_entries",
+        "guild_catalog_entry_targets",
         "guild_workflows",
         "guild_workflow_catalogs",
         "guild_workflow_channels",
