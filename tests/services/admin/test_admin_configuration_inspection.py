@@ -7,13 +7,13 @@ from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
-from claviger.models.inspection import InspectionFinding
 from claviger.models.admin.admin_structure_discovery_model import (
     AdminStructureDiscoveryResult,
 )
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
+from claviger.models.inspection import InspectionFinding
 from claviger.repositories.admin.guild_admin_configuration_repository import (
     GuildAdminConfigurationRepository,
 )
