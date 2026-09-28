@@ -1,4 +1,5 @@
 from claviger.models.admin.admin_configuration_reconciliation_model import (
+    AdminConfigurationFindingCode,
     AdminConfigurationReconciliationDecision,
 )
 from claviger.models.admin.admin_structure_discovery_model import (
@@ -112,7 +113,7 @@ def test_reconcile_without_configuration_or_candidate_returns_create() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.CREATE
 
     assert result.category is None
-    assert result.issues == ()
+    assert result.findings == ()
 
 
 def test_reconcile_ready_candidate_without_configuration_returns_import() -> None:
@@ -130,7 +131,7 @@ def test_reconcile_ready_candidate_without_configuration_returns_import() -> Non
     assert result.decision == AdminConfigurationReconciliationDecision.IMPORT
 
     assert result.category == category
-    assert result.issues == ()
+    assert result.findings == ()
 
 
 def test_reconcile_incomplete_candidate_returns_complete() -> None:
@@ -156,7 +157,7 @@ def test_reconcile_incomplete_candidate_returns_complete() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.COMPLETE
 
     assert result.category == category
-    assert result.issues
+    assert result.findings
 
 
 def test_reconcile_multiple_unconfigured_candidates_requires_choice() -> None:
@@ -179,7 +180,7 @@ def test_reconcile_multiple_unconfigured_candidates_requires_choice() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.NEEDS_CHOICE
 
     assert result.category is None
-    assert result.issues
+    assert result.findings
 
 
 def test_reconcile_valid_complete_configuration_returns_keep() -> None:
@@ -197,7 +198,7 @@ def test_reconcile_valid_complete_configuration_returns_keep() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.KEEP
 
     assert result.category == category
-    assert result.issues == ()
+    assert result.findings == ()
 
 
 def test_reconcile_incomplete_persisted_configuration_returns_complete() -> None:
@@ -223,7 +224,7 @@ def test_reconcile_incomplete_persisted_configuration_returns_complete() -> None
     assert result.decision == AdminConfigurationReconciliationDecision.COMPLETE
 
     assert result.category == category
-    assert result.issues
+    assert result.findings
 
 
 def test_reconcile_missing_configured_channel_returns_complete() -> None:
@@ -255,7 +256,11 @@ def test_reconcile_missing_configured_channel_returns_complete() -> None:
 
     assert result.category == category
 
-    assert any("202" in issue for issue in result.issues)
+    assert any(
+        finding.code == AdminConfigurationFindingCode.CHANNEL_MISSING.value
+        and finding.details["channel_id"] == 202
+        for finding in result.findings
+    )
 
 
 def test_reconcile_public_configured_structure_returns_complete() -> None:
@@ -281,7 +286,7 @@ def test_reconcile_public_configured_structure_returns_complete() -> None:
 
     assert result.decision == AdminConfigurationReconciliationDecision.COMPLETE
 
-    assert result.issues
+    assert result.findings
 
 
 def test_missing_configured_category_without_alternative_returns_create() -> None:
@@ -297,7 +302,7 @@ def test_missing_configured_category_without_alternative_returns_create() -> Non
     assert result.decision == AdminConfigurationReconciliationDecision.CREATE
 
     assert result.category is None
-    assert result.issues
+    assert result.findings
 
 
 def test_missing_configured_category_with_alternative_requires_choice() -> None:
@@ -319,7 +324,7 @@ def test_missing_configured_category_with_alternative_requires_choice() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.NEEDS_CHOICE
 
     assert result.category is None
-    assert result.issues
+    assert result.findings
 
 
 def test_valid_persisted_category_wins_over_other_admin_candidates() -> None:
@@ -348,4 +353,4 @@ def test_valid_persisted_category_wins_over_other_admin_candidates() -> None:
     assert result.decision == AdminConfigurationReconciliationDecision.KEEP
 
     assert result.category == configured
-    assert result.issues == ()
+    assert result.findings == ()

@@ -7,6 +7,7 @@ from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
+from claviger.models.inspection import InspectionFinding
 from claviger.models.admin.admin_structure_discovery_model import (
     AdminStructureDiscoveryResult,
 )
@@ -152,7 +153,7 @@ async def test_inspect_reports_unready_when_discord_drift_requires_repair() -> N
     reconciliation = AdminConfigurationReconciliationResult(
         decision=AdminConfigurationReconciliationDecision.CREATE,
         category=None,
-        issues=("Configured ADMIN category disappeared.",),
+        findings=(InspectionFinding("admin.category.configured_missing"),),
     )
 
     repository.get.return_value = configuration
