@@ -144,8 +144,8 @@ def _format_database_status(
 
     lines.extend(
         [
-            f"- Version actuelle : \`{current_version}\`",
-            f"- Version attendue : \`{status.target_version}\`",
+            f"- Version actuelle : `{current_version}`",
+            f"- Version attendue : `{status.target_version}`",
             "",
             "**Constats :**",
         ]
