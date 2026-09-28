@@ -7,6 +7,7 @@ from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
+from claviger.models.inspection import InspectionFinding
 from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminChannelCandidate,
@@ -177,7 +178,7 @@ async def test_prepare_category_completes_only_explicit_selection() -> None:
     reconciliation = AdminConfigurationReconciliationResult(
         decision=AdminConfigurationReconciliationDecision.COMPLETE,
         category=incomplete,
-        issues=("At least two forums are required.",),
+        findings=(InspectionFinding("admin.category.forum_count_insufficient"),),
     )
     reconciliation_service.reconcile.return_value = reconciliation
 

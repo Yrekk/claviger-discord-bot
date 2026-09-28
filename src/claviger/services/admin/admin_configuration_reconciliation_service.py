@@ -1,4 +1,5 @@
 from claviger.models.admin.admin_configuration_reconciliation_model import (
+    AdminConfigurationFindingCode,
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
@@ -11,6 +12,7 @@ from claviger.models.admin.admin_structure_discovery_model import (
 from claviger.models.admin.guild_admin_configuration_model import (
     GuildAdminConfiguration,
 )
+from claviger.models.inspection import InspectionFinding
 
 
 class AdminConfigurationReconciliationService:
@@ -48,12 +50,14 @@ class AdminConfigurationReconciliationService:
 
         if discovery.is_ambiguous:
             return AdminConfigurationReconciliationResult(
-                decision=(AdminConfigurationReconciliationDecision.NEEDS_CHOICE),
+                decision=AdminConfigurationReconciliationDecision.NEEDS_CHOICE,
                 category=None,
-                issues=(
-                    (
-                        "Several administrative categories were discovered "
-                        "and no persisted configuration identifies one."
+                findings=(
+                    InspectionFinding(
+                        AdminConfigurationFindingCode.MULTIPLE_CATEGORIES.value,
+                        details={
+                            "candidate_count": len(discovery.categories),
+                        },
                     ),
                 ),
             )
@@ -65,15 +69,15 @@ class AdminConfigurationReconciliationService:
                 "Unambiguous admin discovery did not provide a category."
             )
 
-        issues = self._get_candidate_issues(
+        findings = self._get_candidate_findings(
             category,
         )
 
-        if issues:
+        if findings:
             return AdminConfigurationReconciliationResult(
                 decision=AdminConfigurationReconciliationDecision.COMPLETE,
                 category=category,
-                issues=issues,
+                findings=findings,
             )
 
         return AdminConfigurationReconciliationResult(
@@ -95,41 +99,47 @@ class AdminConfigurationReconciliationService:
         )
 
         if category is None:
-            missing_issue = (
-                "The configured administrative category "
-                f"{configuration.category_id} no longer exists in discovery."
-            )
+            findings = [
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CONFIGURED_CATEGORY_MISSING.value,
+                    details={
+                        "category_id": configuration.category_id,
+                    },
+                ),
+            ]
 
             if not discovery.categories:
                 return AdminConfigurationReconciliationResult(
                     decision=AdminConfigurationReconciliationDecision.CREATE,
                     category=None,
-                    issues=(missing_issue,),
+                    findings=tuple(findings),
                 )
 
-            return AdminConfigurationReconciliationResult(
-                decision=(AdminConfigurationReconciliationDecision.NEEDS_CHOICE),
-                category=None,
-                issues=(
-                    missing_issue,
-                    (
-                        "Other administrative category candidates exist, "
-                        "so Claviger will not replace the persisted category "
-                        "automatically."
-                    ),
-                ),
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.MULTIPLE_CATEGORIES.value,
+                    details={
+                        "candidate_count": len(discovery.categories),
+                    },
+                )
             )
 
-        issues = self._get_configuration_issues(
+            return AdminConfigurationReconciliationResult(
+                decision=AdminConfigurationReconciliationDecision.NEEDS_CHOICE,
+                category=None,
+                findings=tuple(findings),
+            )
+
+        findings = self._get_configuration_findings(
             category=category,
             configuration=configuration,
         )
 
-        if issues:
+        if findings:
             return AdminConfigurationReconciliationResult(
                 decision=AdminConfigurationReconciliationDecision.COMPLETE,
                 category=category,
-                issues=issues,
+                findings=findings,
             )
 
         return AdminConfigurationReconciliationResult(
@@ -137,104 +147,180 @@ class AdminConfigurationReconciliationService:
             category=category,
         )
 
-    def _get_candidate_issues(
+    def _get_candidate_findings(
         self,
         category: AdminCategoryCandidate,
-    ) -> tuple[str, ...]:
+    ) -> tuple[InspectionFinding, ...]:
         """Describe why an unconfigured Discord category is not ready."""
 
-        issues: list[str] = []
+        findings: list[InspectionFinding] = []
 
         if not category.is_private:
-            issues.append(
-                "The administrative category is visible to @everyone "
-                "or contains a publicly visible child."
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CATEGORY_PUBLIC.value,
+                    details={
+                        "category_id": category.category_id,
+                    },
+                )
             )
 
         if not category.bot_can_view:
-            issues.append("Claviger cannot view the administrative category.")
+            findings.append(
+                InspectionFinding(
+                    (
+                        AdminConfigurationFindingCode
+                        .CATEGORY_APPLICATION_UNAVAILABLE.value
+                    ),
+                    details={
+                        "category_id": category.category_id,
+                    },
+                )
+            )
 
         if not category.text_channels:
-            issues.append("No text channel is available for administrative commands.")
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.TEXT_CHANNEL_MISSING.value,
+                    details={
+                        "category_id": category.category_id,
+                        "required_count": 1,
+                        "actual_count": 0,
+                    },
+                )
+            )
 
         if len(category.forum_channels) < 2:
-            issues.append(
-                "At least two forums are required for activity and error reports."
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.FORUM_COUNT_INSUFFICIENT.value,
+                    details={
+                        "category_id": category.category_id,
+                        "required_count": 2,
+                        "actual_count": len(category.forum_channels),
+                    },
+                )
             )
 
         if not category.usable_text_channels:
-            issues.append(
-                "Claviger cannot use any discovered administrative text channel."
+            findings.append(
+                InspectionFinding(
+                    (
+                        AdminConfigurationFindingCode
+                        .USABLE_TEXT_CHANNEL_MISSING.value
+                    ),
+                    details={
+                        "category_id": category.category_id,
+                        "required_count": 1,
+                        "actual_count": 0,
+                    },
+                )
             )
 
         if len(category.usable_forum_channels) < 2:
-            issues.append("Claviger cannot use at least two administrative forums.")
+            findings.append(
+                InspectionFinding(
+                    (
+                        AdminConfigurationFindingCode
+                        .USABLE_FORUM_COUNT_INSUFFICIENT.value
+                    ),
+                    details={
+                        "category_id": category.category_id,
+                        "required_count": 2,
+                        "actual_count": len(category.usable_forum_channels),
+                    },
+                )
+            )
 
-        return tuple(
-            issues,
-        )
+        return tuple(findings)
 
-    def _get_configuration_issues(
+    def _get_configuration_findings(
         self,
         *,
         category: AdminCategoryCandidate,
         configuration: GuildAdminConfiguration,
-    ) -> tuple[str, ...]:
+    ) -> tuple[InspectionFinding, ...]:
         """Validate configured Discord IDs against the observed category."""
 
-        issues: list[str] = []
+        findings: list[InspectionFinding] = []
 
         if not category.is_private:
-            issues.append(
-                "The configured administrative category is not fully private."
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CATEGORY_PUBLIC.value,
+                    details={
+                        "category_id": category.category_id,
+                    },
+                )
             )
 
         if not category.bot_can_view:
-            issues.append(
-                "Claviger cannot view the configured administrative category."
+            findings.append(
+                InspectionFinding(
+                    (
+                        AdminConfigurationFindingCode
+                        .CATEGORY_APPLICATION_UNAVAILABLE.value
+                    ),
+                    details={
+                        "category_id": category.category_id,
+                    },
+                )
             )
 
-        issues.extend(
+        findings.extend(
             self._validate_configured_channel(
                 category=category,
                 channel_id=configuration.activity_forum_id,
                 expected_type="forum",
-                label="activity forum",
+                purpose="activity_forum",
             )
         )
 
         if configuration.command_channel_id is None:
-            issues.append("No administrative command channel is configured.")
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.COMMAND_CHANNEL_MISSING.value,
+                )
+            )
 
         else:
-            issues.extend(
+            findings.extend(
                 self._validate_configured_channel(
                     category=category,
                     channel_id=configuration.command_channel_id,
                     expected_type="text",
-                    label="command channel",
+                    purpose="command_channel",
                 )
             )
 
         if configuration.error_forum_id is None:
-            issues.append("No error report forum is configured.")
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.ERROR_FORUM_MISSING.value,
+                )
+            )
 
         else:
-            issues.extend(
+            findings.extend(
                 self._validate_configured_channel(
                     category=category,
                     channel_id=configuration.error_forum_id,
                     expected_type="forum",
-                    label="error forum",
+                    purpose="error_forum",
                 )
             )
 
             if configuration.error_forum_id == configuration.activity_forum_id:
-                issues.append("Activity and error reports reference the same forum.")
+                findings.append(
+                    InspectionFinding(
+                        AdminConfigurationFindingCode.DESTINATIONS_COLLIDE.value,
+                        details={
+                            "channel_id": configuration.error_forum_id,
+                        },
+                    )
+                )
 
-        return tuple(
-            issues,
-        )
+        return tuple(findings)
 
     def _validate_configured_channel(
         self,
@@ -242,9 +328,9 @@ class AdminConfigurationReconciliationService:
         category: AdminCategoryCandidate,
         channel_id: int,
         expected_type: AdminChannelType,
-        label: str,
-    ) -> tuple[str, ...]:
-        """Validate one configured Discord channel against discovery."""
+        purpose: str,
+    ) -> tuple[InspectionFinding, ...]:
+        """Validate one configured channel against current Discord discovery."""
 
         channel = self._find_channel(
             category,
@@ -252,26 +338,54 @@ class AdminConfigurationReconciliationService:
         )
 
         if channel is None:
-            return (f"The configured {label} {channel_id} is missing from Discord.",)
+            return (
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CHANNEL_MISSING.value,
+                    details={
+                        "channel_id": channel_id,
+                        "purpose": purpose,
+                    },
+                ),
+            )
 
-        issues: list[str] = []
+        findings: list[InspectionFinding] = []
 
         if channel.channel_type != expected_type:
-            issues.append(
-                f"The configured {label} {channel_id} has the wrong channel type."
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CHANNEL_WRONG_TYPE.value,
+                    details={
+                        "channel_id": channel_id,
+                        "purpose": purpose,
+                        "expected_type": expected_type,
+                        "actual_type": channel.channel_type,
+                    },
+                )
             )
 
         if not channel.is_private:
-            issues.append(
-                f"The configured {label} {channel_id} is visible to @everyone."
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CHANNEL_PUBLIC.value,
+                    details={
+                        "channel_id": channel_id,
+                        "purpose": purpose,
+                    },
+                )
             )
 
         if not channel.bot_usable:
-            issues.append(f"Claviger cannot use the configured {label} {channel_id}.")
+            findings.append(
+                InspectionFinding(
+                    AdminConfigurationFindingCode.CHANNEL_APPLICATION_UNUSABLE.value,
+                    details={
+                        "channel_id": channel_id,
+                        "purpose": purpose,
+                    },
+                )
+            )
 
-        return tuple(
-            issues,
-        )
+        return tuple(findings)
 
     @staticmethod
     def _find_category(

@@ -7,6 +7,7 @@ from claviger.models.admin.admin_configuration_reconciliation_model import (
     AdminConfigurationReconciliationDecision,
     AdminConfigurationReconciliationResult,
 )
+from claviger.models.inspection import InspectionFinding
 from claviger.models.admin.admin_structure_discovery_model import (
     AdminCategoryCandidate,
     AdminStructureDiscoveryResult,
@@ -280,7 +281,7 @@ async def test_complete_persists_repaired_routing() -> None:
     reconciliation = AdminConfigurationReconciliationResult(
         decision=AdminConfigurationReconciliationDecision.COMPLETE,
         category=category,
-        issues=("No error report forum is configured.",),
+        findings=(InspectionFinding("admin.routing.error_forum_missing"),),
     )
 
     provisioning = AdminStructureProvisioningResult(
@@ -383,7 +384,7 @@ async def test_needs_choice_preserves_existing_configuration_without_write() -> 
     reconciliation = AdminConfigurationReconciliationResult(
         decision=AdminConfigurationReconciliationDecision.NEEDS_CHOICE,
         category=None,
-        issues=("Configured ADMIN category disappeared.",),
+        findings=(InspectionFinding("admin.category.configured_missing"),),
     )
 
     provisioning = AdminStructureProvisioningResult(
